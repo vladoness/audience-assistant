@@ -223,7 +223,8 @@ function editCondition(i, change) {
 }
 
 function addCondition() {
-  const attr = state.catalog.attributes[0];
+  const used = new Set(state.definition.conditions.map((c) => c.attribute));
+  const attr = state.catalog.attributes.find((a) => !used.has(a.name)) || state.catalog.attributes[0];
   state.definition.conditions.push({ attribute: attr.name, op: OPS[attr.type][0], value: defaultValue(attr, "eq"), source: "user" });
   $("result").classList.remove("hidden");
   recheck();

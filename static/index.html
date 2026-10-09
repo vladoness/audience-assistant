@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audience Assistant · Marketing Ops</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Audience Assistant</h1>
+      <p class="sub">Andino Telecom · Marketing Operations</p>
+    </div>
+    <div class="topbar-right">
+      <span id="model-pill" class="pill">connecting…</span>
+      <a href="/api/metrics" target="_blank" class="link">metrics</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="ask">
+      <label for="request" class="step">1 · Describe the audience</label>
+      <textarea id="request" rows="3" maxlength="500"
+        placeholder="e.g. Prepaid customers in the Coast region who haven't topped up in over 30 days but still use the app"></textarea>
+      <div class="row between">
+        <div id="examples" class="chips"></div>
+        <button id="interpret-btn" class="primary">Interpret</button>
+      </div>
+      <p class="hint">Describe groups, not people. Personal data (emails, phone numbers) is masked before the AI sees it.</p>
+    </section>
+
+    <section class="card hidden" id="result">
+      <div class="step">2 · Check what will run</div>
+      <div id="status-banner" class="banner"></div>
+      <div id="clarify"></div>
+      <div id="unmapped"></div>
+
+      <div class="summary-box">
+        <div class="summary-label">This audience is exactly:</div>
+        <p id="summary"></p>
+      </div>
+
+      <table class="conditions">
+        <thead><tr><th>Field</th><th>Rule</th><th>Value</th><th>Source</th><th></th></tr></thead>
+        <tbody id="conditions"></tbody>
+      </table>
+      <div class="row between">
+        <button id="add-condition" class="ghost">+ Add condition</button>
+        <label class="inline">Channel
+          <select id="channel"><option value="sms">SMS</option><option value="email">Email</option></select>
+        </label>
+      </div>
+      <ul id="issues" class="issues"></ul>
+      <details id="assumptions-box" class="hidden"><summary>AI assumptions</summary><ul id="assumptions"></ul></details>
+      <div id="telemetry" class="telemetry"></div>
+    </section>
+
+    <section class="card hidden" id="size-card">
+      <div class="step">3 · Size</div>
+      <div class="metrics-row">
+        <div class="metric big"><span id="reachable">–</span><label>reachable lines</label></div>
+        <div class="metric"><span id="matched">–</span><label>match the conditions</label></div>
+        <div class="metric"><span id="excluded">–</span><label>excluded: no consent</label></div>
+        <div class="metric"><span id="share">–</span><label>of all lines</label></div>
+      </div>
+      <div class="breakdowns">
+        <div><h3>By region</h3><div id="by-region"></div></div>
+        <div><h3>By line type</h3><div id="by-line-type"></div></div>
+      </div>
+      <ul id="size-warnings" class="issues"></ul>
+      <p class="hint" id="size-meta"></p>
+    </section>
+
+    <section class="card hidden" id="approve-card">
+      <div class="step">4 · Approve</div>
+      <div class="row">
+        <input id="aud-name" placeholder="Audience name" maxlength="80">
+        <input id="approver" placeholder="Your name" maxlength="60">
+        <button id="approve-btn" class="primary" disabled>Approve audience</button>
+      </div>
+      <p id="approve-msg" class="hint"></p>
+    </section>
+
+    <section class="card" id="history">
+      <div class="step">Approved audiences</div>
+      <table class="audit">
+        <thead><tr><th>#</th><th>Name</th><th>Reachable</th><th>Approved by</th><th>Edited</th><th>Definition</th><th>When (UTC)</th></tr></thead>
+        <tbody id="audit"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

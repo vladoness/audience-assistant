@@ -178,6 +178,11 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
                  "max": a.max, "unit": a.unit, "description": a.description}
                 for a in c.attributes.values() if a.targetable
             ],
+            "terms": {
+                t.name: {"status": t.status, "definition": t.definition, "decision_id": t.decision.get("id"),
+                         "owner": t.decision.get("owner")}
+                for t in c.terms.values()
+            },
             "channels": list(c.channels),
             "examples": EXAMPLES,
         }

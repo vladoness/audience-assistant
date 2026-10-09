@@ -1,3 +1,5 @@
+import json
+
 from tests.conftest import ScriptedProvider, proposal
 
 PREPAID_COAST = proposal(conditions=[{"attribute": "line_type", "op": "eq", "value": "prepaid"},
@@ -17,7 +19,9 @@ def test_interpret_size_approve_and_audit_trail(make_client):
     assert audit["request_text"] == "prepaid in coast"
     assert audit["model"] == "scripted-model"
     assert audit["edited_by_user"] == 0
-    assert audit["catalog_version"] and audit["glossary_version"]
+    assert set(json.loads(audit["governance_versions"])) == {"catalog", "glossary", "policies", "parameters"}
+    assert audit["governance_changes"] == []
+    assert audit["reachable_now"] == size["reachable"]
 
 
 def test_user_edits_are_recorded_as_edits(make_client):

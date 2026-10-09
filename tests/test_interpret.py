@@ -63,7 +63,7 @@ def test_policy_violations_are_not_sent_back_for_repair(make_client):
     provider = ScriptedProvider(proposal(conditions=[{"attribute": "credit_risk_band", "op": "eq", "value": "high"}]))
     _, r = interpret(make_client, provider)
     assert r["status"] == "invalid"
-    assert r["issues"][0]["code"] == "restricted_attribute"
+    assert r["issues"][0]["code"] == "policy_violation"
     assert len(provider.calls) == 1
 
 

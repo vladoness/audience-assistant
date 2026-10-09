@@ -1,5 +1,6 @@
 # Governed attribute catalog: the only fields an audience may be built from.
-# The model sees this file; the validator and SQL compiler enforce it.
+# The model sees this file; the validator and SQL compiler enforce it. Labels connect fields to
+# the data-usage policies in policies.yaml.
 version: "2026-10-09.1"
 entity: subscriber_line
 grain: one row per mobile line (profile_id); audience sizes count distinct lines
@@ -66,6 +67,7 @@ attributes:
     label: Used the operator app (last 30 days)
     type: boolean
     description: Opened the self-care app at least once in the last 30 days.
+    labels: [APP_ANALYTICS]
 
   roaming_30d:
     label: Roamed abroad (last 30 days)
@@ -93,22 +95,18 @@ attributes:
     label: Credit risk band
     type: enum
     values: [low, medium, high]
-    usage: restricted
-    restriction: Credit-decision use only. Not permitted for marketing targeting (policy MKT-07).
+    description: Internal credit scoring band.
+    labels: [CREDIT_DECISION_ONLY]
 
   marketing_consent_sms:
     label: SMS marketing consent
     type: boolean
-    usage: system
-    restriction: Consent is applied automatically for the chosen channel and cannot be used as a targeting condition.
+    description: Opted in to SMS marketing.
+    labels: [CONSENT_SIGNAL]
 
   marketing_consent_email:
     label: Email marketing consent
     type: boolean
-    usage: system
-    restriction: Consent is applied automatically for the chosen channel and cannot be used as a targeting condition.
+    description: Opted in to email marketing.
+    labels: [CONSENT_SIGNAL]
 
-channels:
-  sms: marketing_consent_sms
-  email: marketing_consent_email
-default_channel: sms

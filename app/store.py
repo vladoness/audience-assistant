@@ -1,9 +1,10 @@
 """Persistence: the audit trail (SQLite) and the interpretation cache (in memory).
 
 Every interpretation is recorded with the masked request, the raw model proposal, the model
-and prompt version, and its telemetry. An approval references that record, so the audit trail
-shows what the marketer asked, what the model proposed, what the marketer changed and what
-was finally approved, with the catalog and glossary versions in force.
+and prompt version, and the versions of every governance file. An approval references that
+record and adds a governance snapshot: which governed terms it used, under which decision and
+parameter versions. That is what lets the system tell, later, which approved audiences a
+glossary or parameter change affects.
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+SCHEMA_VERSION = 2
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
     request_id TEXT PRIMARY KEY,
@@ -27,10 +30,10 @@ CREATE TABLE IF NOT EXISTS interpretations (
     proposal_json TEXT,
     definition_json TEXT NOT NULL,
     unmapped_json TEXT NOT NULL,
+    clarifications_json TEXT NOT NULL,
     model TEXT,
     prompt_version TEXT,
-    catalog_version TEXT NOT NULL,
-    glossary_version TEXT NOT NULL,
+    governance_versions TEXT NOT NULL,
     telemetry_json TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS audiences (
@@ -47,8 +50,8 @@ CREATE TABLE IF NOT EXISTS audiences (
     matched INTEGER NOT NULL,
     reachable INTEGER NOT NULL,
     acknowledged_unmapped_json TEXT NOT NULL,
-    catalog_version TEXT NOT NULL,
-    glossary_version TEXT NOT NULL
+    governance_json TEXT NOT NULL,
+    governance_versions TEXT NOT NULL
 );
 """
 
@@ -70,14 +73,26 @@ class AuditStore:
         self._lock = threading.Lock()
         self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._db.row_factory = sqlite3.Row
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Older local databases are renamed aside (dev data), never silently reused."""
+        current = self._db.execute("PRAGMA user_version").fetchone()[0]
+        if current < SCHEMA_VERSION:
+            existing = {r[0] for r in self._db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            for table in ("interpretations", "audiences"):
+                if table in existing:
+                    self._db.execute(f"ALTER TABLE {table} RENAME TO {table}_v{current}_{int(time.time())}")
         self._db.executescript(_SCHEMA)
+        self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        self._db.commit()
 
     def record_interpretation(self, row: dict[str, Any]) -> None:
         with self._lock, self._db:
             self._db.execute(
                 """INSERT INTO interpretations VALUES (:request_id, :created_at, :request_text, :status, :proposal_json,
-                   :definition_json, :unmapped_json, :model, :prompt_version, :catalog_version, :glossary_version,
-                   :telemetry_json)""",
+                   :definition_json, :unmapped_json, :clarifications_json, :model, :prompt_version,
+                   :governance_versions, :telemetry_json)""",
                 {"created_at": _now(), **row},
             )
 
@@ -91,10 +106,10 @@ class AuditStore:
             cur = self._db.execute(
                 """INSERT INTO audiences (created_at, name, approver, request_id, definition_json, definition_hash,
                    edited_by_user, explanation, channel, matched, reachable, acknowledged_unmapped_json,
-                   catalog_version, glossary_version)
+                   governance_json, governance_versions)
                    VALUES (:created_at, :name, :approver, :request_id, :definition_json, :definition_hash,
                    :edited_by_user, :explanation, :channel, :matched, :reachable, :acknowledged_unmapped_json,
-                   :catalog_version, :glossary_version)""",
+                   :governance_json, :governance_versions)""",
                 {"created_at": _now(), **row},
             )
             return cur.lastrowid
@@ -102,9 +117,19 @@ class AuditStore:
     def list_audiences(self, limit: int = 50) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute(
-                """SELECT a.*, i.request_text, i.model, i.prompt_version
+                """SELECT a.*, i.request_text, i.model, i.prompt_version, i.definition_json AS proposed_definition_json
                    FROM audiences a JOIN interpretations i USING (request_id)
                    ORDER BY a.id DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def interpretation_signals(self, limit: int = 5000) -> list[dict[str, Any]]:
+        """Recent interpretation outcomes, for the insights view."""
+        with self._lock:
+            rows = self._db.execute(
+                """SELECT created_at, request_text, status, unmapped_json, clarifications_json
+                   FROM interpretations ORDER BY created_at DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]

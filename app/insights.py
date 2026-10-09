@@ -1,0 +1,81 @@
+"""Field-to-product signals, computed from the audit trail.
+
+What marketers asked for that the data can't express is counted, not discarded. That is the
+backlog for the data team (which fields to add) and for governance (which open terms to settle
+first, and which way people already lean). Edits marketers make to the AI's proposals show
+where the prompt or the catalog descriptions need work.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from collections import Counter, defaultdict
+from typing import Any
+
+from app.catalog import Catalog
+from app.store import AuditStore
+
+
+def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
+    signals = store.interpretation_signals()
+    audiences = store.list_audiences(limit=1000)
+
+    demand: Counter[str] = Counter()
+    example: dict[str, str] = {}
+    last_seen: dict[str, str] = {}
+    asked: Counter[str] = Counter()
+    for s in signals:
+        for phrase in json.loads(s["unmapped_json"]):
+            key = _normalize(phrase)
+            demand[key] += 1
+            example.setdefault(key, s["request_text"])
+            last_seen.setdefault(key, s["created_at"])
+        asked.update(json.loads(s["clarifications_json"]))
+
+    chosen: dict[str, Counter[str]] = defaultdict(Counter)
+    edited_fields: Counter[str] = Counter()
+    for a in audiences:
+        approved = json.loads(a["definition_json"])["conditions"]
+        choices = {c["source"].removeprefix("glossary:") for c in approved
+                   if c["source"].startswith("glossary:") and "=" in c["source"]}
+        for choice in choices:
+            term, _, option = choice.partition("=")
+            chosen[term][option] += 1
+        if a["edited_by_user"]:
+            proposed = {_key(c) for c in json.loads(a["proposed_definition_json"])["conditions"]
+                        if not c["source"].startswith("glossary:")}
+            final = {_key(c) for c in approved if not c["source"].startswith("glossary:")}
+            edited_fields.update({k[0] for k in proposed ^ final})
+
+    edited = sum(1 for a in audiences if a["edited_by_user"])
+    return {
+        "requests": len(signals),
+        "outcomes": dict(Counter(s["status"] for s in signals)),
+        "unmapped_demand": [
+            {"phrase": phrase, "count": n, "last_seen": last_seen[phrase], "example": example[phrase]}
+            for phrase, n in demand.most_common(10)
+        ],
+        "open_terms": [
+            {"term": t.name, "asked": asked[t.name], "owner_pending": t.owner_pending,
+             "chosen": {o.label: chosen[t.name][o.id] for o in t.options}}
+            for t in catalog.terms.values() if t.status == "open"
+        ],
+        "edits": {
+            "approved": len(audiences),
+            "edited": edited,
+            "rate": round(edited / len(audiences), 3) if audiences else 0.0,
+            "by_field": [
+                {"field": f, "label": catalog.attributes[f].label if f in catalog.attributes else f, "count": n}
+                for f, n in edited_fields.most_common(8)
+            ],
+        },
+    }
+
+
+def _normalize(phrase: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", phrase.lower())).strip()
+
+
+def _key(c: dict[str, Any]) -> tuple[str, str, str]:
+    return c["attribute"], c["op"], json.dumps(c["value"])

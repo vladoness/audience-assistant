@@ -77,6 +77,56 @@ expected definition. `usage_events_30d >= 1` and `> 0`, or `region != Capital` a
 (the other four)`, are the same audience and both pass. Comparing JSON would punish correct
 answers and reward lucky string matches.
 
+**9. Data-usage policy is evaluated per marketing action, not per field.**
+A field is not simply "allowed" or "forbidden". `app_active_30d` comes from an app-analytics
+SDK whose consent covers SMS service messages but not email marketing. So fields carry labels,
+channels are marketing actions, and enabled policies deny labels for actions. This is the shape
+of label-based governance in customer data platforms (labels → policies → marketing actions), so
+it maps directly onto a platform's own policy service in a real rollout. Policy violations are
+never sent back to the model for "repair": the request conflicts with policy, so the marketer
+sees the policy id and decides.
+
+**10. A rule is one owned sentence; its numbers are a versioned parameter set.**
+"High value means a top revenue band" is a decision someone signs. "40 USD" is a parameter that
+changes more often. Fusing them means every threshold change looks like a rule change, and
+reviewing a rule means reading SQL. So the glossary holds the sentence, the owner and the
+decision id, and the conditions reference `parameters.yaml` (version, effective date, owner,
+approver). The split also makes change impact computable.
+
+**11. The governance config is validated mechanically, with a receipt.**
+At startup (and with `make lint`) the config is checked:
+- glossary conditions reference real fields and parameters;
+- labels and marketing actions exist;
+- decided terms have an owner, a decision id and a one-sentence rule;
+- open terms have options and a named decider;
+- consent fields are policy-blocked from targeting.
+
+Errors stop the service. Warnings are the governance backlog. The receipt
+(`governance lint: 0 errors, 0 warnings`) is in `/healthz`.
+
+**12. Approvals snapshot their governance, so changes have a computable blast radius.**
+Each approved audience stores the governed terms it relied on with their decision and parameter
+versions. The audit list compares that snapshot with the current config. It flags audiences
+whose rules changed (or whose interim choice for an open term has since been decided), and
+re-sizes each one under the current definitions. A threshold change becomes a visible, reviewable
+event instead of a silent shift in who gets the next campaign.
+
+**13. What the model can't express is counted, not discarded.**
+Unmapped phrases, clarification questions and marketers' corrections are already in the audit
+trail. `/api/insights` aggregates them into:
+- fields the data team should add (demand);
+- open terms the business should settle first, with the choices people actually made;
+- fields where the AI's mapping keeps getting corrected (prompt or catalog fixes).
+
+That is the field-to-product loop, built from data the system already records.
+
+**14. Model use is bounded.**
+Requests are capped at 500 characters, outputs at 1,024 tokens, and repairs at one. The one
+endpoint that calls the model has a per-client token-bucket rate limit (HTTP 429 with
+Retry-After). A daily model budget switches the assistant off when spent; the deterministic
+editor keeps working. These are the OWASP LLM10 (unbounded consumption) mitigations sized for a
+single-team tool.
+
 ## Where the time goes (and why that shapes the design)
 
 | Stage | Typical | Notes |

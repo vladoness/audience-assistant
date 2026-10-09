@@ -27,7 +27,7 @@ from app.catalog import Catalog
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 TOOL = {
     "name": "propose_audience",
@@ -82,8 +82,9 @@ Rules:
    conditions for it. The system expands decided terms itself and asks the marketer to choose for open terms.
 3. Anything you cannot express with the catalog goes into unmapped_phrases, quoted from the request. Never silently
    drop part of the request.
-4. Attributes marked NOT TARGETABLE must never appear in conditions. If the request asks for one, put that phrase in
-   unmapped_phrases.
+4. Attributes marked NOT TARGETABLE must never appear in conditions, and an attribute marked "Not usable for <channel>
+   campaigns" must not be used when the audience is for that channel. If the request needs one, put that phrase in
+   unmapped_phrases; data-usage policies decide this, not you.
 5. Consent is applied automatically: never add consent conditions. Set channel only if the request names one
    (SMS/text -> sms, email -> email); otherwise null.
 6. Map a relative phrase to a threshold only when the request states it ("more than 30 days without a top-up" ->
@@ -123,17 +124,29 @@ def build_messages(request_text: str, repair: dict[str, Any] | None = None) -> l
 class ProviderUnavailable(RuntimeError):
     """The model could not be reached or returned something unusable. Callers degrade gracefully."""
 
+    code = "ai_unavailable"
+
+
+class BudgetExhausted(ProviderUnavailable):
+    code = "budget_exhausted"
+
 
 @dataclass
 class LLMResult:
     proposal: dict[str, Any]
     model: str
     latency_ms: float
-    input_tokens: int = 0
+    input_tokens: int = 0  # uncached input only (Anthropic's definition); see total_input_tokens
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    finish_reason: str = "tool_use"
     replayed: bool = False
+
+    @property
+    def total_input_tokens(self) -> int:
+        """OpenTelemetry gen_ai.usage.input_tokens: all input tokens, cached or not."""
+        return self.input_tokens + self.cache_read_tokens + self.cache_write_tokens
 
 
 class Provider(Protocol):
@@ -184,6 +197,7 @@ class AnthropicProvider:
             output_tokens=usage.output_tokens,
             cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
             cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+            finish_reason=response.stop_reason or "",
         )
 
 
@@ -264,9 +278,8 @@ class Pricing:
         rates = next((r for name, r in self.per_model.items() if result.model.startswith(name)), None)
         if rates is None:
             return 0.0
-        uncached_input = max(result.input_tokens, 0)
         return round(
-            (uncached_input * rates["input"]
+            (result.input_tokens * rates["input"]
              + result.output_tokens * rates["output"]
              + result.cache_read_tokens * rates.get("cache_read", rates["input"])
              + result.cache_write_tokens * rates.get("cache_write", rates["input"])) / 1_000_000,

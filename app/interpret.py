@@ -18,7 +18,10 @@ from typing import Any
 
 from app.catalog import Catalog
 from app.explain import explain
-from app.llm import PROMPT_VERSION, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt
+from app.limits import DailyBudget
+from app.llm import (
+    PROMPT_VERSION, BudgetExhausted, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt,
+)
 from app.models import (
     AudienceDefinition, CheckResult, Clarification, ClarificationOption, Condition, InterpretResult, Issue, Telemetry,
 )
@@ -29,12 +32,12 @@ from app.validate import parse_condition, validate_definition
 
 log = logging.getLogger(__name__)
 
-_NOT_REPAIRABLE = {"restricted_attribute", "consent_not_targetable"}
+_NOT_REPAIRABLE = {"policy_violation"}
 
 
 class Interpreter:
     def __init__(self, catalog: Catalog, provider: Provider, store: AuditStore, cache: TTLCache,
-                 metrics: Metrics, pricing: Pricing, max_request_chars: int = 500):
+                 metrics: Metrics, pricing: Pricing, max_request_chars: int = 500, budget: DailyBudget | None = None):
         self.catalog = catalog
         self.provider = provider
         self.store = store
@@ -42,6 +45,7 @@ class Interpreter:
         self.metrics = metrics
         self.pricing = pricing
         self.max_request_chars = max_request_chars
+        self.budget = budget
         self.system_prompt = build_system_prompt(catalog)
 
     def interpret(self, request_text: str) -> InterpretResult:
@@ -60,7 +64,7 @@ class Interpreter:
                 message=f"Requests are limited to {self.max_request_chars} characters; describe one audience at a time.")), started)
 
         cache_key = TTLCache.key(" ".join(masked.lower().split()), self.provider.model, PROMPT_VERSION,
-                                 self.catalog.version, self.catalog.glossary_version)
+                                 self.catalog.fingerprint)
         proposal = self.cache.get(cache_key)
         if proposal is not None:
             tel.cache_hit = True
@@ -69,10 +73,10 @@ class Interpreter:
             try:
                 proposal = self._call_model(build_messages(masked), tel)
             except ProviderUnavailable as exc:
-                log.warning("llm_unavailable", extra={"reason": str(exc)})
-                self.metrics.incr("llm_unavailable")
+                log.warning("llm_unavailable", extra={"reason": str(exc), "code": exc.code})
+                self.metrics.incr(exc.code)
                 result = self._empty("ai_unavailable", request_id, tel, Issue(
-                    level="warning", code="ai_unavailable",
+                    level="warning", code=exc.code,
                     message=f"The assistant is unavailable ({exc}). Build the audience with the editor below."))
                 return self._finish(request_id, masked, None, result, started)
 
@@ -118,8 +122,12 @@ class Interpreter:
                            explanation=explain(validated, self.catalog))
 
     def _call_model(self, messages: list[dict[str, Any]], tel: Telemetry) -> dict[str, Any]:
+        if self.budget is not None and not self.budget.available():
+            raise BudgetExhausted(f"today's model budget of ${self.budget.limit_usd:.2f} is used up")
         result: LLMResult = self.provider.propose(self.system_prompt, messages)
         cost = self.pricing.cost(result)
+        if self.budget is not None:
+            self.budget.spend(cost)
         tel.llm_calls += 1
         tel.model = result.model
         tel.llm_ms += round(result.latency_ms, 1)
@@ -130,13 +138,24 @@ class Interpreter:
         tel.cost_usd = round(tel.cost_usd + cost, 6)
         self.metrics.incr("llm_calls")
         self.metrics.incr("llm_cost_usd", cost)
-        self.metrics.incr("llm_input_tokens", result.input_tokens + result.cache_read_tokens + result.cache_write_tokens)
+        self.metrics.incr("llm_input_tokens", result.total_input_tokens)
         self.metrics.incr("llm_output_tokens", result.output_tokens)
         self.metrics.observe("llm_ms", result.latency_ms)
-        log.info("llm_call", extra={"model": result.model, "latency_ms": round(result.latency_ms, 1),
-                                    "input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
-                                    "cache_read_tokens": result.cache_read_tokens, "cost_usd": cost,
-                                    "replayed": result.replayed})
+        log.info("llm_call", extra={
+            "gen_ai.provider.name": self.provider.name,
+            "gen_ai.operation.name": "chat",
+            "gen_ai.request.model": self.provider.model,
+            "gen_ai.response.model": result.model,
+            "gen_ai.request.temperature": 0,
+            "gen_ai.response.finish_reasons": [result.finish_reason],
+            "gen_ai.usage.input_tokens": result.total_input_tokens,
+            "gen_ai.usage.cache_read.input_tokens": result.cache_read_tokens,
+            "gen_ai.usage.cache_creation.input_tokens": result.cache_write_tokens,
+            "gen_ai.usage.output_tokens": result.output_tokens,
+            "latency_ms": round(result.latency_ms, 1),
+            "cost_usd": cost,
+            "replayed": result.replayed,
+        })
         return result.proposal
 
     def _evaluate(self, request_id: str, proposal: dict[str, Any], tel: Telemetry) -> InterpretResult:
@@ -214,10 +233,10 @@ class Interpreter:
             "proposal_json": json.dumps(proposal) if proposal is not None else None,
             "definition_json": result.definition.model_dump_json(),
             "unmapped_json": json.dumps(result.unmapped_phrases),
+            "clarifications_json": json.dumps([c.term for c in result.clarifications]),
             "model": result.telemetry.model,
             "prompt_version": PROMPT_VERSION,
-            "catalog_version": self.catalog.version,
-            "glossary_version": self.catalog.glossary_version,
+            "governance_versions": json.dumps(self.catalog.versions),
             "telemetry_json": result.telemetry.model_dump_json(),
         })
         log.info("interpretation", extra={

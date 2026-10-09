@@ -1,21 +1,23 @@
-# Governed business terms. A "decided" term has one owned definition that the system expands
-# itself (the model only names the term). An "open" term has competing definitions, so the
-# marketer must choose; the model is told never to guess one.
-version: "2026-10-09.1"
+# Governed business terms.
+# A "decided" term is one rule sentence with an owner and a decision id; its numbers come from
+# a versioned parameter set (parameters.yaml) and the system expands it itself (the model only
+# names the term). An "open" term has competing definitions and no decision yet, so the marketer
+# chooses; the model is told never to guess one.
+version: "2026-10-09.2"
 
 terms:
   high_value:
     status: decided
-    aliases: [high value, high-value, valuable, top customers, high spenders]
-    definition: Average monthly revenue over the last 3 months of at least 40 USD.
+    aliases: [high value, high-value, valuable, top customers, high spenders, alto valor]
+    rule: A line is high value when its average monthly revenue over the last three months reaches the high-value threshold.
     decision: {id: D-014, owner: Marketing Analytics, date: 2026-08-12}
     conditions:
-      - {attribute: arpu_3m, op: gte, value: 40}
+      - {attribute: arpu_3m, op: gte, value: {param: high_value.min_arpu_usd}}
 
   app_user:
     status: decided
-    aliases: [app user, app users, uses the app, digital customers]
-    definition: Opened the self-care app in the last 30 days.
+    aliases: [app user, app users, uses the app, digital customers, usan la app]
+    rule: A line is an app user when it opened the self-care app in the last 30 days.
     decision: {id: D-009, owner: Digital Channels, date: 2026-07-30}
     conditions:
       - {attribute: app_active_30d, op: eq, value: true}
@@ -23,27 +25,27 @@ terms:
   lapsed_prepaid:
     status: decided
     aliases: [lapsed, haven't topped up, stopped recharging, lapsed recharge]
-    definition: Prepaid line with no top-up for more than 30 days.
+    rule: A prepaid line is lapsed when it has gone longer than the lapse window without a top-up.
     decision: {id: D-021, owner: Prepaid Marketing, date: 2026-09-02}
     conditions:
       - {attribute: line_type, op: eq, value: prepaid}
-      - {attribute: days_since_last_recharge, op: gt, value: 30}
+      - {attribute: days_since_last_recharge, op: gt, value: {param: lapsed_prepaid.min_days_without_topup}}
 
   heavy_data_user:
     status: decided
     aliases: [heavy data, heavy data users, data-heavy, big data users]
-    definition: Used at least 20 GB of mobile data in the last 30 days.
+    rule: A line is a heavy data user when its last-30-day data use reaches the heavy-use threshold.
     decision: {id: D-011, owner: Marketing Analytics, date: 2026-08-12}
     conditions:
-      - {attribute: data_gb_30d, op: gte, value: 20}
+      - {attribute: data_gb_30d, op: gte, value: {param: heavy_data_user.min_data_gb_30d}}
 
   new_customer:
     status: decided
     aliases: [new customers, new joiners, recently joined]
-    definition: Line activated less than 3 months ago.
+    rule: A line is a new customer while its tenure is below the new-customer window.
     decision: {id: D-005, owner: Marketing Analytics, date: 2026-06-18}
     conditions:
-      - {attribute: tenure_months, op: lt, value: 3}
+      - {attribute: tenure_months, op: lt, value: {param: new_customer.max_tenure_months_exclusive}}
 
   active:
     status: open
@@ -72,7 +74,7 @@ terms:
           - {attribute: line_type, op: eq, value: postpaid}
           - {attribute: billing_status, op: eq, value: overdue}
       - id: churn_proxy_lapsed
-        label: Prepaid lines with no top-up for more than 30 days
+        label: Lapsed prepaid lines (no top-up beyond the lapse window)
         conditions:
           - {attribute: line_type, op: eq, value: prepaid}
-          - {attribute: days_since_last_recharge, op: gt, value: 30}
+          - {attribute: days_since_last_recharge, op: gt, value: {param: lapsed_prepaid.min_days_without_topup}}

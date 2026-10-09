@@ -29,6 +29,8 @@ class Settings:
     max_request_chars: int = 500
     min_audience: int = 100
     broad_share: float = 0.5
+    rate_limit_per_min: int = 20
+    daily_budget_usd: float = 5.0
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -47,4 +49,6 @@ class Settings:
             audit_db_path=Path(os.getenv("AUDIT_DB_PATH", cls.audit_db_path)),
             cache_ttl_s=int(os.getenv("CACHE_TTL_S", cls.cache_ttl_s)),
             min_audience=int(os.getenv("MIN_AUDIENCE", cls.min_audience)),
+            rate_limit_per_min=int(os.getenv("RATE_LIMIT_PER_MIN", cls.rate_limit_per_min)),
+            daily_budget_usd=float(os.getenv("DAILY_BUDGET_USD", cls.daily_budget_usd)),
         )

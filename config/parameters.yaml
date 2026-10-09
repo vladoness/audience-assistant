@@ -1,0 +1,41 @@
+# Versioned parameter sets: the numbers that governed rules use.
+# A rule is one sentence an owner signs ("high value means a top revenue band"); its threshold
+# lives here, with a version and effective date, so changing a number is a new parameter
+# version, not a new rule. Approved audiences record the versions they were built with.
+version: "2026-10-09.1"
+
+parameter_sets:
+  high_value:
+    version: 3
+    effective: 2026-08-12
+    owner: Marketing Analytics
+    approved_by: M. Rojas
+    values: {min_arpu_usd: 40}
+
+  heavy_data_user:
+    version: 1
+    effective: 2026-08-12
+    owner: Marketing Analytics
+    approved_by: M. Rojas
+    values: {min_data_gb_30d: 20}
+
+  lapsed_prepaid:
+    version: 2
+    effective: 2026-09-02
+    owner: Prepaid Marketing
+    approved_by: L. Quispe
+    values: {min_days_without_topup: 30}
+
+  new_customer:
+    version: 1
+    effective: 2026-06-18
+    owner: Marketing Analytics
+    approved_by: M. Rojas
+    values: {max_tenure_months_exclusive: 3}
+
+  audience_guardrails:
+    version: 1
+    effective: 2026-09-15
+    owner: Marketing Operations
+    approved_by: A. Flores
+    values: {min_reachable_lines: 100, max_share_of_base: 0.5}

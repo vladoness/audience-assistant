@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -72,8 +73,8 @@ def settings(tmp_path, data_path) -> Settings:
 def make_client(settings):
     clients = []
 
-    def _make(provider) -> TestClient:
-        client = TestClient(create_app(settings, provider))
+    def _make(provider, **overrides) -> TestClient:
+        client = TestClient(create_app(replace(settings, **overrides), provider))
         client.__enter__()
         clients.append(client)
         return client

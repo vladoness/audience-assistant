@@ -2,8 +2,8 @@
 
 The model's output is treated as an untrusted proposal. This module decides what is valid:
 fields must exist in the catalog, operators must fit the field type, values must be in range,
-restricted and consent fields cannot be targeted, and the conditions must not contradict each
-other or the scope of the fields they use.
+no enabled data-usage policy may forbid a field for the audience's marketing action, and the
+conditions must not contradict each other or the scope of the fields they use.
 """
 
 from __future__ import annotations
@@ -34,15 +34,20 @@ def parse_condition(raw: Any, source: str = "model") -> tuple[Condition | None, 
     return Condition(attribute=str(raw["attribute"]), op=raw["op"], value=raw["value"], source=raw.get("source", source)), None
 
 
-def normalize(cond: Condition, catalog: Catalog) -> tuple[Condition | None, list[Issue]]:
-    """Check one condition against the catalog and coerce its value to the field's type."""
+def normalize(cond: Condition, catalog: Catalog, channel: str) -> tuple[Condition | None, list[Issue]]:
+    """Check one condition against the catalog and policies, and coerce its value to the field's type."""
     attr = catalog.attributes.get(cond.attribute)
     if attr is None:
         return None, [_err("unknown_attribute", f"'{cond.attribute}' is not in the catalog.", cond.attribute)]
-    if attr.usage == "restricted":
-        return None, [_err("restricted_attribute", f"{attr.label} cannot be used: {attr.restriction}", attr.name)]
-    if attr.usage == "system":
-        return None, [_err("consent_not_targetable", f"{attr.label}: {attr.restriction}", attr.name)]
+    violated = catalog.violations(attr.name, channel)
+    if violated:
+        policy = violated[0]
+        label = next(lb for lb in attr.labels if lb in policy.deny_labels)
+        return None, [_err(
+            "policy_violation",
+            f"{attr.label} can't be used for {channel} campaigns: policy {policy.id} ({policy.name}). {catalog.labels[label]}",
+            attr.name,
+        )]
     if cond.op not in OPS_BY_TYPE[attr.type]:
         allowed = ", ".join(sorted(OPS_BY_TYPE[attr.type]))
         return None, [_err("operator_not_allowed", f"'{cond.op}' does not apply to {attr.label} (allowed: {allowed}).", attr.name)]
@@ -60,7 +65,7 @@ def validate_definition(definition: AudienceDefinition, catalog: Catalog) -> tup
     cleaned: list[Condition] = []
     seen: set[tuple[str, str, str]] = set()
     for cond in definition.conditions:
-        normalized, problems = normalize(cond, catalog)
+        normalized, problems = normalize(cond, catalog, definition.channel)
         issues += problems
         if normalized is None:
             continue

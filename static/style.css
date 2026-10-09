@@ -107,7 +107,16 @@ details { margin-top: 12px; font-size: 13px; color: var(--muted); }
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.insights { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 12px; }
+.insights h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+ul.plain { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+ul.plain li { padding: 5px 0; border-bottom: 1px solid var(--line); }
+ul.plain .n { float: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gov-ok { color: var(--ok); font-size: 12px; }
+.gov-stale { color: var(--warn); font-size: 12px; }
+
 @media (max-width: 720px) {
+  .insights { grid-template-columns: 1fr; }
   .metrics-row, .breakdowns { grid-template-columns: 1fr 1fr; }
   .topbar { padding: 14px 18px; }
 }

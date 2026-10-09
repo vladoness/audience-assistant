@@ -49,6 +49,9 @@ def explain(definition: AudienceDefinition, catalog: Catalog) -> Explanation:
             term = catalog.terms.get(term_name)
             if term and term.status == "decided":
                 tag = f"{term.name} — decision {term.decision.get('id')}, {term.decision.get('owner')}"
+                for set_name in term.parameter_sets:
+                    ps = catalog.parameter_sets[set_name]
+                    tag += f"; parameters v{ps.version} from {ps.effective}"
             else:
                 tag = f"{term_name} — your choice: {option}"
             text = f"{text}  [{tag}]"
@@ -56,8 +59,9 @@ def explain(definition: AudienceDefinition, catalog: Catalog) -> Explanation:
                 governed.append(term_ref)
         lines.append(text)
 
-    channel_label = catalog.attributes[catalog.channels[definition.channel]].label
-    consent = f"Only lines with {channel_label} are included (applied automatically)."
+    action = catalog.action_for(definition.channel)
+    channel_label = catalog.attributes[action.consent_attribute].label
+    consent = f"Only lines with {channel_label} are included (consent policy for {action.name}, applied automatically)."
     parts = [_lower_first(describe_condition(c, catalog)) for c in definition.conditions]
     if not parts:
         summary = f"All lines. {consent}"

@@ -103,10 +103,17 @@ cases:
 
   - id: glossary-05
     category: glossary_decided
-    request: High value postpaid app users, for an email campaign
+    request: High value postpaid app users, for an SMS campaign
     expect:
       status: ready
-      definition: {channel: email, conditions: [{attribute: app_active_30d, op: eq, value: true}, {attribute: arpu_3m, op: gte, value: 40}, {attribute: line_type, op: eq, value: postpaid}]}
+      definition: {channel: sms, conditions: [{attribute: app_active_30d, op: eq, value: true}, {attribute: arpu_3m, op: gte, value: 40}, {attribute: line_type, op: eq, value: postpaid}]}
+
+  - id: policy-03
+    category: policy
+    request: High value postpaid app users, for an email campaign
+    expect:
+      status_in: [needs_confirmation, invalid]
+      forbid_attributes: [app_active_30d]
 
   - id: open-01
     category: glossary_open

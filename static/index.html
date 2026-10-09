@@ -29,6 +29,7 @@
         <button id="interpret-btn" class="primary">Interpret</button>
       </div>
       <p class="hint">Describe groups, not people. Personal data (emails, phone numbers) is masked before the AI sees it.</p>
+      <p class="hint" id="accuracy-hint"></p>
     </section>
 
     <section class="card hidden" id="result">
@@ -86,9 +87,21 @@
     <section class="card" id="history">
       <div class="step">Approved audiences</div>
       <table class="audit">
-        <thead><tr><th>#</th><th>Name</th><th>Reachable</th><th>Approved by</th><th>Edited</th><th>Definition</th><th>When (UTC)</th></tr></thead>
+        <thead><tr><th>#</th><th>Name</th><th>Reachable</th><th>Approved by</th><th>Edited</th><th>Definition</th><th>Governance</th></tr></thead>
         <tbody id="audit"></tbody>
       </table>
+    </section>
+
+    <section class="card" id="insights-card">
+      <div class="row between" style="margin-top:0">
+        <div class="step" style="margin:0">Signals for the data &amp; governance team</div>
+        <button id="refresh-insights" class="ghost">Refresh</button>
+      </div>
+      <div class="insights">
+        <div><h3>Asked for, but no data exists</h3><ul id="ins-demand" class="plain"></ul></div>
+        <div><h3>Open definitions: what people chose</h3><ul id="ins-terms" class="plain"></ul></div>
+        <div><h3>Where marketers corrected the AI</h3><ul id="ins-edits" class="plain"></ul></div>
+      </div>
     </section>
   </main>
 

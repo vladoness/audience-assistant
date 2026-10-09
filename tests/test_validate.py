@@ -16,15 +16,26 @@ def test_invented_attribute_is_rejected(catalog):
     assert codes(issues) == {"unknown_attribute"}
 
 
-def test_restricted_attribute_cannot_be_targeted(catalog):
-    _, issues = check(catalog, {"attribute": "credit_risk_band", "op": "eq", "value": "high"})
-    assert codes(issues) == {"restricted_attribute"}
-    assert "MKT-07" in issues[0].message
+def test_credit_data_is_blocked_by_policy_for_every_channel(catalog):
+    for channel in ("sms", "email"):
+        _, issues = check(catalog, {"attribute": "credit_risk_band", "op": "eq", "value": "high"}, channel=channel)
+        assert codes(issues) == {"policy_violation"}
+        assert "MKT-07" in issues[0].message
 
 
 def test_consent_cannot_be_used_as_a_condition(catalog):
     _, issues = check(catalog, {"attribute": "marketing_consent_sms", "op": "eq", "value": False})
-    assert codes(issues) == {"consent_not_targetable"}
+    assert codes(issues) == {"policy_violation"}
+    assert "MKT-15" in issues[0].message
+
+
+def test_policies_are_evaluated_per_marketing_action(catalog):
+    app_users = {"attribute": "app_active_30d", "op": "eq", "value": True}
+    _, sms_issues = check(catalog, app_users, channel="sms")
+    _, email_issues = check(catalog, app_users, channel="email")
+    assert not codes(sms_issues)
+    assert codes(email_issues) == {"policy_violation"}
+    assert "MKT-12" in email_issues[0].message
 
 
 def test_operator_must_fit_the_field_type(catalog):

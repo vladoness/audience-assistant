@@ -42,6 +42,10 @@ async function init() {
   const pill = $("model-pill");
   pill.textContent = health.provider === "anthropic" ? `AI: ${health.model}` : `AI: ${health.provider} mode`;
   pill.classList.toggle("live", health.provider === "anthropic");
+  pill.title = `${health.governance_lint} · governance ${Object.entries(health.governance).map(([k, v]) => `${k} ${v}`).join(", ")}`;
+  if (health.eval) {
+    $("accuracy-hint").textContent = `On our ${health.eval.cases}-case test set this model gets ${Math.round(health.eval.pass_rate * 100)}% of requests fully right, so always check the summary before approving.`;
+  }
 
   catalog.examples.forEach((text) => {
     const chip = document.createElement("button");
@@ -55,7 +59,9 @@ async function init() {
   $("channel").onchange = () => { state.definition.channel = $("channel").value; recheck(); };
   ["aud-name", "approver"].forEach((id) => $(id).addEventListener("input", updateApprove));
   $("approve-btn").onclick = approve;
+  $("refresh-insights").onclick = loadInsights;
   loadAudit();
+  loadInsights();
 }
 
 async function interpret() {
@@ -146,7 +152,8 @@ function sourceBadge(source) {
   const ref = source.replace("glossary:", "");
   if (ref.includes("=")) return `<span class="badge choice" title="${esc(ref)}">your choice</span>`;
   const term = state.catalog.terms[ref];
-  return `<span class="badge governed" title="${esc(term?.definition || "")}">governed · ${esc(term?.decision_id || ref)}</span>`;
+  const params = Object.entries(term?.parameters || {}).map(([n, v]) => `${n} v${v}`).join(", ");
+  return `<span class="badge governed" title="${esc((term?.rule || "") + (params ? ` (parameters: ${params})` : ""))}">governed · ${esc(term?.decision_id || ref)}</span>`;
 }
 
 function renderConditions() {
@@ -303,6 +310,7 @@ async function approve() {
     });
     $("approve-msg").textContent = `Approved as audience #${r.id} · ${fmt(r.reachable)} reachable lines · definition ${r.definition_hash}`;
     loadAudit();
+    loadInsights();
   } catch (e) {
     $("approve-msg").textContent = "Not approved: " + JSON.stringify(e.data?.detail || e.message);
   }
@@ -312,9 +320,35 @@ async function loadAudit() {
   const rows = await api("/api/audiences");
   $("audit").innerHTML = rows.map((r) => `
     <tr><td>${r.id}</td><td>${esc(r.name)}</td><td>${fmt(r.reachable)}</td><td>${esc(r.approver)}</td>
-    <td>${r.edited_by_user ? "yes" : "no"}</td><td class="def">${esc(r.explanation)}<div class="mono">${r.definition_hash} · ${esc(r.model || "manual")}</div></td>
-    <td class="mono">${esc(r.created_at.replace("T", " ").replace("+00:00", ""))}</td></tr>`).join("")
+    <td>${r.edited_by_user ? "yes" : "no"}</td><td class="def">${esc(r.explanation)}<div class="mono">${r.definition_hash} · ${esc(r.model || "manual")} · ${esc(r.created_at.replace("T", " ").replace("+00:00", ""))}</div></td>
+    <td>${governanceCell(r)}</td></tr>`).join("")
     || '<tr><td colspan="7" class="hint">Nothing approved yet.</td></tr>';
+}
+
+function governanceCell(r) {
+  if (!r.governance_changes.length) {
+    const drift = r.reachable_now - r.reachable;
+    return `<span class="gov-ok">current</span>${drift ? `<div class="hint">size now ${fmt(r.reachable_now)}</div>` : ""}`;
+  }
+  const delta = r.reachable_under_current_rules - r.reachable;
+  const pct = r.reachable ? ((100 * delta) / r.reachable).toFixed(1) : "0";
+  return `<span class="gov-stale">⚠ rules changed since approval</span>
+    <div class="hint">${r.governance_changes.map(esc).join("<br>")}</div>
+    <div class="hint">under current rules: ${fmt(r.reachable_under_current_rules)} (${delta >= 0 ? "+" : ""}${pct}%). Re-approve before use.</div>`;
+}
+
+async function loadInsights() {
+  const ins = await api("/api/insights");
+  $("ins-demand").innerHTML = ins.unmapped_demand.map((d) =>
+    `<li title="e.g. ${esc(d.example)}">${esc(d.phrase)}<span class="n">${d.count}×</span></li>`).join("")
+    || '<li class="hint">Nothing yet.</li>';
+  $("ins-terms").innerHTML = ins.open_terms.map((t) => {
+    const chosen = Object.entries(t.chosen).filter(([, n]) => n).map(([label, n]) => `${esc(label)}: ${n}`).join("; ");
+    return `<li><strong>${esc(t.term)}</strong><span class="n">asked ${t.asked}×</span><div class="hint">${chosen || "no approvals yet"} · decides: ${esc(t.owner_pending)}</div></li>`;
+  }).join("");
+  const e = ins.edits;
+  $("ins-edits").innerHTML = `<li>Approved audiences edited before approval<span class="n">${e.edited}/${e.approved}</span></li>`
+    + e.by_field.map((f) => `<li>${esc(f.label)}<span class="n">${f.count}×</span></li>`).join("");
 }
 
 init();

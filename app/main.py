@@ -4,10 +4,11 @@
     POST /api/check       re-validate after edits or clarification answers (deterministic)
     POST /api/size        audience size, consent exclusions, breakdowns, guardrail warnings
     POST /api/approve     server-side re-check + re-size, then an audit record with provenance
-    GET  /api/audiences   approved audiences (audit trail)
-    GET  /api/catalog     attributes and terms for the editor
+    GET  /api/audiences   approved audiences + whether a governance change affects them (blast radius)
+    GET  /api/insights    unmapped-request demand, open-term choices, edit rates (field-to-product signals)
+    GET  /api/catalog     attributes, terms and policies for the editor
     GET  /api/metrics     counters and latency percentiles
-    GET  /healthz         liveness + readiness detail
+    GET  /healthz         liveness + governance lint receipt, versions, eval summary, budget
 """
 
 from __future__ import annotations
@@ -25,7 +26,11 @@ from fastapi.staticfiles import StaticFiles
 
 from app.audience import AudienceEngine
 from app.catalog import Catalog, load_catalog
+from app.governance import impact, reexpand, snapshot
+from app.insights import build_insights
 from app.interpret import Interpreter
+from app.limits import DailyBudget, RateLimiter
+from app.lint import LintReport, lint
 from app.llm import AnthropicProvider, Pricing, Provider, RecordingProvider, ReplayProvider
 from app.models import (
     ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, InterpretRequest, InterpretResult, SizeResult,
@@ -46,6 +51,10 @@ class Services:
     store: AuditStore
     interpreter: Interpreter
     metrics: Metrics
+    limiter: RateLimiter
+    budget: DailyBudget
+    lint_report: LintReport
+    eval_summary: dict | None
 
 
 def build_provider(settings: Settings) -> Provider:
@@ -58,14 +67,33 @@ def build_provider(settings: Settings) -> Provider:
     return ReplayProvider(settings.fixtures_dir)
 
 
+def load_eval_summary(model: str) -> dict | None:
+    path = ROOT / "evals" / "results" / f"{model}.json"
+    if not path.exists():
+        return None
+    summary = json.loads(path.read_text())["summary"]
+    return {k: summary[k] for k in ("model", "cases", "pass_rate", "audience_exact_match", "latency_p50_ms")}
+
+
 def build_services(settings: Settings, provider: Provider | None = None) -> Services:
     catalog = load_catalog(settings.config_dir)
+    report = lint(catalog)
+    for warning in report.warnings:
+        log.warning("governance_lint_warning", extra={"detail": warning})
+    if report.errors:
+        raise RuntimeError(f"{report.receipt}: " + "; ".join(report.errors))
+    log.info("governance_lint", extra={"receipt": report.receipt, "versions": catalog.versions})
+
     if not settings.data_path.exists():
         log.info("generating_synthetic_data", extra={"rows": settings.profile_rows})
         generate(settings.data_path, settings.profile_rows)
-    engine = AudienceEngine(settings.data_path, catalog, settings.min_audience, settings.broad_share)
+    guardrails = catalog.parameter_sets.get("audience_guardrails")
+    min_audience = int(guardrails.values["min_reachable_lines"]) if guardrails else settings.min_audience
+    broad_share = float(guardrails.values["max_share_of_base"]) if guardrails else settings.broad_share
+    engine = AudienceEngine(settings.data_path, catalog, min_audience, broad_share)
     store = AuditStore(settings.audit_db_path)
     metrics = Metrics()
+    budget = DailyBudget(settings.daily_budget_usd)
     interpreter = Interpreter(
         catalog=catalog,
         provider=provider or build_provider(settings),
@@ -74,10 +102,13 @@ def build_services(settings: Settings, provider: Provider | None = None) -> Serv
         metrics=metrics,
         pricing=Pricing.load(settings.config_dir / "models.yaml"),
         max_request_chars=settings.max_request_chars,
+        budget=budget,
     )
     log.info("startup", extra={"provider": interpreter.provider.name, "model": interpreter.provider.model,
                                "profiles": engine.base, "catalog_version": catalog.version})
-    return Services(settings, catalog, engine, store, interpreter, metrics)
+    return Services(settings, catalog, engine, store, interpreter, metrics,
+                    limiter=RateLimiter(settings.rate_limit_per_min), budget=budget, lint_report=report,
+                    eval_summary=load_eval_summary(interpreter.provider.model))
 
 
 def create_app(settings: Settings | None = None, provider: Provider | None = None) -> FastAPI:
@@ -112,7 +143,13 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
 
     @app.post("/api/interpret", response_model=InterpretResult)
     def interpret(body: InterpretRequest, request: Request) -> InterpretResult:
-        return svc(request).interpreter.interpret(body.request)
+        s = svc(request)
+        allowed, retry_after = s.limiter.allow(request.client.host if request.client else "unknown")
+        if not allowed:
+            s.metrics.incr("rate_limited")
+            raise HTTPException(429, detail="Too many requests to the assistant; try again shortly.",
+                                headers={"Retry-After": str(max(1, round(retry_after)))})
+        return s.interpreter.interpret(body.request)
 
     @app.post("/api/check", response_model=CheckResult)
     def check(body: CheckRequest, request: Request) -> CheckResult:
@@ -156,8 +193,8 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             "matched": sized.matched,
             "reachable": sized.reachable,
             "acknowledged_unmapped_json": json.dumps(unmapped if body.acknowledged_unmapped else []),
-            "catalog_version": s.catalog.version,
-            "glossary_version": s.catalog.glossary_version,
+            "governance_json": json.dumps(snapshot(checked.definition, s.catalog)),
+            "governance_versions": json.dumps(s.catalog.versions),
         })
         s.metrics.incr("audiences_approved")
         log.info("audience_approved", extra={"audience_id": audience_id, "reachable": sized.reachable,
@@ -166,7 +203,22 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
 
     @app.get("/api/audiences")
     def audiences(request: Request) -> list[dict]:
-        return svc(request).store.list_audiences()
+        s = svc(request)
+        rows = []
+        for row in s.store.list_audiences():
+            definition = AudienceDefinition(**json.loads(row["definition_json"]))
+            changes = impact(json.loads(row["governance_json"]), s.catalog)
+            row["governance_changes"] = changes
+            row["reachable_now"] = s.engine.size(definition).reachable
+            row["reachable_under_current_rules"] = (
+                s.engine.size(reexpand(definition, s.catalog)).reachable if changes else row["reachable_now"])
+            rows.append(row)
+        return rows
+
+    @app.get("/api/insights")
+    def insights(request: Request) -> dict:
+        s = svc(request)
+        return build_insights(s.store, s.catalog)
 
     @app.get("/api/catalog")
     def catalog(request: Request) -> dict:
@@ -176,13 +228,16 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             "attributes": [
                 {"name": a.name, "label": a.label, "type": a.type, "values": list(a.values), "min": a.min,
                  "max": a.max, "unit": a.unit, "description": a.description}
-                for a in c.attributes.values() if a.targetable
+                for a in c.attributes.values() if c.targetable_somewhere(a.name)
             ],
             "terms": {
-                t.name: {"status": t.status, "definition": t.definition, "decision_id": t.decision.get("id"),
-                         "owner": t.decision.get("owner")}
+                t.name: {"status": t.status, "rule": t.rule, "decision_id": t.decision.get("id"),
+                         "owner": t.decision.get("owner"),
+                         "parameters": {n: c.parameter_sets[n].version for n in t.parameter_sets}}
                 for t in c.terms.values()
             },
+            "policies": [{"id": p.id, "name": p.name, "deny_labels": list(p.deny_labels),
+                          "marketing_actions": list(p.marketing_actions)} for p in c.policies],
             "channels": list(c.channels),
             "examples": EXAMPLES,
         }
@@ -195,7 +250,9 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
     def healthz(request: Request) -> dict:
         s = svc(request)
         return {"status": "ok", "profiles": s.engine.base, "provider": s.interpreter.provider.name,
-                "model": s.interpreter.provider.model, "catalog_version": s.catalog.version}
+                "model": s.interpreter.provider.model, "governance": s.catalog.versions,
+                "governance_lint": s.lint_report.receipt, "eval": s.eval_summary,
+                "model_spend_today_usd": s.budget.spent_today, "model_budget_usd": s.budget.limit_usd}
 
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 

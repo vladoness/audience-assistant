@@ -1,4 +1,4 @@
-.PHONY: setup data run test eval eval-replay record bench
+.PHONY: setup data run test lint eval eval-replay record bench
 
 setup:          ## install dependencies into .venv
 	uv sync
@@ -23,3 +23,6 @@ eval-replay:    ## reproduce an eval run offline from recorded fixtures
 
 bench:          ## sizing latency at 200k / 1M / 5M lines
 	uv run python -m scripts.bench --rows 200000 1000000 5000000
+
+lint:           ## check the governance config (fields, labels, policies, parameters, glossary)
+	uv run python -m app.lint

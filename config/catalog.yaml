@@ -1,0 +1,114 @@
+# Governed attribute catalog: the only fields an audience may be built from.
+# The model sees this file; the validator and SQL compiler enforce it.
+version: "2026-10-09.1"
+entity: subscriber_line
+grain: one row per mobile line (profile_id); audience sizes count distinct lines
+snapshot: nightly batch snapshot of the customer profile store
+
+attributes:
+  line_type:
+    label: Line type
+    type: enum
+    values: [prepaid, postpaid]
+    description: Billing model of the line.
+
+  region:
+    label: Region
+    type: enum
+    values: [Capital, Coast, Highlands, Valley, North]
+    description: Home region, derived from the cell where the line spends most nights.
+
+  plan_tier:
+    label: Plan tier
+    type: enum
+    values: [basic, standard, premium]
+    description: Commercial tier of the current plan or bundle.
+
+  device_os:
+    label: Device type
+    type: enum
+    values: [android, ios, feature_phone]
+    description: Operating system of the handset most recently seen on the network.
+
+  tenure_months:
+    label: Tenure
+    type: integer
+    min: 0
+    max: 240
+    unit: months
+    description: Months since the line was activated.
+
+  arpu_3m:
+    label: Average monthly revenue (last 3 months)
+    type: number
+    min: 0
+    max: 500
+    unit: USD/month
+    description: Average revenue per line over the last three billing months.
+
+  data_gb_30d:
+    label: Mobile data used (last 30 days)
+    type: number
+    min: 0
+    max: 300
+    unit: GB
+    description: Total mobile data consumed in the last 30 days.
+
+  usage_events_30d:
+    label: Network usage events (last 30 days)
+    type: integer
+    min: 0
+    max: 20000
+    unit: events
+    description: Calls, SMS and data sessions in the last 30 days. Zero means the line was silent.
+
+  app_active_30d:
+    label: Used the operator app (last 30 days)
+    type: boolean
+    description: Opened the self-care app at least once in the last 30 days.
+
+  roaming_30d:
+    label: Roamed abroad (last 30 days)
+    type: boolean
+    description: Attached to a foreign network at least once in the last 30 days.
+
+  billing_status:
+    label: Billing status
+    type: enum
+    values: [current, overdue, suspended]
+    description: >-
+      Account standing. Postpaid lines can be overdue (unpaid invoice) or suspended (dunning);
+      prepaid lines are suspended after 90 days without a recharge. Overdue lines still use the network.
+
+  days_since_last_recharge:
+    label: Days since last top-up
+    type: integer
+    min: 0
+    max: 365
+    unit: days
+    applies_to: {line_type: prepaid}
+    description: Prepaid only. Empty (null) for postpaid lines.
+
+  credit_risk_band:
+    label: Credit risk band
+    type: enum
+    values: [low, medium, high]
+    usage: restricted
+    restriction: Credit-decision use only. Not permitted for marketing targeting (policy MKT-07).
+
+  marketing_consent_sms:
+    label: SMS marketing consent
+    type: boolean
+    usage: system
+    restriction: Consent is applied automatically for the chosen channel and cannot be used as a targeting condition.
+
+  marketing_consent_email:
+    label: Email marketing consent
+    type: boolean
+    usage: system
+    restriction: Consent is applied automatically for the chosen channel and cannot be used as a targeting condition.
+
+channels:
+  sms: marketing_consent_sms
+  email: marketing_consent_email
+default_channel: sms

@@ -1,0 +1,24 @@
+[project]
+name = "audience-assistant"
+version = "0.1.0"
+description = "AI-assisted audience building for a telco marketing-ops team: plain English in, verified and sized audience out."
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.40",
+    "duckdb>=1.1",
+    "fastapi>=0.115",
+    "pydantic>=2.8",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "uvicorn>=0.30",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

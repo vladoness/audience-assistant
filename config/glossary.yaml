@@ -1,0 +1,78 @@
+# Governed business terms. A "decided" term has one owned definition that the system expands
+# itself (the model only names the term). An "open" term has competing definitions, so the
+# marketer must choose; the model is told never to guess one.
+version: "2026-10-09.1"
+
+terms:
+  high_value:
+    status: decided
+    aliases: [high value, high-value, valuable, top customers, high spenders]
+    definition: Average monthly revenue over the last 3 months of at least 40 USD.
+    decision: {id: D-014, owner: Marketing Analytics, date: 2026-08-12}
+    conditions:
+      - {attribute: arpu_3m, op: gte, value: 40}
+
+  app_user:
+    status: decided
+    aliases: [app user, app users, uses the app, digital customers]
+    definition: Opened the self-care app in the last 30 days.
+    decision: {id: D-009, owner: Digital Channels, date: 2026-07-30}
+    conditions:
+      - {attribute: app_active_30d, op: eq, value: true}
+
+  lapsed_prepaid:
+    status: decided
+    aliases: [lapsed, haven't topped up, stopped recharging, lapsed recharge]
+    definition: Prepaid line with no top-up for more than 30 days.
+    decision: {id: D-021, owner: Prepaid Marketing, date: 2026-09-02}
+    conditions:
+      - {attribute: line_type, op: eq, value: prepaid}
+      - {attribute: days_since_last_recharge, op: gt, value: 30}
+
+  heavy_data_user:
+    status: decided
+    aliases: [heavy data, heavy data users, data-heavy, big data users]
+    definition: Used at least 20 GB of mobile data in the last 30 days.
+    decision: {id: D-011, owner: Marketing Analytics, date: 2026-08-12}
+    conditions:
+      - {attribute: data_gb_30d, op: gte, value: 20}
+
+  new_customer:
+    status: decided
+    aliases: [new customers, new joiners, recently joined]
+    definition: Line activated less than 3 months ago.
+    decision: {id: D-005, owner: Marketing Analytics, date: 2026-06-18}
+    conditions:
+      - {attribute: tenure_months, op: lt, value: 3}
+
+  active:
+    status: open
+    aliases: [active, active customers, active lines]
+    question: '"Active" has two definitions in use and no agreed standard yet. Which one do you mean?'
+    owner_pending: Marketing Analytics (decision D-030 open)
+    options:
+      - id: active_usage
+        label: Used the network in the last 30 days (at least one call, SMS or data session)
+        conditions:
+          - {attribute: usage_events_30d, op: gte, value: 1}
+      - id: active_billing
+        label: Account in good standing (billing status 'current'); includes silent lines
+        conditions:
+          - {attribute: billing_status, op: eq, value: current}
+
+  churn_risk:
+    status: open
+    aliases: [churn risk, likely to churn, at risk of leaving, about to leave]
+    question: There is no approved churn model yet. Which governed signal should stand in for it?
+    owner_pending: Data Science (churn model on backlog)
+    options:
+      - id: churn_proxy_overdue
+        label: Postpaid lines with an overdue invoice
+        conditions:
+          - {attribute: line_type, op: eq, value: postpaid}
+          - {attribute: billing_status, op: eq, value: overdue}
+      - id: churn_proxy_lapsed
+        label: Prepaid lines with no top-up for more than 30 days
+        conditions:
+          - {attribute: line_type, op: eq, value: prepaid}
+          - {attribute: days_since_last_recharge, op: gt, value: 30}

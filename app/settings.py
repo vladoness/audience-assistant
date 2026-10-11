@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parent.parent
 class Settings:
     llm_provider: str = "replay"  # anthropic | replay | offline
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-haiku-4-5"
+    anthropic_model: str = "claude-haiku-5-5"
+    anthropic_effort: str = "low"  # low | medium | high | xhigh | max | "" for the model default
     llm_timeout_s: float = 20.0
     llm_max_retries: int = 2
     record_fixtures: bool = False
@@ -41,6 +42,7 @@ class Settings:
             llm_provider=provider,
             anthropic_api_key=key,
             anthropic_model=os.getenv("ANTHROPIC_MODEL", cls.anthropic_model),
+            anthropic_effort=os.getenv("ANTHROPIC_EFFORT", cls.anthropic_effort),
             llm_timeout_s=float(os.getenv("LLM_TIMEOUT_S", cls.llm_timeout_s)),
             llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", cls.llm_max_retries)),
             record_fixtures=os.getenv("RECORD_FIXTURES", "0") == "1",

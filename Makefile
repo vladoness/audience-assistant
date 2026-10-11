@@ -13,13 +13,13 @@ test:           ## run the test suite (no network, no API key needed)
 	uv run pytest
 
 eval:           ## run the golden set against the live model (needs ANTHROPIC_API_KEY); MODEL=...
-	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-haiku-4-5)
+	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-haiku-5-5)
 
 record:         ## live eval run that also saves replay fixtures for offline mode
-	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-haiku-4-5) --record
+	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-haiku-5-5) --record
 
 eval-replay:    ## reproduce an eval run offline from recorded fixtures
-	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-haiku-4-5)
+	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-haiku-5-5)
 
 bench:          ## sizing latency at 200k / 1M / 5M lines
 	uv run python -m scripts.bench --rows 200000 1000000 5000000

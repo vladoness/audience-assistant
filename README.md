@@ -12,6 +12,12 @@ counting, and the summary the user approves.
 - **Customer context and value:** [docs/CUSTOMER-CONTEXT.md](docs/CUSTOMER-CONTEXT.md)
 - **Design note and diagram:** [docs/DESIGN.md](docs/DESIGN.md)
 
+| An open business term asks instead of guessing | Policy is evaluated per channel |
+|---|---|
+| ![Clarification](docs/screenshots/1-clarify.png) | ![Policy](docs/screenshots/3-policy.png) |
+| **What can't be built is surfaced, and an ungrounded term is flagged** | **Sized, approved, audited** |
+| ![Unmapped and ungrounded](docs/screenshots/4-unmapped-ungrounded.png) | ![Sized and approved](docs/screenshots/2-sized-approved.png) |
+
 ---
 
 ## Quick start
@@ -21,7 +27,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000  (generates 200k synthetic profiles on first start, ~1 s)
-make test         # 50 tests, no network or API key needed
+make test         # 52 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 ```
 
@@ -155,7 +161,7 @@ field-to-product signals.
 static/            index.html + app.js: no build step
 app/main.py        FastAPI routes, request-id middleware, app factory (tests inject a fake model)
 app/interpret.py   pipeline: mask → cache → model → glossary expansion → validate → repair once → status → explain
-app/llm.py         the only model call: forced tool use, prompt, Anthropic / replay / recording providers, pricing
+app/llm.py         the only model call: structured output (strict JSON schema), effort, providers, pricing
 app/validate.py    catalog rules: fields, operators, types, ranges, data-usage policy per channel, scope, contradictions
 app/explain.py     plain-English rendering of a definition (templates, no model)
 app/audience.py    definition → parameterized SQL on DuckDB; consent filter; grain check; guardrails
@@ -198,17 +204,46 @@ The diagram and the reasoning behind each choice are in [docs/DESIGN.md](docs/DE
 
 ## Trade-offs: latency, cost, accuracy
 
-**Measured on the golden set** (`make eval`, 33 cases, temperature 0):
+**Measured on the golden set** (`make eval`, 34 cases, prompt v5, 11 Oct 2026; prices from Anthropic's
+list effective 2026-10-07):
 
-| | claude-haiku-4-5 | claude-sonnet-4-5 |
-|---|---|---|
-| Pass rate (all expectations met) | _TBD_ | _TBD_ |
-| Audience exact match (same reachable lines) | _TBD_ | _TBD_ |
-| Model latency p50 / p95 | _TBD_ | _TBD_ |
-| Cost per 1,000 requests | _TBD_ | _TBD_ |
-| Repair rate | _TBD_ | _TBD_ |
+| | Haiku 5.5 · effort low (**default**) | Haiku 5.5 · default effort | Sonnet 5.5 · effort low |
+|---|---|---|---|
+| All expectations met | 33/34 (97%) | 33/34 (97%) | 34/34 (100%) |
+| Correct outcome status (ready / clarify / confirm / unsupported / invalid) | 100% | 100% | 100% |
+| Same audience as expected (exact set of reachable lines) | 96.8% | 96.8% | 100% |
+| Model latency p50 / p95 | **1.7 s / 2.4 s** | 2.2 s / 3.8 s | 2.1 s / 2.8 s |
+| Tokens per request (in / out, input mostly cached) | 2,992 / 146 | 2,992 / 281 | 2,992 / 143 |
+| Cost per 1,000 requests | **$0.12** | $0.19 | $2.03 |
+| Repair calls needed | 0 | 0 | 0 |
 
-*(Filled from `evals/results/*.json`; per-case detail and failures are in those files.)*
+Per-case results: `evals/results/*.json`. The same run can be reproduced offline from the recorded
+responses: `make eval-replay`.
+
+**What the misses were, and what caught them:**
+- **Haiku · low, "Postpaid customers with a high credit risk band".** It correctly refused the
+  credit data (policy) but also applied *high value* because of the word "high". The
+  deterministic grounding check flags it (*"the assistant applied 'high value' but your request
+  doesn't use any of its phrases"*), and the summary shows "revenue ≥ 40 USD". The marketer sees
+  it before approving.
+- **Haiku · default effort, "haven't recharged in 60 days".** It read this as ≥ 60 days rather
+  than > 60. That is a genuine boundary ambiguity, 2% of lines differ, and the summary says "at
+  least 60 days".
+
+**How the prompt got here** (honest log): the first live run (prompt v3) scored 32/33. The model
+replaced an explicit "more than 15 GB" with the governed *heavy data user* term (20 GB). I added
+a rule that the marketer's own number wins over a glossary term. To avoid only tuning to that one
+case, I also added a new case it had not seen ("spending more than 60 dollars"). The
+credit-risk miss above survived a further prompt rule, which is why the fix is a deterministic
+check rather than more prompt.
+
+**Decision: Haiku 5.5 at low effort.** It is the fastest and cheapest configuration and is right
+on every *outcome* (it never guessed an open term, dropped a phrase or broke a policy). Its one
+miss is surfaced to the user by a code-level check. Sonnet 5.5 is perfect on this set but 17×
+the cost for one case. Default effort makes Haiku slower and costlier with no accuracy gain on
+this task. The obvious next step is to route only flagged requests to Sonnet. The flag rate on
+this set is about 3%, so the estimated blended cost is ≈ $0.18 per 1,000 for 34/34 here. I would
+measure that rather than assume it.
 
 **How I'd explain the choices to the customer:**
 
@@ -219,13 +254,13 @@ The diagram and the reasoning behind each choice are in [docs/DESIGN.md](docs/DE
   code-generated summary, and why the eval measures audience equality.
 - **Latency:** sizing is milliseconds even at 5M lines; the model call is the user-visible wait.
   Mitigations: a cache for repeated requests (the cached answer returns in ~1 ms), prompt caching
-  of the ~2k-token static catalog, temperature 0 and a capped output, at most one repair call.
+  of the ~2k-token static catalog, a capped output, at most one repair call.
 - **Cost:** a fraction of a cent per request, so at ~40 audiences a month cost is irrelevant next
   to analyst time. It matters at scale or with many tenants. The levers are the same: smallest
   model that clears the eval bar, caching, the repair cap.
-- **Model choice:** pick the smallest model that meets the bar on the golden set. Rerun `make
-  eval` whenever the prompt, catalog or model changes; it is the regression test for the parts
-  unit tests can't cover.
+- **Model choice:** pick the smallest model and effort that meet the bar on the golden set (above).
+  Rerun `make eval` whenever the prompt, catalog or model changes; it is the regression test for
+  the parts unit tests can't cover.
 
 ---
 
@@ -235,6 +270,8 @@ The diagram and the reasoning behind each choice are in [docs/DESIGN.md](docs/DE
 |---|---|
 | Model invents a field, value or threshold | Validator rejects it; one repair attempt with the errors; then `invalid` with reasons shown |
 | Model drifts a governed definition ("high value" = 50) | Can't: the model only names the term; the server expands it from `glossary.yaml` |
+| Model applies a governed term the request never mentions | Deterministic grounding check warns the marketer (the term's phrases aren't in the request) |
+| Model ignores the marketer's explicit number in favour of a glossary term | Prompt rule (the marketer's number wins) + a dedicated eval case; the summary shows the threshold actually used |
 | Ambiguous business term ("active") | Never guessed: clarifying question with governed options (`needs_clarification`) |
 | Part of the request can't be expressed | Listed as unmapped; approval blocked until the marketer accepts it (`needs_confirmation`) |
 | Request targets restricted data (credit risk) or consent | Rejected with the policy reason; not sent back to the model |
@@ -255,11 +292,11 @@ The diagram and the reasoning behind each choice are in [docs/DESIGN.md](docs/DE
 
 ## Testing and reliability
 
-- `make test`: **50 tests**, no network. A scripted fake model drives each failure mode
+- `make test`: **52 tests**, no network. A scripted fake model drives each failure mode
   deterministically: repair once then stop, outage fallback, cache hit, PII never reaching the
   model, policy violations not retried, tampered approvals rejected. SQL counts are checked
   against independent queries, and values are verified to be bound parameters.
-- `make eval`: the golden set (`evals/cases.yaml`, 33 cases across simple, thresholds, decided and
+- `make eval`: the golden set (`evals/cases.yaml`, 34 cases across simple, thresholds, decided and
   open glossary terms, unmapped phrases, vague qualifiers, policy (including a per-channel
   conflict), injection, out-of-scope, Spanish and PII). It is scored by audience set equality plus status, clarification, unmapped and
   forbidden-field checks. Expected outcomes are hand-written, because they encode policy decisions.
@@ -321,7 +358,7 @@ previews at CDP scale, multi-tenant config, stateless replicas, model routing) a
   terms or publish a parameter version; the open terms are listed with their pending owner.
 - **Rate limit and budget are per process.** With replicas they move to Redis behind the same
   interface.
-- **The golden set is 33 cases.** That is enough to compare models and catch regressions, not
+- **The golden set is 34 cases.** That is enough to compare models and catch regressions, not
   to certify accuracy.
 
 ## Use of AI in building this

@@ -8,3 +8,4 @@ data/*.duckdb.wal
 data/*.sqlite
 evals/results/*.local.json
 .DS_Store
+evals/results/*.replay.json

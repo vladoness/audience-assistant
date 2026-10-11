@@ -11,7 +11,7 @@ match, or what the summary says.
 flowchart LR
     U[Marketer request] --> M[Mask PII]
     M --> C{Cache hit?}
-    C -- no --> L[LLM: forced tool call\nproposal JSON]
+    C -- no --> L[LLM: structured output\nstrict JSON schema]
     C -- yes --> P
     L --> P[Parse proposal]
     P --> G[Expand glossary terms\nfrom governed config]
@@ -29,7 +29,8 @@ flowchart LR
 ## Decisions and why
 
 **1. The model fills a JSON schema; it never writes SQL.**
-A forced tool call (`tool_choice` = `propose_audience`) means the response always parses into
+Structured output constrained to a strict JSON schema (`output_config.format`, every object
+`additionalProperties: false`) means the response always parses into
 `{conditions, glossary_terms, unmapped_phrases, channel, out_of_scope, assumptions}`. Column
 names reach SQL only after validation against the catalog, and values are always bound
 parameters. *Rejected: text-to-SQL.* It is more flexible, but every failure mode (wrong join,

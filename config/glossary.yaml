@@ -3,7 +3,7 @@
 # a versioned parameter set (parameters.yaml) and the system expands it itself (the model only
 # names the term). An "open" term has competing definitions and no decision yet, so the marketer
 # chooses; the model is told never to guess one.
-version: "2026-10-09.2"
+version: "2026-10-11.1"
 
 terms:
   high_value:
@@ -16,7 +16,7 @@ terms:
 
   app_user:
     status: decided
-    aliases: [app user, app users, uses the app, digital customers, usan la app]
+    aliases: [app user, app users, uses the app, use the app, using the app, digital customers, usan la app]
     rule: A line is an app user when it opened the self-care app in the last 30 days.
     decision: {id: D-009, owner: Digital Channels, date: 2026-07-30}
     conditions:

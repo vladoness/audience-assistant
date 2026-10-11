@@ -62,17 +62,18 @@ def build_provider(settings: Settings) -> Provider:
         if not settings.anthropic_api_key:
             raise RuntimeError("LLM_PROVIDER=anthropic needs ANTHROPIC_API_KEY")
         provider: Provider = AnthropicProvider(settings.anthropic_api_key, settings.anthropic_model,
-                                               settings.llm_timeout_s, settings.llm_max_retries)
+                                               settings.llm_timeout_s, settings.llm_max_retries,
+                                               effort=settings.anthropic_effort or None)
         return RecordingProvider(provider, settings.fixtures_dir) if settings.record_fixtures else provider
     return ReplayProvider(settings.fixtures_dir)
 
 
-def load_eval_summary(model: str) -> dict | None:
-    path = ROOT / "evals" / "results" / f"{model}.json"
+def load_eval_summary(model: str, effort: str | None) -> dict | None:
+    path = ROOT / "evals" / "results" / f"{model}@{effort or 'default'}.json"
     if not path.exists():
         return None
     summary = json.loads(path.read_text())["summary"]
-    return {k: summary[k] for k in ("model", "cases", "pass_rate", "audience_exact_match", "latency_p50_ms")}
+    return {k: summary[k] for k in ("model", "effort", "cases", "pass_rate", "audience_exact_match", "latency_p50_ms")}
 
 
 def build_services(settings: Settings, provider: Provider | None = None) -> Services:
@@ -108,7 +109,7 @@ def build_services(settings: Settings, provider: Provider | None = None) -> Serv
                                "profiles": engine.base, "catalog_version": catalog.version})
     return Services(settings, catalog, engine, store, interpreter, metrics,
                     limiter=RateLimiter(settings.rate_limit_per_min), budget=budget, lint_report=report,
-                    eval_summary=load_eval_summary(interpreter.provider.model))
+                    eval_summary=load_eval_summary(interpreter.provider.model, getattr(interpreter.provider, "effort", None)))
 
 
 def create_app(settings: Settings | None = None, provider: Provider | None = None) -> FastAPI:

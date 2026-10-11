@@ -20,7 +20,7 @@ from app.catalog import Catalog
 from app.explain import explain
 from app.limits import DailyBudget
 from app.llm import (
-    PROMPT_VERSION, BudgetExhausted, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt,
+    MAX_OUTPUT_TOKENS, PROMPT_VERSION, BudgetExhausted, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt,
 )
 from app.models import (
     AudienceDefinition, CheckResult, Clarification, ClarificationOption, Condition, InterpretResult, Issue, Telemetry,
@@ -80,7 +80,7 @@ class Interpreter:
                     message=f"The assistant is unavailable ({exc}). Build the audience with the editor below."))
                 return self._finish(request_id, masked, None, result, started)
 
-        result = self._evaluate(request_id, proposal, tel)
+        result = self._evaluate(request_id, proposal, tel, masked)
         errors = [i for i in result.issues if i.level == "error"]
         if errors and not tel.cache_hit and not all(e.code in _NOT_REPAIRABLE for e in errors):
             try:
@@ -89,7 +89,7 @@ class Interpreter:
                 tel.repaired = True
                 self.metrics.incr("repair_attempt")
                 proposal = repaired
-                result = self._evaluate(request_id, proposal, tel)
+                result = self._evaluate(request_id, proposal, tel, masked)
             except ProviderUnavailable as exc:
                 log.warning("llm_repair_unavailable", extra={"reason": str(exc)})
 
@@ -146,7 +146,8 @@ class Interpreter:
             "gen_ai.operation.name": "chat",
             "gen_ai.request.model": self.provider.model,
             "gen_ai.response.model": result.model,
-            "gen_ai.request.temperature": 0,
+            "gen_ai.request.max_tokens": MAX_OUTPUT_TOKENS,
+            "llm.effort": getattr(self.provider, "effort", None),
             "gen_ai.response.finish_reasons": [result.finish_reason],
             "gen_ai.usage.input_tokens": result.total_input_tokens,
             "gen_ai.usage.cache_read.input_tokens": result.cache_read_tokens,
@@ -158,7 +159,7 @@ class Interpreter:
         })
         return result.proposal
 
-    def _evaluate(self, request_id: str, proposal: dict[str, Any], tel: Telemetry) -> InterpretResult:
+    def _evaluate(self, request_id: str, proposal: dict[str, Any], tel: Telemetry, request_text: str) -> InterpretResult:
         issues: list[Issue] = []
         conditions: list[Condition] = []
         clarifications: list[Clarification] = []
@@ -178,12 +179,20 @@ class Interpreter:
             term = self.catalog.terms.get(term_name)
             if term is None:
                 issues.append(Issue(level="error", code="unknown_term", message=f"'{term_name}' is not a glossary term."))
-            elif term.status == "decided":
+                continue
+            if not _mentions(request_text, term):
+                issues.append(Issue(
+                    level="warning", code="ungrounded_term",
+                    message=f"The assistant applied the governed term '{term.name.replace('_', ' ')}', but your request "
+                            "doesn't use any of its phrases. Remove those conditions if that isn't what you meant."))
+            if term.status == "decided":
                 conditions += [Condition(**c, source=f"glossary:{term.name}") for c in term.conditions]
             else:
                 clarifications.append(self._clarification(term))
 
-        channel = proposal.get("channel") or self.catalog.default_channel
+        channel = proposal.get("channel")
+        if channel in (None, "", "unspecified"):
+            channel = self.catalog.default_channel
         if channel not in self.catalog.channels:
             issues.append(Issue(level="warning", code="unknown_channel",
                                 message=f"Unknown channel '{channel}', using {self.catalog.default_channel}."))
@@ -248,3 +257,9 @@ class Interpreter:
             "pii_masked": result.telemetry.pii_masked,
         })
         return result
+
+
+def _mentions(request_text: str, term) -> bool:
+    """Deterministic grounding check: does the request contain one of the term's phrases?"""
+    text = request_text.lower()
+    return any(alias.lower() in text for alias in term.aliases) or term.name.replace("_", " ") in text

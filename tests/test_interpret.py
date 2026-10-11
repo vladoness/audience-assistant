@@ -108,3 +108,16 @@ def test_over_long_requests_are_rejected_without_calling_the_model(make_client):
     assert r["status"] == "invalid"
     assert r["issues"][0]["code"] == "request_too_long"
     assert provider.calls == []
+
+
+def test_glossary_term_without_textual_evidence_is_flagged(make_client):
+    provider = ScriptedProvider(proposal(conditions=[{"attribute": "line_type", "op": "eq", "value": "postpaid"}],
+                                         terms=["high_value"], unmapped=["high credit risk band"]))
+    _, r = interpret(make_client, provider, "Postpaid customers with a high credit risk band")
+    assert "ungrounded_term" in [i["code"] for i in r["issues"]]
+
+
+def test_glossary_term_named_in_the_request_is_not_flagged(make_client):
+    provider = ScriptedProvider(proposal(terms=["high_value"]))
+    _, r = interpret(make_client, provider, "High value customers")
+    assert "ungrounded_term" not in [i["code"] for i in r["issues"]]

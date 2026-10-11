@@ -1,7 +1,7 @@
 """Runs the golden set through the real interpreter and reports accuracy, latency and cost.
 
-    uv run python -m evals.run --provider anthropic --model claude-haiku-4-5 --record
-    uv run python -m evals.run --provider replay --model claude-haiku-4-5     # reproduce offline from fixtures
+    uv run python -m evals.run --provider anthropic --model claude-haiku-5-5 --effort low --record
+    uv run python -m evals.run --provider replay --model claude-haiku-5-5     # reproduce offline from fixtures
 
 A case passes only if every expectation it declares holds. Audience correctness is judged by
 outcome: the proposed and expected definitions must select exactly the same reachable lines.
@@ -107,7 +107,8 @@ def summarize(model: str, rows: list[dict]) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--provider", choices=["anthropic", "replay"], default="replay")
-    parser.add_argument("--model", default="claude-haiku-4-5")
+    parser.add_argument("--model", default="claude-haiku-5-5")
+    parser.add_argument("--effort", default="low", help="low | medium | high | xhigh | max | default")
     parser.add_argument("--record", action="store_true", help="save live responses as replay fixtures")
     parser.add_argument("--only", help="run a single case id")
     args = parser.parse_args()
@@ -119,7 +120,9 @@ def main() -> None:
     engine = AudienceEngine(settings.data_path, catalog)
 
     if args.provider == "anthropic":
-        provider = AnthropicProvider(settings.anthropic_api_key, args.model, settings.llm_timeout_s, settings.llm_max_retries)
+        effort = None if args.effort == "default" else args.effort
+        provider = AnthropicProvider(settings.anthropic_api_key, args.model, settings.llm_timeout_s,
+                                     settings.llm_max_retries, effort=effort)
         if args.record:
             provider = RecordingProvider(provider, settings.fixtures_dir)
     else:
@@ -141,10 +144,11 @@ def main() -> None:
         print(f"{mark}  {row['id']:<18} {row['status']:<20} {row['llm_ms']:>7.0f} ms  {row['checks']}")
 
     summary = summarize(args.model, rows)
+    summary["effort"] = args.effort
     out_dir = ROOT / "evals" / "results"
     out_dir.mkdir(exist_ok=True)
     suffix = "" if args.provider == "anthropic" else ".replay"
-    (out_dir / f"{args.model}{suffix}.json").write_text(json.dumps({"summary": summary, "cases": rows}, indent=2))
+    (out_dir / f"{args.model}@{args.effort}{suffix}.json").write_text(json.dumps({"summary": summary, "cases": rows}, indent=2))
     print(json.dumps(summary, indent=2))
 
 

@@ -139,7 +139,7 @@ function renderUnmapped() {
   if (!state.unmapped.length) return;
   const div = document.createElement("div");
   div.className = "unmapped-box";
-  div.innerHTML = `No data available for: ${state.unmapped.map((p) => `<q>${esc(p)}</q>`).join(", ")}.
+  div.innerHTML = `Not included (no data for it, or not allowed by policy): ${state.unmapped.map((p) => `<q>${esc(p)}</q>`).join(", ")}.
     <label class="inline" style="margin-top:8px"><input type="checkbox" id="ack" ${state.acknowledged ? "checked" : ""}>
     Build the audience without this part</label>`;
   box.appendChild(div);

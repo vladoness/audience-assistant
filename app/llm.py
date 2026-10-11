@@ -1,12 +1,12 @@
 """The only place the AI model is called.
 
 The model gets the catalog, the glossary and the marketer's (masked) request, and must answer
-through a single tool call whose JSON schema is the proposal format. It proposes; it never
-decides. Validation, glossary expansion, consent, sizing and the plain-English summary all
+with structured output constrained to PROPOSAL_SCHEMA (strict JSON schema, so the response always
+parses). It proposes; it never decides. Validation, glossary expansion, consent, sizing and the plain-English summary all
 happen in deterministic code downstream.
 
 Providers:
-- AnthropicProvider: live calls (temperature 0, forced tool use, cached system prompt).
+- AnthropicProvider: live calls (structured output, configurable effort, cached system prompt).
 - ReplayProvider: serves responses recorded from live calls (offline demo, reproducible evals).
 - RecordingProvider: wraps a live provider and writes those recordings.
 """
@@ -27,49 +27,51 @@ from app.catalog import Catalog
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v5"
+MAX_OUTPUT_TOKENS = 1024
 
-TOOL = {
-    "name": "propose_audience",
-    "description": "Propose an audience definition for the marketer's request using only catalog attributes and glossary terms.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "glossary_terms": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Glossary term names used by the request. Do not also write conditions for them.",
-            },
-            "conditions": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "attribute": {"type": "string"},
-                        "op": {"type": "string", "enum": ["eq", "neq", "in", "not_in", "gt", "gte", "lt", "lte", "between"]},
-                        "value": {
-                            "type": ["string", "number", "boolean", "array"],
-                            "description": "Scalar; [low, high] for between; a list for in/not_in.",
-                        },
+PROPOSAL_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "glossary_terms": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Glossary term names used by the request. Do not also write conditions for them.",
+        },
+        "conditions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "attribute": {"type": "string"},
+                    "op": {"type": "string", "enum": ["eq", "neq", "in", "not_in", "gt", "gte", "lt", "lte", "between"]},
+                    "value": {
+                        "description": "Scalar; [low, high] for between; a list for in/not_in.",
+                        "anyOf": [
+                            {"type": "string"}, {"type": "number"}, {"type": "boolean"},
+                            {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "number"}]}},
+                        ],
                     },
-                    "required": ["attribute", "op", "value"],
                 },
-            },
-            "channel": {"type": ["string", "null"], "enum": ["sms", "email", None]},
-            "unmapped_phrases": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Phrases from the request that no attribute or glossary term can express, quoted.",
-            },
-            "out_of_scope": {"type": "boolean", "description": "True only if the request does not describe a group of customers."},
-            "assumptions": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Up to 3 short interpretation choices the marketer should know about.",
+                "required": ["attribute", "op", "value"],
             },
         },
-        "required": ["glossary_terms", "conditions", "unmapped_phrases", "out_of_scope", "assumptions"],
+        "channel": {"type": "string", "enum": ["sms", "email", "unspecified"]},
+        "unmapped_phrases": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Phrases from the request that no attribute or glossary term can express, quoted.",
+        },
+        "out_of_scope": {"type": "boolean", "description": "True only if the request does not describe a group of customers."},
+        "assumptions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Up to 3 short interpretation choices the marketer should know about.",
+        },
     },
+    "required": ["glossary_terms", "conditions", "channel", "unmapped_phrases", "out_of_scope", "assumptions"],
 }
 
 _RULES = """You translate a marketing-operations request into a structured audience definition for a telco's customer
@@ -80,13 +82,16 @@ Rules:
 1. Use only the attributes and glossary terms listed below. Never invent attributes, values or thresholds.
 2. If the request uses a glossary term or one of its phrases, put the term name in glossary_terms and do NOT write
    conditions for it. The system expands decided terms itself and asks the marketer to choose for open terms.
+   But if the request states its own number for that idea ("more than 15 GB", "spending over 60 dollars"), the
+   marketer's number wins: write it as a condition and do not use the glossary term. A shared word is not enough
+   to use a term: only use it when the request is about that concept ("a new phone" is not "new customers").
 3. Anything you cannot express with the catalog goes into unmapped_phrases, quoted from the request. Never silently
    drop part of the request.
 4. Attributes marked NOT TARGETABLE must never appear in conditions, and an attribute marked "Not usable for <channel>
    campaigns" must not be used when the audience is for that channel. If the request needs one, put that phrase in
    unmapped_phrases; data-usage policies decide this, not you.
 5. Consent is applied automatically: never add consent conditions. Set channel only if the request names one
-   (SMS/text -> sms, email -> email); otherwise null.
+   (SMS/text -> sms, email -> email); otherwise "unspecified".
 6. Map a relative phrase to a threshold only when the request states it ("more than 30 days without a top-up" ->
    days_since_last_recharge gt 30; "last month" -> the 30-day attributes). If a qualifier is vague ("low data users",
    "big spenders" when not a glossary phrase) put it in unmapped_phrases instead of guessing a number.
@@ -98,7 +103,7 @@ Examples:
 Request: "Postpaid customers in Coast or Valley who roamed last month, email campaign"
 -> conditions [line_type eq postpaid, region in [Coast, Valley], roaming_30d eq true]; glossary_terms []; channel email
 Request: "high value active iPhone users"
--> conditions [device_os eq ios]; glossary_terms [high_value, active]; channel null
+-> conditions [device_os eq ios]; glossary_terms [high_value, active]; channel unspecified
 Request: "prepaid customers who complained to the call centre"
 -> conditions [line_type eq prepaid]; unmapped_phrases ["complained to the call centre"]
 """
@@ -140,7 +145,7 @@ class LLMResult:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
-    finish_reason: str = "tool_use"
+    finish_reason: str = "end_turn"
     replayed: bool = False
 
     @property
@@ -159,25 +164,27 @@ class Provider(Protocol):
 class AnthropicProvider:
     name = "anthropic"
 
-    def __init__(self, api_key: str, model: str, timeout_s: float, max_retries: int):
+    def __init__(self, api_key: str, model: str, timeout_s: float, max_retries: int, effort: str | None = "low"):
         import anthropic
 
         self._anthropic = anthropic
         self._client = anthropic.Anthropic(api_key=api_key, timeout=timeout_s, max_retries=max_retries)
         self.model = model
+        self.effort = effort
 
     def propose(self, system: str, messages: list[dict[str, Any]]) -> LLMResult:
         a = self._anthropic
+        output_config: dict[str, Any] = {"format": {"type": "json_schema", "schema": PROPOSAL_SCHEMA}}
+        if self.effort:
+            output_config["effort"] = self.effort
         started = time.perf_counter()
         try:
             response = self._client.messages.create(
                 model=self.model,
-                max_tokens=1024,
-                temperature=0,
+                max_tokens=MAX_OUTPUT_TOKENS,
                 system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-                tools=[TOOL],
-                tool_choice={"type": "tool", "name": TOOL["name"]},
                 messages=messages,
+                output_config=output_config,
             )
         except (a.APITimeoutError, a.APIConnectionError, a.RateLimitError, a.InternalServerError) as exc:
             raise ProviderUnavailable(f"{type(exc).__name__}: model temporarily unreachable") from exc
@@ -185,12 +192,16 @@ class AnthropicProvider:
             raise ProviderUnavailable(f"model call rejected (HTTP {exc.status_code})") from exc
         latency_ms = (time.perf_counter() - started) * 1000
 
-        tool_use = next((b for b in response.content if getattr(b, "type", None) == "tool_use"), None)
-        if tool_use is None or not isinstance(tool_use.input, dict):
-            raise ProviderUnavailable(f"model returned no tool call (stop_reason={response.stop_reason})")
+        if response.stop_reason != "end_turn":
+            raise ProviderUnavailable(f"model stopped early (stop_reason={response.stop_reason})")
+        text = "".join(b.text for b in response.content if getattr(b, "type", None) == "text")
+        try:
+            proposal = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ProviderUnavailable("model returned output that is not valid JSON") from exc
         usage = response.usage
         return LLMResult(
-            proposal=tool_use.input,
+            proposal=proposal,
             model=response.model,
             latency_ms=latency_ms,
             input_tokens=usage.input_tokens,

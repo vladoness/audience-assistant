@@ -66,6 +66,13 @@ cases:
       status: ready
       definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: usage_events_30d, op: eq, value: 0}]}
 
+  - id: threshold-05
+    category: thresholds
+    request: Customers in the North spending more than 60 dollars a month
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: arpu_3m, op: gt, value: 60}, {attribute: region, op: eq, value: North}]}
+
   - id: scope-01
     category: thresholds
     request: Customers who haven't recharged in 60 days
@@ -193,6 +200,7 @@ cases:
     expect:
       status_in: [needs_confirmation, invalid]
       forbid_attributes: [credit_risk_band]
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}]}
 
   - id: policy-02
     category: policy

@@ -20,6 +20,8 @@ def verify_provenance(definition: AudienceDefinition, catalog: Catalog) -> Audie
     definition. Anything else is relabelled "user", so a client can't make an edited threshold look governed."""
     out = []
     for c in definition.conditions:
+        if c.source not in {"model", "user"} and not c.source.startswith("glossary:"):
+            c = c.model_copy(update={"source": "user"})
         if c.source.startswith("glossary:"):
             term_name, _, option = c.source.removeprefix("glossary:").partition("=")
             term = catalog.terms.get(term_name)
@@ -39,16 +41,19 @@ def reconcile_with_proposal(final: AudienceDefinition, proposed: AudienceDefinit
     """Server-side truth for "model" sources, and whether the marketer edited the AI's proposal.
 
     A condition counts as the model's only if the model actually proposed it. Answering a
-    clarification or keeping governed terms is not an edit; changing, adding or removing
-    targeting conditions is.
+    clarification is not an edit; changing the channel or adding, removing or changing any other
+    condition (including a governed one the grounding check warned about) is.
     """
     model_keys = {_key(c) for c in proposed.conditions if c.source == "model"}
     conditions = [
         c.model_copy(update={"source": "user"}) if c.source == "model" and _key(c) not in model_keys else c
         for c in final.conditions
     ]
-    kept_model = {_key(c) for c in conditions if c.source == "model"}
-    edited = any(c.source == "user" for c in conditions) or bool(model_keys - kept_model)
+
+    def targeting(d: AudienceDefinition) -> set[str]:
+        return {_key(c) for c in d.conditions if not (c.source.startswith("glossary:") and "=" in c.source)}
+
+    edited = final.channel != proposed.channel or targeting(final) != targeting(proposed)
     return final.model_copy(update={"conditions": conditions}), edited
 
 

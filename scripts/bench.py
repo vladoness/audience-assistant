@@ -43,7 +43,11 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=20)
     args = parser.parse_args()
     catalog = load_catalog(ROOT / "config")
-    tmp = Path(tempfile.mkdtemp())
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        run_bench(Path(tmp_dir), catalog, args)
+
+
+def run_bench(tmp: Path, catalog, args) -> None:
 
     print(f"{'rows':>10}  {'generate':>9}  {'definition':<20} {'p50 ms':>8} {'p95 ms':>8}")
     for rows in args.rows:

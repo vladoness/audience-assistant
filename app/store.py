@@ -108,9 +108,12 @@ class AuditStore:
             row = self._db.execute("SELECT id FROM audiences WHERE request_id = ?", (request_id,)).fetchone()
         return row["id"] if row else None
 
-    def ping(self) -> bool:
+    def can_write(self) -> bool:
+        """Readiness: take and release a write lock without changing anything."""
         with self._lock:
-            return self._db.execute("SELECT 1").fetchone()[0] == 1
+            self._db.execute("BEGIN IMMEDIATE")
+            self._db.execute("ROLLBACK")
+            return True
 
     def record_approval(self, row: dict[str, Any]) -> int:
         with self._lock, self._db:
@@ -124,6 +127,13 @@ class AuditStore:
                 {"created_at": _now(), **row},
             )
             return cur.lastrowid
+
+    def record_approval_once(self, row: dict[str, Any]) -> int | None:
+        """Insert an approval; None if this interpretation was approved concurrently."""
+        try:
+            return self.record_approval(row)
+        except sqlite3.IntegrityError:
+            return None
 
     def list_audiences(self, limit: int = 50) -> list[dict[str, Any]]:
         with self._lock:

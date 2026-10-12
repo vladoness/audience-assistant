@@ -44,9 +44,10 @@ async function init() {
   pill.classList.toggle("live", health.provider === "anthropic");
   pill.title = `${health.governance_lint} · governance ${Object.entries(health.governance).map(([k, v]) => `${k} ${v}`).join(", ")}`;
   if (health.eval) {
-    const part = (e, label) => e ? `${Math.round(e.pass_rate * 100)}% on ${e.cases} ${label} cases` : null;
-    const measured = [part(health.eval.heldout, "held-out"), part(health.eval.dev, "development")].filter(Boolean).join(", ");
-    $("accuracy-hint").textContent = `Measured accuracy of this configuration: ${measured}. The assistant can misread a request, so always check the summary before approving.`;
+    const sets = [health.eval.dev, health.eval.heldout].filter(Boolean);
+    const cases = sets.reduce((n, e) => n + e.cases, 0);
+    const pct = Math.round(100 * sets.reduce((n, e) => n + e.pass_rate * e.cases, 0) / cases);
+    $("accuracy-hint").textContent = `Measured on our ${cases} test cases (also used to choose this model): ${pct}% fully right. The assistant can misread a request, so always check the summary before approving.`;
   }
 
   catalog.examples.forEach((text) => {

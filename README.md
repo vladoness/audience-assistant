@@ -27,7 +27,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 68 tests, no network or API key needed
+make test         # 73 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 ```
 
@@ -126,7 +126,9 @@ effective 2026-10-07; latency is the model call, nearest-rank percentiles):
 "Pass" means every expectation for that case held: the right outcome status, **exactly the same
 set of reachable lines as the expected audience**, the right clarification or unmapped phrase,
 and policies named and enforced. Per-case results are in `evals/results/`. Run 1 of every
-configuration is recorded, so `make eval-replay MODEL=... EFFORT=...` reproduces it offline.
+configuration is recorded, so `make eval-replay MODEL=... EFFORT=...` reproduces its outcomes
+offline. Three Sonnet dev requests share their text with the UI examples and were re-recorded with
+them: same outcomes, different latencies.
 
 **What the misses were.** Sonnet missed nothing in 156 case-runs. Haiku's misses:
 - **Governed term applied without evidence.**
@@ -139,6 +141,9 @@ configuration is recorded, so `make eval-replay MODEL=... EFFORT=...` reproduces
   summary says "at least 60 days".
 - **Over-caution with PII.** In a request containing a contact email, it asked the marketer to
   confirm dropping "contact [EMAIL] for details". The audience was right.
+- **A failed model call.** Once in 3 runs, Haiku at default effort stopped early on the
+  prompt-injection case. The system returned "assistant unavailable", which is safe but counts as a
+  miss.
 
 **Decision: Sonnet 5.5 at low effort.** At this customer's volume (about 40 audiences a month)
 the cost difference is under a dollar a month, while the accuracy difference is the gap between
@@ -175,7 +180,7 @@ variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 - **Latency:** sizing takes milliseconds even at 5M lines; the model call is the wait (about 2 s
   median).
   - **Mitigations:** a response cache for repeated requests, prompt caching of the static
-    catalog (~2.7k tokens), low effort, a capped output, at most one repair call.
+    catalog (~3k tokens), low effort, a capped output, at most one repair call.
   - **Worst case:** about 40 s (10 s timeout, 1 retry, at most 2 calls). After 3 consecutive
     failures a circuit breaker pauses the assistant for 30 s, so people fall back to the editor
     instead of waiting.
@@ -259,7 +264,7 @@ OpenAPI docs are at `/docs`.
 
 ## Testing and reliability
 
-- **`make test`: 68 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 73 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;
@@ -279,6 +284,8 @@ OpenAPI docs are at `/docs`.
     vague qualifiers, policies, injection, out-of-scope, Spanish and PII.
   - Scoring is by exact audience equality plus status, clarification, unmapped and policy checks.
   - Repeats show run-to-run variance, and flaky cases are listed in the results.
+  - **Limitation:** policy cases check that the policy is named and enforced, not that the rest of
+    the proposed audience is right.
 
 ## Observability and operability
 
@@ -353,26 +360,12 @@ explores is what a customer rollout needs around such an agent:
 Not modelled here: identity. One row per line means no identity graph, no merge policies, and no
 person-level consent across a household's lines.
 
-## Standards I mapped it against
+## Standards
 
-- **OWASP Top 10 for LLM Apps (2025).** Each mitigation below is covered by a test:
-  - **LLM01, prompt injection:** the request is data inside delimiters; output is schema-bound;
-    policies and consent are enforced in code.
-  - **LLM02, sensitive information disclosure:** PII is masked before the model and the logs.
-  - **LLM05, improper output handling:** model output never reaches SQL as text.
-  - **LLM06, excessive agency:** the model can only return a proposal.
-  - **LLM10, unbounded consumption:** length caps, `max_tokens`, timeouts, one repair, rate limit,
-    budget, circuit breaker.
-- **Microsoft HAX guidelines:**
-  - G2: measured accuracy shown next to the assistant;
-  - G9: every condition editable;
-  - G10: ask about open terms, surface unmapped parts;
-  - G11: a source badge on every condition;
-  - G18: approved audiences flagged when rules change.
-- **NIST AI RMF:** the governance files, evals and failure-mode handling above are where Govern,
-  Measure and Manage show up. I haven't done a formal mapping.
-- **OpenTelemetry GenAI semantic conventions:** attribute names on the model-call log, with
-  input tokens including cached tokens as the spec requires for Anthropic.
+I mapped the design against the OWASP Top 10 for LLM Applications (2025), Microsoft's HAX
+guidelines for human-AI interaction, the NIST AI RMF, and the OpenTelemetry GenAI semantic
+conventions. The mapping, and which parts are tested, is in
+[docs/DESIGN.md](docs/DESIGN.md#standards-i-mapped-it-against).
 
 ---
 

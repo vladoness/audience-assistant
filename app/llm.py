@@ -142,6 +142,10 @@ class CircuitOpen(ProviderUnavailable):
     code = "circuit_open"
 
 
+class NotRecorded(ProviderUnavailable):
+    """Offline mode has no recording for this request. Not a model failure."""
+
+
 @dataclass
 class LLMResult:
     proposal: dict[str, Any]
@@ -247,7 +251,7 @@ class ReplayProvider:
     def propose(self, system: str, messages: list[dict[str, Any]]) -> LLMResult:
         fixture = self._fixtures.get(fixture_key(messages))
         if fixture is None:
-            raise ProviderUnavailable("offline mode: no recorded model response for this request")
+            raise NotRecorded("offline mode: no recorded model response for this request")
         usage = fixture.get("usage", {})
         return LLMResult(
             proposal=fixture["proposal"],

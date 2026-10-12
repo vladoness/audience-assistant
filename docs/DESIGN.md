@@ -173,3 +173,25 @@ passes the eval bar, and the repair cap.
 - **Model routing:** try the small model first, escalate to the larger model only when
   validation fails (instead of repairing with the same model). The eval harness gives the data
   to decide whether that is worth it.
+
+## Standards I mapped it against
+
+- **OWASP Top 10 for LLM Apps (2025).** Most mitigations below are exercised by tests;
+  timeouts and `max_tokens` are configuration:
+  - **LLM01, prompt injection:** the request is data inside delimiters; output is schema-bound;
+    policies and consent are enforced in code.
+  - **LLM02, sensitive information disclosure:** PII is masked before the model and the logs.
+  - **LLM05, improper output handling:** model output never reaches SQL as text.
+  - **LLM06, excessive agency:** the model can only return a proposal.
+  - **LLM10, unbounded consumption:** length caps, `max_tokens`, timeouts, one repair, rate limit,
+    budget, circuit breaker.
+- **Microsoft HAX guidelines:**
+  - G2: measured accuracy shown next to the assistant;
+  - G9: every condition editable;
+  - G10: ask about open terms, surface unmapped parts;
+  - G11: a source badge on every condition;
+  - G18: approved audiences flagged when rules change.
+- **NIST AI RMF:** the governance files, evals and failure-mode handling above are where Govern,
+  Measure and Manage show up. I haven't done a formal mapping.
+- **OpenTelemetry GenAI semantic conventions:** attribute names on the model-call log, with
+  input tokens including cached tokens as the spec requires for Anthropic.

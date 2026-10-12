@@ -22,7 +22,7 @@ class Condition(BaseModel):
     attribute: str
     op: Op
     value: Any
-    source: str = "model"  # model | user | glossary:<term> | glossary:<term>=<option>
+    source: str = Field("model", max_length=80)  # model | user | glossary:<term> | glossary:<term>=<option>
 
 
 class AudienceDefinition(BaseModel):

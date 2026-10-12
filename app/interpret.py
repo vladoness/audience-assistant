@@ -21,7 +21,7 @@ from app.explain import explain
 from app.limits import DailyBudget
 from app.governance import verify_provenance
 from app.llm import (
-    MAX_OUTPUT_TOKENS, PROMPT_VERSION, BudgetExhausted, CircuitOpen, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt,
+    MAX_OUTPUT_TOKENS, PROMPT_VERSION, BudgetExhausted, CircuitOpen, NotRecorded, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt,
 )
 from app.models import (
     AudienceDefinition, CheckResult, Clarification, ClarificationOption, Condition, InterpretResult, Issue, Telemetry,
@@ -140,6 +140,8 @@ class Interpreter:
             raise CircuitOpen("several recent model calls failed; pausing the assistant briefly")
         try:
             result: LLMResult = self.provider.propose(self.system_prompt, messages)
+        except NotRecorded:
+            raise
         except ProviderUnavailable:
             self._consecutive_failures += 1
             if self._consecutive_failures >= self.breaker_threshold:
@@ -231,6 +233,8 @@ class Interpreter:
             status = "invalid"
         elif clarifications:
             status = "needs_clarification"
+        elif unmapped and not definition.conditions:
+            status = "unsupported"
         elif unmapped:
             status = "needs_confirmation"
         elif not definition.conditions:

@@ -41,7 +41,7 @@ def test_unmapped_phrases_need_confirmation_instead_of_being_dropped(make_client
 
 def test_invalid_proposal_gets_exactly_one_repair_attempt(make_client):
     bad = proposal(conditions=[{"attribute": "churn_score", "op": "gt", "value": 0.8}])
-    fixed = proposal(conditions=[], unmapped=["likely to churn"])
+    fixed = proposal(conditions=[{"attribute": "line_type", "op": "eq", "value": "prepaid"}], unmapped=["likely to churn"])
     provider = ScriptedProvider(bad, fixed)
     _, r = interpret(make_client, provider)
     assert r["status"] == "needs_confirmation"

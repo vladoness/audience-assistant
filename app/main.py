@@ -195,6 +195,8 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         checked = s.interpreter.check(body.definition, [], {})
         if checked.status != "ready":
             raise HTTPException(422, detail={"status": checked.status, "issues": [i.model_dump() for i in checked.issues]})
+        if not checked.definition.conditions:
+            raise HTTPException(422, detail={"status": "invalid", "detail": "An audience needs at least one condition."})
         answered = {c.source.removeprefix("glossary:").partition("=")[0]
                     for c in checked.definition.conditions if c.source.startswith("glossary:") and "=" in c.source}
         unanswered = [t for t in json.loads(interpretation["clarifications_json"]) if t not in answered]
@@ -208,7 +210,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         final, edited = reconcile_with_proposal(checked.definition, proposed)
         sized = s.engine.size(final)
         definition = final.model_dump()
-        audience_id = s.store.record_approval({
+        audience_id = s.store.record_approval_once({
             "name": body.name.strip(),
             "approver": body.approver.strip(),
             "request_id": body.request_id,
@@ -224,8 +226,11 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             "governance_versions": json.dumps(s.catalog.versions),
         })
         s.metrics.incr("audiences_approved")
+        if audience_id is None:
+            raise HTTPException(409, detail="This request was just approved by someone else.")
         log.info("audience_approved", extra={"audience_id": audience_id, "reachable": sized.reachable,
-                                             "definition_hash": definition_hash(definition)})
+                                             "definition_hash": definition_hash(definition),
+                                             "interpretation_request_id": body.request_id, "edited_by_user": edited})
         return {"id": audience_id, "reachable": sized.reachable, "definition_hash": definition_hash(definition)}
 
     @app.get("/api/audiences")
@@ -282,7 +287,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         s = svc(request)
         checks = {
             "profiles_loaded": s.engine.base > 0,
-            "audit_store_writable": _safe(s.store.ping),
+            "audit_store_writable": _safe(s.store.can_write),
             "model_path_usable": not s.interpreter.circuit_open and s.budget.available(),
         }
         ready = checks["profiles_loaded"] and checks["audit_store_writable"]

@@ -148,3 +148,48 @@ def test_percentile_is_nearest_rank():
     samples = sorted(float(i) for i in range(1, 21))
     assert percentile(samples, 95) == 19.0
     assert percentile([1.0, 9.0], 95) == 9.0
+
+
+# --- Second review round (regressions found by the re-review) ---------------------------------
+
+def test_offline_misses_do_not_trip_the_circuit_breaker(make_client, tmp_path):
+    from app.llm import RecordingProvider, build_messages, ReplayProvider
+    recorded = proposal(conditions=[{"attribute": "roaming_30d", "op": "eq", "value": True}])
+    RecordingProvider(ScriptedProvider(recorded), tmp_path).propose("system", build_messages("roamers"))
+    client = make_client(ReplayProvider(tmp_path, model="scripted-model", effort=None))
+    for i in range(4):
+        assert client.post("/api/interpret", json={"request": f"unrecorded {i}"}).json()["status"] == "ai_unavailable"
+    assert client.post("/api/interpret", json={"request": "roamers"}).json()["status"] == "ready"
+
+
+def test_removing_a_governed_condition_counts_as_an_edit(make_client):
+    client = make_client(ScriptedProvider(proposal(conditions=[{"attribute": "line_type", "op": "eq", "value": "postpaid"}],
+                                                   terms=["high_value"])))
+    r = client.post("/api/interpret", json={"request": "high value postpaid"}).json()
+    without_governed = r["definition"] | {"conditions": [c for c in r["definition"]["conditions"] if c["source"] == "model"]}
+    assert approve(client, r, without_governed).status_code == 200
+    assert client.get("/api/audiences").json()[0]["edited_by_user"] == 1
+
+
+def test_unknown_sources_are_relabelled_and_counted_as_edits(make_client):
+    client = make_client(ScriptedProvider(PREPAID_COAST))
+    r = client.post("/api/interpret", json={"request": "prepaid in coast"}).json()
+    extra = r["definition"] | {"conditions": r["definition"]["conditions"] + [
+        {"attribute": "roaming_30d", "op": "eq", "value": True, "source": "approved-by-legal"}]}
+    checked = client.post("/api/check", json={"definition": extra}).json()
+    assert checked["definition"]["conditions"][-1]["source"] == "user"
+    assert approve(client, r, extra).status_code == 200
+    assert client.get("/api/audiences").json()[0]["edited_by_user"] == 1
+
+
+def test_request_with_nothing_mappable_is_unsupported_not_all_lines(make_client):
+    client = make_client(ScriptedProvider(proposal(unmapped=["called the call centre"])))
+    r = client.post("/api/interpret", json={"request": "customers who called the call centre"}).json()
+    assert r["status"] == "unsupported"
+    empty = {"channel": "sms", "conditions": []}
+    assert approve(client, r, empty, acknowledged_unmapped=True).status_code == 422
+
+
+def test_iban_masking_requires_a_valid_checksum():
+    assert mask_pii("Customers on the XL20 plan with roaming data")[1] == 0
+    assert mask_pii("GB82 WEST 1234 5698 7654 32") == ("[IBAN]", 1)

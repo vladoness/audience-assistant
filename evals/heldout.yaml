@@ -1,0 +1,134 @@
+# Held-out set: written after the dev set and the prompt were final, frozen, and never used to
+# change the prompt. Same expectation keys as cases.yaml. Report it separately from the dev set.
+
+cases:
+  - id: h-simple-01
+    category: simple
+    request: Postpaid customers in the Highlands on premium plans
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: region, op: eq, value: Highlands}, {attribute: plan_tier, op: eq, value: premium}]}
+
+  - id: h-simple-02
+    category: simple
+    request: Android users who did not roam in the last month
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: device_os, op: eq, value: android}, {attribute: roaming_30d, op: eq, value: false}]}
+
+  - id: h-threshold-01
+    category: thresholds
+    request: Prepaid lines that used between 5 and 15 GB of data in the last 30 days
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: data_gb_30d, op: between, value: [5, 15]}]}
+
+  - id: h-threshold-02
+    category: thresholds
+    request: Customers with less than 6 months of tenure in the Coast region
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: tenure_months, op: lt, value: 6}, {attribute: region, op: eq, value: Coast}]}
+
+  - id: h-threshold-03
+    category: thresholds
+    request: Lines using more than 30 GB of data a month
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: data_gb_30d, op: gt, value: 30}]}
+
+  - id: h-threshold-04
+    category: thresholds
+    request: Silent lines that are still billed as current
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: usage_events_30d, op: eq, value: 0}, {attribute: billing_status, op: eq, value: current}]}
+
+  - id: h-glossary-01
+    category: glossary_decided
+    request: Valuable postpaid customers in the Valley
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: arpu_3m, op: gte, value: 40}, {attribute: line_type, op: eq, value: postpaid}, {attribute: region, op: eq, value: Valley}]}
+
+  - id: h-glossary-02
+    category: glossary_decided
+    request: New joiners who use the app
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: tenure_months, op: lt, value: 3}, {attribute: app_active_30d, op: eq, value: true}]}
+
+  - id: h-open-01
+    category: glossary_open
+    request: Active prepaid customers in the North
+    expect:
+      status: needs_clarification
+      clarify: [active]
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: North}]}
+
+  - id: h-open-02
+    category: glossary_open
+    request: Customers at risk of leaving who are on standard plans
+    expect:
+      status: needs_clarification
+      clarify: [churn_risk]
+      definition: {conditions: [{attribute: plan_tier, op: eq, value: standard}]}
+
+  - id: h-unmapped-01
+    category: unmapped
+    request: Postpaid customers who visited our website this week
+    expect:
+      status: needs_confirmation
+      unmapped_contains: [website]
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}]}
+
+  - id: h-unmapped-02
+    category: unmapped
+    request: Big data users in the Capital who complained on social media
+    expect:
+      status: needs_confirmation
+      unmapped_contains: [social media]
+      definition: {conditions: [{attribute: data_gb_30d, op: gte, value: 20}, {attribute: region, op: eq, value: Capital}]}
+
+  - id: h-policy-01
+    category: policy
+    request: Prepaid customers with a medium credit risk band
+    expect:
+      status: invalid
+      issues_include: [policy_violation]
+      forbid_attributes: [credit_risk_band]
+
+  - id: h-policy-02
+    category: policy
+    request: App users, for an email newsletter about our new plans
+    expect:
+      status: invalid
+      issues_include: [policy_violation]
+      forbid_attributes: [app_active_30d]
+
+  - id: h-out-of-scope-01
+    category: out_of_scope
+    request: Summarise last month's campaign results for me
+    expect:
+      status: unsupported
+
+  - id: h-spanish-01
+    category: multilingual
+    request: Clientes postpago en la región Highlands que hicieron roaming el último mes
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: region, op: eq, value: Highlands}, {attribute: roaming_30d, op: eq, value: true}]}
+
+  - id: h-pii-01
+    category: pii
+    request: "Feature phone users in the North (contact maria.lopez@example.com for details)"
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: device_os, op: eq, value: feature_phone}, {attribute: region, op: eq, value: North}]}
+
+  - id: h-channel-01
+    category: simple
+    request: iOS users on basic plans, email campaign
+    expect:
+      status: ready
+      definition: {channel: email, conditions: [{attribute: device_os, op: eq, value: ios}, {attribute: plan_tier, op: eq, value: basic}]}

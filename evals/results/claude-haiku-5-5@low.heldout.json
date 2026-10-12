@@ -1,0 +1,2059 @@
+{
+  "summary": {
+    "model": "claude-haiku-5-5",
+    "cases": 18,
+    "runs": 3,
+    "pass_rate": 0.852,
+    "pass_rate_per_run": [
+      0.889,
+      0.833,
+      0.833
+    ],
+    "status_accuracy": 0.907,
+    "audience_exact_match": 0.93,
+    "repair_rate": 0.0,
+    "latency_p50_ms": 1493.0,
+    "latency_p95_ms": 2456.0,
+    "latency_max_ms": 3071.0,
+    "avg_tokens_in": 3073.0,
+    "avg_tokens_out": 154.0,
+    "cost_per_1k_requests_usd": 0.12,
+    "by_category": {
+      "glossary_decided": "6/6",
+      "glossary_open": "6/6",
+      "multilingual": "3/3",
+      "out_of_scope": "3/3",
+      "pii": "0/3",
+      "policy": "6/6",
+      "simple": "4/9",
+      "thresholds": "12/12",
+      "unmapped": "6/6"
+    },
+    "flaky_cases": [
+      "h-channel-01"
+    ],
+    "failures": [
+      {
+        "id": "h-channel-01",
+        "failed_runs": "2/3"
+      },
+      {
+        "id": "h-pii-01",
+        "failed_runs": "3/3"
+      },
+      {
+        "id": "h-simple-02",
+        "failed_runs": "3/3"
+      }
+    ],
+    "effort": "low",
+    "case_set": "heldout"
+  },
+  "cases": [
+    {
+      "id": "h-simple-01",
+      "category": "simple",
+      "request": "Postpaid customers in the Highlands on premium plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Highlands",
+          "source": "model"
+        },
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "premium",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2115.1,
+      "tokens_in": 3075,
+      "tokens_out": 161,
+      "cost_usd": 0.000464,
+      "run": 1
+    },
+    {
+      "id": "h-simple-02",
+      "category": "simple",
+      "request": "Android users who did not roam in the last month",
+      "passed": false,
+      "checks": {
+        "status": true,
+        "audience": false
+      },
+      "status": "ready",
+      "jaccard": 0.2357,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "roaming_30d",
+          "op": "eq",
+          "value": false,
+          "source": "model"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "ungrounded_term"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1164.7,
+      "tokens_in": 3069,
+      "tokens_out": 111,
+      "cost_usd": 9e-05,
+      "run": 1
+    },
+    {
+      "id": "h-threshold-01",
+      "category": "thresholds",
+      "request": "Prepaid lines that used between 5 and 15 GB of data in the last 30 days",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "between",
+          "value": [
+            5.0,
+            15.0
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1902.7,
+      "tokens_in": 3085,
+      "tokens_out": 144,
+      "cost_usd": 0.000108,
+      "run": 1
+    },
+    {
+      "id": "h-threshold-02",
+      "category": "thresholds",
+      "request": "Customers with less than 6 months of tenure in the Coast region",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 6,
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1310.9,
+      "tokens_in": 3077,
+      "tokens_out": 151,
+      "cost_usd": 0.000111,
+      "run": 1
+    },
+    {
+      "id": "h-threshold-03",
+      "category": "thresholds",
+      "request": "Lines using more than 30 GB of data a month",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 30.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1348.1,
+      "tokens_in": 3072,
+      "tokens_out": 111,
+      "cost_usd": 9e-05,
+      "run": 1
+    },
+    {
+      "id": "h-threshold-04",
+      "category": "thresholds",
+      "request": "Silent lines that are still billed as current",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "usage_events_30d",
+          "op": "eq",
+          "value": 0,
+          "source": "model"
+        },
+        {
+          "attribute": "billing_status",
+          "op": "eq",
+          "value": "current",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1413.2,
+      "tokens_in": 3069,
+      "tokens_out": 169,
+      "cost_usd": 0.000119,
+      "run": 1
+    },
+    {
+      "id": "h-glossary-01",
+      "category": "glossary_decided",
+      "request": "Valuable postpaid customers in the Valley",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Valley",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1451.0,
+      "tokens_in": 3072,
+      "tokens_out": 149,
+      "cost_usd": 0.000109,
+      "run": 1
+    },
+    {
+      "id": "h-glossary-02",
+      "category": "glossary_decided",
+      "request": "New joiners who use the app",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 3,
+          "source": "glossary:new_customer"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1304.6,
+      "tokens_in": 3065,
+      "tokens_out": 91,
+      "cost_usd": 8e-05,
+      "run": 1
+    },
+    {
+      "id": "h-open-01",
+      "category": "glossary_open",
+      "request": "Active prepaid customers in the North",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "North",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1395.6,
+      "tokens_in": 3068,
+      "tokens_out": 165,
+      "cost_usd": 0.000117,
+      "run": 1
+    },
+    {
+      "id": "h-open-02",
+      "category": "glossary_open",
+      "request": "Customers at risk of leaving who are on standard plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "standard",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "churn_risk"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2028.5,
+      "tokens_in": 3074,
+      "tokens_out": 138,
+      "cost_usd": 0.000104,
+      "run": 1
+    },
+    {
+      "id": "h-unmapped-01",
+      "category": "unmapped",
+      "request": "Postpaid customers who visited our website this week",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "visited our website this week"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1288.6,
+      "tokens_in": 3071,
+      "tokens_out": 123,
+      "cost_usd": 9.6e-05,
+      "run": 1
+    },
+    {
+      "id": "h-unmapped-02",
+      "category": "unmapped",
+      "request": "Big data users in the Capital who complained on social media",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Capital",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gte",
+          "value": 20.0,
+          "source": "glossary:heavy_data_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "complained on social media"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1369.5,
+      "tokens_in": 3072,
+      "tokens_out": 138,
+      "cost_usd": 0.000104,
+      "run": 1
+    },
+    {
+      "id": "h-policy-01",
+      "category": "policy",
+      "request": "Prepaid customers with a medium credit risk band",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "credit_risk_band",
+          "op": "eq",
+          "value": "medium",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1929.7,
+      "tokens_in": 3073,
+      "tokens_out": 164,
+      "cost_usd": 0.000117,
+      "run": 1
+    },
+    {
+      "id": "h-policy-02",
+      "category": "policy",
+      "request": "App users, for an email newsletter about our new plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1663.9,
+      "tokens_in": 3072,
+      "tokens_out": 141,
+      "cost_usd": 0.000105,
+      "run": 1
+    },
+    {
+      "id": "h-out-of-scope-01",
+      "category": "out_of_scope",
+      "request": "Summarise last month's campaign results for me",
+      "passed": true,
+      "checks": {
+        "status": true
+      },
+      "status": "unsupported",
+      "jaccard": null,
+      "conditions": [],
+      "clarifications": [],
+      "unmapped": [
+        "Summarise last month's campaign results"
+      ],
+      "issues": [
+        "no_conditions"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1346.5,
+      "tokens_in": 3070,
+      "tokens_out": 102,
+      "cost_usd": 8.6e-05,
+      "run": 1
+    },
+    {
+      "id": "h-spanish-01",
+      "category": "multilingual",
+      "request": "Clientes postpago en la regi\u00f3n Highlands que hicieron roaming el \u00faltimo mes",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Highlands",
+          "source": "model"
+        },
+        {
+          "attribute": "roaming_30d",
+          "op": "eq",
+          "value": true,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1584.3,
+      "tokens_in": 3083,
+      "tokens_out": 194,
+      "cost_usd": 0.000133,
+      "run": 1
+    },
+    {
+      "id": "h-pii-01",
+      "category": "pii",
+      "request": "Feature phone users in the North (contact maria.lopez@example.com for details)",
+      "passed": false,
+      "checks": {
+        "status": false,
+        "audience": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "feature_phone",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "North",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "contact [EMAIL] for details"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1394.9,
+      "tokens_in": 3079,
+      "tokens_out": 161,
+      "cost_usd": 0.000116,
+      "run": 1
+    },
+    {
+      "id": "h-channel-01",
+      "category": "simple",
+      "request": "iOS users on basic plans, email campaign",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "ios",
+          "source": "model"
+        },
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "basic",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 3070.9,
+      "tokens_in": 3071,
+      "tokens_out": 325,
+      "cost_usd": 0.000197,
+      "run": 1
+    },
+    {
+      "id": "h-simple-01",
+      "category": "simple",
+      "request": "Postpaid customers in the Highlands on premium plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Highlands",
+          "source": "model"
+        },
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "premium",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1402.3,
+      "tokens_in": 3075,
+      "tokens_out": 156,
+      "cost_usd": 0.000113,
+      "run": 2
+    },
+    {
+      "id": "h-simple-02",
+      "category": "simple",
+      "request": "Android users who did not roam in the last month",
+      "passed": false,
+      "checks": {
+        "status": true,
+        "audience": false
+      },
+      "status": "ready",
+      "jaccard": 0.2357,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "roaming_30d",
+          "op": "eq",
+          "value": false,
+          "source": "model"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "ungrounded_term"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2166.6,
+      "tokens_in": 3069,
+      "tokens_out": 170,
+      "cost_usd": 0.00012,
+      "run": 2
+    },
+    {
+      "id": "h-threshold-01",
+      "category": "thresholds",
+      "request": "Prepaid lines that used between 5 and 15 GB of data in the last 30 days",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "between",
+          "value": [
+            5.0,
+            15.0
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1386.7,
+      "tokens_in": 3085,
+      "tokens_out": 141,
+      "cost_usd": 0.000107,
+      "run": 2
+    },
+    {
+      "id": "h-threshold-02",
+      "category": "thresholds",
+      "request": "Customers with less than 6 months of tenure in the Coast region",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 6,
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1325.3,
+      "tokens_in": 3077,
+      "tokens_out": 151,
+      "cost_usd": 0.000111,
+      "run": 2
+    },
+    {
+      "id": "h-threshold-03",
+      "category": "thresholds",
+      "request": "Lines using more than 30 GB of data a month",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 30.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1337.9,
+      "tokens_in": 3072,
+      "tokens_out": 112,
+      "cost_usd": 9.1e-05,
+      "run": 2
+    },
+    {
+      "id": "h-threshold-04",
+      "category": "thresholds",
+      "request": "Silent lines that are still billed as current",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "usage_events_30d",
+          "op": "eq",
+          "value": 0,
+          "source": "model"
+        },
+        {
+          "attribute": "billing_status",
+          "op": "eq",
+          "value": "current",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1397.2,
+      "tokens_in": 3069,
+      "tokens_out": 164,
+      "cost_usd": 0.000117,
+      "run": 2
+    },
+    {
+      "id": "h-glossary-01",
+      "category": "glossary_decided",
+      "request": "Valuable postpaid customers in the Valley",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Valley",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1287.6,
+      "tokens_in": 3072,
+      "tokens_out": 166,
+      "cost_usd": 0.000118,
+      "run": 2
+    },
+    {
+      "id": "h-glossary-02",
+      "category": "glossary_decided",
+      "request": "New joiners who use the app",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 3,
+          "source": "glossary:new_customer"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1420.9,
+      "tokens_in": 3065,
+      "tokens_out": 138,
+      "cost_usd": 0.000103,
+      "run": 2
+    },
+    {
+      "id": "h-open-01",
+      "category": "glossary_open",
+      "request": "Active prepaid customers in the North",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "North",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1536.5,
+      "tokens_in": 3068,
+      "tokens_out": 168,
+      "cost_usd": 0.000118,
+      "run": 2
+    },
+    {
+      "id": "h-open-02",
+      "category": "glossary_open",
+      "request": "Customers at risk of leaving who are on standard plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "standard",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "churn_risk"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2007.5,
+      "tokens_in": 3074,
+      "tokens_out": 137,
+      "cost_usd": 0.000104,
+      "run": 2
+    },
+    {
+      "id": "h-unmapped-01",
+      "category": "unmapped",
+      "request": "Postpaid customers who visited our website this week",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "visited our website this week"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1359.7,
+      "tokens_in": 3071,
+      "tokens_out": 116,
+      "cost_usd": 9.3e-05,
+      "run": 2
+    },
+    {
+      "id": "h-unmapped-02",
+      "category": "unmapped",
+      "request": "Big data users in the Capital who complained on social media",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Capital",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gte",
+          "value": 20.0,
+          "source": "glossary:heavy_data_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "complained on social media"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1450.9,
+      "tokens_in": 3072,
+      "tokens_out": 155,
+      "cost_usd": 0.000112,
+      "run": 2
+    },
+    {
+      "id": "h-policy-01",
+      "category": "policy",
+      "request": "Prepaid customers with a medium credit risk band",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "credit_risk_band",
+          "op": "eq",
+          "value": "medium",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1489.0,
+      "tokens_in": 3073,
+      "tokens_out": 151,
+      "cost_usd": 0.00011,
+      "run": 2
+    },
+    {
+      "id": "h-policy-02",
+      "category": "policy",
+      "request": "App users, for an email newsletter about our new plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1691.3,
+      "tokens_in": 3072,
+      "tokens_out": 165,
+      "cost_usd": 0.000117,
+      "run": 2
+    },
+    {
+      "id": "h-out-of-scope-01",
+      "category": "out_of_scope",
+      "request": "Summarise last month's campaign results for me",
+      "passed": true,
+      "checks": {
+        "status": true
+      },
+      "status": "unsupported",
+      "jaccard": null,
+      "conditions": [],
+      "clarifications": [],
+      "unmapped": [
+        "Summarise last month's campaign results"
+      ],
+      "issues": [
+        "no_conditions"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1305.9,
+      "tokens_in": 3070,
+      "tokens_out": 101,
+      "cost_usd": 8.5e-05,
+      "run": 2
+    },
+    {
+      "id": "h-spanish-01",
+      "category": "multilingual",
+      "request": "Clientes postpago en la regi\u00f3n Highlands que hicieron roaming el \u00faltimo mes",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Highlands",
+          "source": "model"
+        },
+        {
+          "attribute": "roaming_30d",
+          "op": "eq",
+          "value": true,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1635.4,
+      "tokens_in": 3083,
+      "tokens_out": 180,
+      "cost_usd": 0.000126,
+      "run": 2
+    },
+    {
+      "id": "h-pii-01",
+      "category": "pii",
+      "request": "Feature phone users in the North (contact maria.lopez@example.com for details)",
+      "passed": false,
+      "checks": {
+        "status": false,
+        "audience": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "feature_phone",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "North",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "contact [EMAIL] for details"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2042.9,
+      "tokens_in": 3079,
+      "tokens_out": 163,
+      "cost_usd": 0.000117,
+      "run": 2
+    },
+    {
+      "id": "h-channel-01",
+      "category": "simple",
+      "request": "iOS users on basic plans, email campaign",
+      "passed": false,
+      "checks": {
+        "status": false
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "ios",
+          "source": "model"
+        },
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "basic",
+          "source": "model"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "ungrounded_term",
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2788.8,
+      "tokens_in": 3071,
+      "tokens_out": 173,
+      "cost_usd": 0.000121,
+      "run": 2
+    },
+    {
+      "id": "h-simple-01",
+      "category": "simple",
+      "request": "Postpaid customers in the Highlands on premium plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Highlands",
+          "source": "model"
+        },
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "premium",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1613.5,
+      "tokens_in": 3075,
+      "tokens_out": 169,
+      "cost_usd": 0.00012,
+      "run": 3
+    },
+    {
+      "id": "h-simple-02",
+      "category": "simple",
+      "request": "Android users who did not roam in the last month",
+      "passed": false,
+      "checks": {
+        "status": true,
+        "audience": false
+      },
+      "status": "ready",
+      "jaccard": 0.2357,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "roaming_30d",
+          "op": "eq",
+          "value": false,
+          "source": "model"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "ungrounded_term"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1555.4,
+      "tokens_in": 3069,
+      "tokens_out": 214,
+      "cost_usd": 0.000142,
+      "run": 3
+    },
+    {
+      "id": "h-threshold-01",
+      "category": "thresholds",
+      "request": "Prepaid lines that used between 5 and 15 GB of data in the last 30 days",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "between",
+          "value": [
+            5.0,
+            15.0
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1737.4,
+      "tokens_in": 3085,
+      "tokens_out": 160,
+      "cost_usd": 0.000116,
+      "run": 3
+    },
+    {
+      "id": "h-threshold-02",
+      "category": "thresholds",
+      "request": "Customers with less than 6 months of tenure in the Coast region",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 6,
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2104.8,
+      "tokens_in": 3077,
+      "tokens_out": 151,
+      "cost_usd": 0.000111,
+      "run": 3
+    },
+    {
+      "id": "h-threshold-03",
+      "category": "thresholds",
+      "request": "Lines using more than 30 GB of data a month",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 30.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1876.3,
+      "tokens_in": 3072,
+      "tokens_out": 111,
+      "cost_usd": 9e-05,
+      "run": 3
+    },
+    {
+      "id": "h-threshold-04",
+      "category": "thresholds",
+      "request": "Silent lines that are still billed as current",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "usage_events_30d",
+          "op": "eq",
+          "value": 0,
+          "source": "model"
+        },
+        {
+          "attribute": "billing_status",
+          "op": "eq",
+          "value": "current",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1556.2,
+      "tokens_in": 3069,
+      "tokens_out": 165,
+      "cost_usd": 0.000117,
+      "run": 3
+    },
+    {
+      "id": "h-glossary-01",
+      "category": "glossary_decided",
+      "request": "Valuable postpaid customers in the Valley",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Valley",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1143.0,
+      "tokens_in": 3072,
+      "tokens_out": 141,
+      "cost_usd": 0.000105,
+      "run": 3
+    },
+    {
+      "id": "h-glossary-02",
+      "category": "glossary_decided",
+      "request": "New joiners who use the app",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 3,
+          "source": "glossary:new_customer"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1535.9,
+      "tokens_in": 3065,
+      "tokens_out": 141,
+      "cost_usd": 0.000105,
+      "run": 3
+    },
+    {
+      "id": "h-open-01",
+      "category": "glossary_open",
+      "request": "Active prepaid customers in the North",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "North",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1615.0,
+      "tokens_in": 3068,
+      "tokens_out": 170,
+      "cost_usd": 0.000119,
+      "run": 3
+    },
+    {
+      "id": "h-open-02",
+      "category": "glossary_open",
+      "request": "Customers at risk of leaving who are on standard plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "standard",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "churn_risk"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1296.1,
+      "tokens_in": 3074,
+      "tokens_out": 148,
+      "cost_usd": 0.000109,
+      "run": 3
+    },
+    {
+      "id": "h-unmapped-01",
+      "category": "unmapped",
+      "request": "Postpaid customers who visited our website this week",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "visited our website this week"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1342.0,
+      "tokens_in": 3071,
+      "tokens_out": 130,
+      "cost_usd": 0.0001,
+      "run": 3
+    },
+    {
+      "id": "h-unmapped-02",
+      "category": "unmapped",
+      "request": "Big data users in the Capital who complained on social media",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Capital",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gte",
+          "value": 20.0,
+          "source": "glossary:heavy_data_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "complained on social media"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1516.5,
+      "tokens_in": 3072,
+      "tokens_out": 160,
+      "cost_usd": 0.000115,
+      "run": 3
+    },
+    {
+      "id": "h-policy-01",
+      "category": "policy",
+      "request": "Prepaid customers with a medium credit risk band",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "credit_risk_band",
+          "op": "eq",
+          "value": "medium",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1568.5,
+      "tokens_in": 3073,
+      "tokens_out": 177,
+      "cost_usd": 0.000123,
+      "run": 3
+    },
+    {
+      "id": "h-policy-02",
+      "category": "policy",
+      "request": "App users, for an email newsletter about our new plans",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1493.4,
+      "tokens_in": 3072,
+      "tokens_out": 152,
+      "cost_usd": 0.000111,
+      "run": 3
+    },
+    {
+      "id": "h-out-of-scope-01",
+      "category": "out_of_scope",
+      "request": "Summarise last month's campaign results for me",
+      "passed": true,
+      "checks": {
+        "status": true
+      },
+      "status": "unsupported",
+      "jaccard": null,
+      "conditions": [],
+      "clarifications": [],
+      "unmapped": [
+        "Summarise last month's campaign results"
+      ],
+      "issues": [
+        "no_conditions"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1367.6,
+      "tokens_in": 3070,
+      "tokens_out": 102,
+      "cost_usd": 8.6e-05,
+      "run": 3
+    },
+    {
+      "id": "h-spanish-01",
+      "category": "multilingual",
+      "request": "Clientes postpago en la regi\u00f3n Highlands que hicieron roaming el \u00faltimo mes",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Highlands",
+          "source": "model"
+        },
+        {
+          "attribute": "roaming_30d",
+          "op": "eq",
+          "value": true,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1820.9,
+      "tokens_in": 3083,
+      "tokens_out": 189,
+      "cost_usd": 0.00013,
+      "run": 3
+    },
+    {
+      "id": "h-pii-01",
+      "category": "pii",
+      "request": "Feature phone users in the North (contact maria.lopez@example.com for details)",
+      "passed": false,
+      "checks": {
+        "status": false,
+        "audience": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "feature_phone",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "North",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "contact [EMAIL] for details"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2096.3,
+      "tokens_in": 3079,
+      "tokens_out": 187,
+      "cost_usd": 0.000129,
+      "run": 3
+    },
+    {
+      "id": "h-channel-01",
+      "category": "simple",
+      "request": "iOS users on basic plans, email campaign",
+      "passed": false,
+      "checks": {
+        "status": false
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "ios",
+          "source": "model"
+        },
+        {
+          "attribute": "plan_tier",
+          "op": "eq",
+          "value": "basic",
+          "source": "model"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "ungrounded_term",
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2456.3,
+      "tokens_in": 3071,
+      "tokens_out": 182,
+      "cost_usd": 0.000126,
+      "run": 3
+    }
+  ]
+}

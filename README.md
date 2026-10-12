@@ -2,21 +2,21 @@
 
 A marketing-operations campaign manager types *"prepaid customers in the Coast who haven't
 topped up in over 30 days but still use the app"*. A few seconds later they see the exact audience
-definition in plain English, answer at most one clarifying question, see how many lines can
-actually be reached, and approve it with a full audit trail.
+definition in plain English, answer any question about ambiguous business terms, see how many
+lines can actually be reached, and approve it with an audit trail.
 
 The AI model translates language into a structured proposal. Everything that has a correct
-answer is done by deterministic code: which fields exist, what governed terms mean, consent,
-counting, and the summary the user approves.
+answer is done by deterministic code: which fields exist, what governed terms mean, which data
+policies apply, consent, counting, and the summary the user approves.
 
 - **Customer context and value:** [docs/CUSTOMER-CONTEXT.md](docs/CUSTOMER-CONTEXT.md)
 - **Design note and diagram:** [docs/DESIGN.md](docs/DESIGN.md)
 
-| An open business term asks instead of guessing | Policy is evaluated per channel |
+| An open business term asks instead of guessing | A data-usage policy is named, per channel |
 |---|---|
 | ![Clarification](docs/screenshots/1-clarify.png) | ![Policy](docs/screenshots/3-policy.png) |
-| **What can't be built is surfaced, and an ungrounded term is flagged** | **Sized, approved, audited** |
-| ![Unmapped and ungrounded](docs/screenshots/4-unmapped-ungrounded.png) | ![Sized and approved](docs/screenshots/2-sized-approved.png) |
+| **What has no data behind it is surfaced, never dropped** | **Sized, approved, audited** |
+| ![Unmapped](docs/screenshots/4-unmapped.png) | ![Sized and approved](docs/screenshots/2-sized-approved.png) |
 
 ---
 
@@ -26,39 +26,50 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 make setup        # uv sync
-make run          # http://127.0.0.1:8000  (PORT=8010 make run to change; generates 200k profiles on first start, ~1 s)
-make test         # 52 tests, no network or API key needed
+make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
+make test         # 68 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 ```
 
-**With a model (recommended):** `cp .env.example .env`, add `ANTHROPIC_API_KEY`, then `make run`.
+**With a model:** `cp .env.example .env`, add `ANTHROPIC_API_KEY`, then `make run`.
 
-**Without a key:** the app starts in offline mode. The example prompts replay recorded model
-responses (`evals/fixtures/`). Anything else shows "assistant unavailable" and the condition
-editor still works end to end. That is also the designed behaviour when the model is down.
+**Without a key:** the app starts in offline mode. The six example prompts replay recorded model
+responses (`evals/fixtures/`). Anything else shows "assistant unavailable", and the condition
+editor, sizing and approval still work end to end. That is also the designed behaviour when the
+model is down.
 
-Other targets: `make eval` (golden set against the live model), `make eval-replay` (the same,
-offline from recordings), `make bench` (sizing latency at 200k / 1M / 5M lines).
+Evals: `make eval` and `make eval-heldout` (live, 3 runs each), `make eval-replay` (both sets,
+offline from the recordings). `make bench` measures sizing latency at 200k / 1M / 5M lines.
 
 ---
 
 ## The workflow
 
-1. **Describe** the audience in plain language (English or Spanish). Emails and phone numbers are
-   masked before the model sees the request.
+1. **Describe** the audience in plain language (English or Spanish). Emails, phone numbers, IBANs
+   and common EU national IDs are masked before the model sees the request.
 2. **Check what will run.** Each condition shows where it came from: **AI**, **governed** (a
    glossary decision with an id and owner), **your choice** (a clarification answer) or
-   **edited**. The marketer can change, add or remove any condition; every change is re-validated.
-   - **Ambiguous business term** (e.g. "active", "likely to churn"): one question with the
-     competing governed definitions as options.
+   **edited**. The marketer can change, add or remove any condition; every change is re-validated
+   on the server. The UI shows three kinds of problem:
+   - **Ambiguous business term** (e.g. "active", "likely to churn"): one question per such term,
+     with the competing governed definitions as options.
    - **Part of the request has no data behind it** (e.g. "called the call centre"): shown
      explicitly, and approval requires accepting that the audience is built without it.
+   - **A field the request needs is blocked by a data-usage policy** (e.g. credit risk for
+     marketing): the condition stays visible, highlighted, with the policy id. It can't be sized
+     or approved until removed.
 3. **Size.** Matched lines, minus those without consent for the channel, gives reachable lines,
    with region and line-type breakdowns. Warnings flag empty, tiny (< 100) or very broad (> 50% of
    base) audiences.
-4. **Approve.** The server re-validates and re-sizes the submitted definition, then writes an
-   audit record: request (masked), the model's raw proposal, model and prompt version,
-   catalog and glossary versions, whether the marketer edited it, counts at approval, and approver.
+4. **Approve.** The server re-validates and re-sizes. It checks that every open term was answered
+   and every unmapped part acknowledged, and that "governed" labels are genuine. Then it writes an
+   audit record:
+   - the masked request and the model's raw proposal;
+   - the model and prompt version, and all governance versions;
+   - whether the marketer edited the AI's proposal;
+   - counts at approval, and the approver.
+
+   Each interpretation can be approved once.
 
 ---
 
@@ -66,201 +77,110 @@ offline from recordings), `make bench` (sizing latency at 200k / 1M / 5M lines).
 
 The business owns four small, versioned config files. The model reads them; code enforces them.
 
-- **Fields and labels** (`catalog.yaml`). Every targetable field, with its type, range and
-  meaning. Fields carry data-usage labels: `credit_risk_band` is `CREDIT_DECISION_ONLY`,
-  `app_active_30d` is `APP_ANALYTICS`, and the consent fields are `CONSENT_SIGNAL`.
-- **Policies per marketing action** (`policies.yaml`). Each channel is a marketing action
-  (`sms_marketing`, `email_marketing`) with its consent field. Enabled policies deny labels for
-  actions:
+- **Fields and labels** (`catalog.yaml`). Every targetable field carries type, range, meaning and
+  data-usage labels:
+  - `credit_risk_band` is `CREDIT_DECISION_ONLY`;
+  - `app_active_30d` is `APP_ANALYTICS`;
+  - the consent fields are `CONSENT_SIGNAL`.
+- **Policies per marketing action** (`policies.yaml`). Each channel is a marketing action with
+  its consent field. Enabled policies deny labels for actions:
   - **MKT-07:** no credit data for any marketing.
   - **MKT-12:** app analytics data is not usable for email.
   - **MKT-15:** consent fields are never targeting criteria.
 
-  The same audience can be valid for SMS and blocked for email, and the message names the
-  policy.
-- **Rules are sentences, numbers are parameters** (`glossary.yaml` + `parameters.yaml`). A
-  decided term is one rule sentence with an owner and a decision id. *"A line is high value when
-  its 3-month average revenue reaches the high-value threshold"* is decision D-014, owned by
-  Marketing Analytics. Its number lives in a versioned parameter set: `high_value` v3, effective
-  2026-08-12, 40 USD, approved by a named person. Changing the threshold is a new parameter
-  version, not a new rule.
+  So the same audience can be valid for SMS and blocked for email.
+- **Rules are sentences, numbers are parameters** (`glossary.yaml` + `parameters.yaml`).
+  - A decided term is one rule sentence with an owner and a decision id (*high value*: D-014,
+    Marketing Analytics).
+  - Its threshold lives in a versioned parameter set (`high_value` v3, effective 2026-08-12,
+    40 USD, approved by a named person).
+  - Changing the threshold is a new parameter version, not a new rule.
 - **Open terms are honest.** "Active" and "churn risk" have competing definitions and no
-  decision yet. The assistant asks instead of guessing, and the Insights panel shows how people
-  answered: evidence for whoever has to decide.
+  decision yet. The assistant asks, and the Insights panel shows how people answered: evidence
+  for whoever has to decide.
 
-Four mechanisms keep this config trustworthy over time:
-
-- **Startup check with a receipt** (`make lint`, also in `/healthz`):
-  - **Errors** (an unknown field, label or parameter, a decided term with no owner) stop the
-    service.
-  - **Warnings** (a rule longer than one sentence, an open term with no named decider) are the
-    governance backlog.
-- **Change impact on approved audiences.** Each approval stores which governed terms it used and
-  their decision and parameter versions. When a rule or threshold changes, the approved-audiences
-  table flags every affected audience, says what changed (`high_value v3 → v4`), and shows its
-  size under the current rules, before anyone sends a campaign to a stale audience.
-- **Counted gaps.** Request parts the data can't express are counted, not discarded. *"Called
-  the call centre: 14×"* is a field the data team should add. Fields marketers keep correcting
-  point to prompt or catalog fixes.
-- **Bounded model use.** A per-client rate limit on the one endpoint that calls the model, and a
-  daily model budget. When either is hit, the assistant steps aside and the manual editor keeps
-  working.
-
-## How this maps to Adobe Experience Platform
-
-The prototype is deliberately platform-neutral, but every piece has an AEP counterpart. In an AEP
-engagement I would wire it to these rather than re-build them:
-
-| Here | Adobe Experience Platform |
-|---|---|
-| `catalog.yaml` fields | XDM schema fields / union profile attributes |
-| Labels + `policies.yaml` + marketing actions | Data usage labels, data governance policies, marketing actions on destinations (Policy Service API to evaluate before activation) |
-| Consent applied per channel by the engine | Consent policies at activation |
-| Validated definition → parameterized SQL | Segment definition in PQL, evaluated by the segmentation service |
-| Size before approval | Audience estimate |
-| Approve → audit record | Create and persist the audience (with permissions) |
-| Glossary with decision ids, parameter sets, change impact | Customer-owned governance layer: what the business has decided "high value" and "active" mean, kept outside any single tool |
-
-The interpret → size → approve flow is the same shape as AEP's **Audience Agent** (plan →
-characteristics → estimate → approve). What the prototype explores is what a customer rollout
-needs around it: business definitions owned and versioned by the customer, explicit handling
-of what can't be expressed, an evaluation set built from the customer's own requests, and
-field-to-product signals.
-
-## Standards I checked it against
-
-| Standard | How the design responds |
-|---|---|
-| **OWASP Top 10 for LLM Apps (2025)** | |
-| LLM01 Prompt injection | Request is data inside delimiters; output is schema-bound and validated; consent and policies are enforced in code regardless (tested) |
-| LLM02 Sensitive information disclosure | PII masked before the model and the logs; probes and UI show aggregates only |
-| LLM05 Improper output handling | Model output never reaches SQL as text: catalog-validated identifiers, bound parameters |
-| LLM06 Excessive agency | The model has one tool that returns a proposal; it can't query, write or approve |
-| LLM07 System prompt leakage | The prompt contains only the catalog and rules, no secrets |
-| LLM09 Misinformation | Human approves a code-generated summary; status comes from the validator; eval measures audience equality |
-| LLM10 Unbounded consumption | Request length cap, `max_tokens`, timeouts, one repair max, per-client rate limit, daily budget |
-| **NIST AI RMF / GenAI profile (AI 600-1)** | |
-| Govern | Owned decisions, versioned policies and parameters, startup lint |
-| Map | Customer context and failure-mode table |
-| Measure | Golden-set evals (accuracy, latency, cost), metrics |
-| Manage | Fallback to manual, change impact, audit trail |
-| **Microsoft HAX guidelines** | |
-| G2: How well it works | Measured eval pass rate shown next to the assistant |
-| G9: Efficient correction | Every condition editable, re-validated live |
-| G10: Scope when in doubt | Clarify open terms; surface unmapped phrases |
-| G11: Why it did that | Source badge on every condition, decision ids, plain-English summary |
-| G18: Notify about changes | Approved audiences flagged when rules change |
-| **OpenTelemetry GenAI semantic conventions** | LLM call logs use `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens` (including cached tokens, per the Anthropic note), `gen_ai.usage.output_tokens`, `gen_ai.response.finish_reasons` |
-| **GDPR principles relevant to EMEA rollouts** | Purpose limitation (credit data can't be used for marketing); consent per channel; data minimisation (masking, aggregates); accountability (audit trail with versions) |
-
----
-
-## Architecture
-
-```
-static/            index.html + app.js: no build step
-app/main.py        FastAPI routes, request-id middleware, app factory (tests inject a fake model)
-app/interpret.py   pipeline: mask → cache → model → glossary expansion → validate → repair once → status → explain
-app/llm.py         the only model call: structured output (strict JSON schema), effort, providers, pricing
-app/validate.py    catalog rules: fields, operators, types, ranges, data-usage policy per channel, scope, contradictions
-app/explain.py     plain-English rendering of a definition (templates, no model)
-app/audience.py    definition → parameterized SQL on DuckDB; consent filter; grain check; guardrails
-app/store.py       SQLite audit trail (interpretations, approved audiences + governance snapshot) + TTL/LRU cache
-app/governance.py  change impact: which approved audiences a glossary/parameter change affects, and by how much
-app/insights.py    field-to-product signals: unmapped demand, open-term choices, where marketers corrected the AI
-app/lint.py        governance config check (startup + `make lint`), prints a receipt
-app/limits.py      per-client rate limit + daily model budget (OWASP LLM10)
-app/observability.py  JSON logs with request id (LLM calls use OpenTelemetry gen_ai.* names); metrics
-app/synthdata.py   deterministic synthetic profile store (DuckDB SQL)
-config/            catalog.yaml (fields + labels), policies.yaml (labels → marketing actions), parameters.yaml
-                   (versioned thresholds), glossary.yaml (governed terms), models.yaml (prices)
-evals/             golden set, runner, recorded fixtures, results
-```
-
-Endpoints: `POST /api/interpret` (the only one that calls the model), `POST /api/check`,
-`POST /api/size`, `POST /api/approve`, `GET /api/audiences`, `GET /api/insights`, `GET /api/catalog`,
-`GET /api/metrics`, `GET /healthz`. The interactive OpenAPI docs are at `/docs`.
-
-The diagram and the reasoning behind each choice are in [docs/DESIGN.md](docs/DESIGN.md).
-
----
-
-## Assumptions
-
-- **Data:** the profile store is a nightly snapshot with one row per mobile line (synthetic,
-  200k lines by default). Audiences are batch-evaluated; real-time/streaming qualification is out
-  of scope.
-- **Governance already exists as config:** a catalog of targetable fields and a glossary of
-  business terms with owners. In a real deployment, building these with the business is part of
-  the engagement, and the open terms are its first backlog.
-- **Logic:** an audience is an AND of conditions; OR is supported within one field (`in`). Nested
-  boolean logic was left out deliberately (see limitations).
-- **Users:** one tenant, trusted internal users, approver identified by name. Authentication and
-  roles would come from the customer's SSO.
-- **Activation** (sending the audience to an SMS/email tool) is out of scope; the approved
-  definition and its hash are the hand-off.
+Four mechanisms keep this trustworthy over time (details in [docs/DESIGN.md](docs/DESIGN.md)):
+- **Startup lint with a receipt.** Unknown fields, labels or parameters, wrong types, an
+  unrecognised policy status, or a decided term without an owner stop the service.
+- **Change impact.** Approved audiences are flagged when a rule or threshold they used changes,
+  with their size under the current rules.
+- **Counted gaps.** Requests for data that doesn't exist, and requests blocked by policy, are
+  counted separately.
+- **Bounded model use.** Rate limit, daily budget and a circuit breaker; the manual editor always
+  works.
 
 ---
 
 ## Trade-offs: latency, cost, accuracy
 
-**Measured on the golden set** (`make eval`, 34 cases, prompt v5, 11 Oct 2026; prices from Anthropic's
-list effective 2026-10-07):
+**Measured** (prompt v6, 12 Oct 2026, every configuration run 3 times; prices from Anthropic's list
+effective 2026-10-07; latency is the model call, nearest-rank percentiles):
 
-| | Haiku 5.5 · effort low (**default**) | Haiku 5.5 · default effort | Sonnet 5.5 · effort low |
+| | **Sonnet 5.5 · low effort (default)** | Haiku 5.5 · low effort | Haiku 5.5 · default effort |
 |---|---|---|---|
-| All expectations met | 33/34 (97%) | 33/34 (97%) | 34/34 (100%) |
-| Correct outcome status (ready / clarify / confirm / unsupported / invalid) | 100% | 100% | 100% |
-| Same audience as expected (exact set of reachable lines) | 96.8% | 96.8% | 100% |
-| Model latency p50 / p95 | **1.7 s / 2.4 s** | 2.2 s / 3.8 s | 2.1 s / 2.8 s |
-| Tokens per request (in / out, input mostly cached) | 2,992 / 146 | 2,992 / 281 | 2,992 / 143 |
-| Cost per 1,000 requests | **$0.12** | $0.19 | $2.03 |
-| Repair calls needed | 0 | 0 | 0 |
+| Development set, 34 cases × 3 runs | **100%** | 95% | 93% |
+| Held-out set, 18 cases × 3 runs | **100%** | 85% | 94% |
+| Latency p50 / p95 / max (dev) | 1.9 s / 3.6 s / 6.8 s | 1.5 s / 2.4 s / 3.2 s | 2.0 s / 3.8 s / 8.1 s |
+| Cost per 1,000 requests | $2.02 | $0.12 | $0.17 |
 
-Per-case results: `evals/results/*.json`. The same run can be reproduced offline from the recorded
-responses: `make eval-replay`.
+"Pass" means every expectation for that case held: the right outcome status, **exactly the same
+set of reachable lines as the expected audience**, the right clarification or unmapped phrase,
+and policies named and enforced. Per-case results are in `evals/results/`. Run 1 of every
+configuration is recorded, so `make eval-replay MODEL=... EFFORT=...` reproduces it offline.
 
-**What the misses were, and what caught them:**
-- **Haiku · low, "Postpaid customers with a high credit risk band".** It correctly refused the
-  credit data (policy) but also applied *high value* because of the word "high". The
-  deterministic grounding check flags it (*"the assistant applied 'high value' but your request
-  doesn't use any of its phrases"*), and the summary shows "revenue ≥ 40 USD". The marketer sees
-  it before approving.
-- **Haiku · default effort, "haven't recharged in 60 days".** It read this as ≥ 60 days rather
-  than > 60. That is a genuine boundary ambiguity, 2% of lines differ, and the summary says "at
-  least 60 days".
+**What the misses were.** Sonnet missed nothing in 156 case-runs. Haiku's misses:
+- **Governed term applied without evidence.**
+  - "More than 15 GB" became the governed *heavy data user* (≥ 20 GB).
+  - "Android **users**" picked up the governed *app users*.
+  - "iOS users …, email campaign" got *app users* and was then blocked by MKT-12.
 
-**How the prompt got here** (honest log): the first live run (prompt v3) scored 32/33. The model
-replaced an explicit "more than 15 GB" with the governed *heavy data user* term (20 GB). I added
-a rule that the marketer's own number wins over a glossary term. To avoid only tuning to that one
-case, I also added a new case it had not seen ("spending more than 60 dollars"). The
-credit-risk miss above survived a further prompt rule, which is why the fix is a deterministic
-check rather than more prompt.
+  The deterministic grounding check flagged every one of these to the marketer.
+- **A boundary ambiguity.** "Haven't recharged in 60 days" was read as ≥ 60 rather than > 60; the
+  summary says "at least 60 days".
+- **Over-caution with PII.** In a request containing a contact email, it asked the marketer to
+  confirm dropping "contact [EMAIL] for details". The audience was right.
 
-**Decision: Haiku 5.5 at low effort.** It is the fastest and cheapest configuration and is right
-on every *outcome* (it never guessed an open term, dropped a phrase or broke a policy). Its one
-miss is surfaced to the user by a code-level check. Sonnet 5.5 is perfect on this set but 17×
-the cost for one case. Default effort makes Haiku slower and costlier with no accuracy gain on
-this task. The obvious next step is to route only flagged requests to Sonnet. The flag rate on
-this set is about 3%, so the estimated blended cost is ≈ $0.18 per 1,000 for 34/34 here. I would
-measure that rather than assume it.
+**Decision: Sonnet 5.5 at low effort.** At this customer's volume (about 40 audiences a month)
+the cost difference is under a dollar a month, while the accuracy difference is the gap between
+"always right on our tests" and "check the warnings". Haiku at low effort is the documented
+option for high-volume tenants: about 17× cheaper and a little faster, with every
+governed-term miss surfaced by the grounding check. The configuration is one environment
+variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
+
+**How the prompt got here (honest log).**
+- **First live run.** The model replaced "more than 15 GB" with the governed term. I added a
+  rule that the marketer's own number wins, plus a dev case for it.
+- **A false claim I corrected.** The first version of this README called that case one the model
+  "had not seen", but the prompt's own example used the same phrase. An external review caught
+  it.
+- **Separating dev from held-out.** I then rewrote the prompt examples so none mirrors an eval
+  case. I wrote a separate 18-case held-out set after the prompt was frozen and never changed the
+  prompt because of it.
+- **Caveat.** I did use both sets to choose the default model, so the 100% is not an unbiased
+  estimate either. A fresh held-out set, built from the customer's real requests during a pilot,
+  is the next step.
+- **Prompt fixes are fragile.** Changing the example re-broke the 15 GB case on Haiku. That is
+  exactly why the safety-relevant checks live in code, not in the prompt.
 
 **How I'd explain the choices to the customer:**
+- **Accuracy is a system property.** The model can misread a request. It cannot produce an
+  audience that:
+  - breaks a data-usage policy;
+  - ignores consent;
+  - uses a field that doesn't exist;
+  - changes a governed definition.
 
-- **Accuracy is a system property, not a model property.** The model can still misread a
-  request, but it can't produce an audience that breaks policy, ignores consent, uses a field
-  that doesn't exist or changes a governed definition. Those failures are blocked in code. The
-  residual risk is a *valid but wrong* reading. That is why the marketer approves a
-  code-generated summary, and why the eval measures audience equality.
-- **Latency:** sizing is milliseconds even at 5M lines; the model call is the user-visible wait.
-  Mitigations: a cache for repeated requests (the cached answer returns in ~1 ms), prompt caching
-  of the ~2k-token static catalog, a capped output, at most one repair call.
-- **Cost:** a fraction of a cent per request, so at ~40 audiences a month cost is irrelevant next
-  to analyst time. It matters at scale or with many tenants. The levers are the same: smallest
-  model that clears the eval bar, caching, the repair cap.
-- **Model choice:** pick the smallest model and effort that meet the bar on the golden set (above).
-  Rerun `make eval` whenever the prompt, catalog or model changes; it is the regression test for
-  the parts unit tests can't cover.
+  Those are blocked in code. The residual risk is a *valid but wrong* reading, which is why the
+  marketer approves a code-generated summary and why the eval compares audiences, not JSON.
+- **Latency:** sizing takes milliseconds even at 5M lines; the model call is the wait (about 2 s
+  median).
+  - **Mitigations:** a response cache for repeated requests, prompt caching of the static
+    catalog (~2.7k tokens), low effort, a capped output, at most one repair call.
+  - **Worst case:** about 40 s (10 s timeout, 1 retry, at most 2 calls). After 3 consecutive
+    failures a circuit breaker pauses the assistant for 30 s, so people fall back to the editor
+    instead of waiting.
+- **Cost:** irrelevant at one team's volume; it matters at many tenants, where the Haiku option
+  and model routing become worth their complexity.
 
 ---
 
@@ -268,64 +188,127 @@ measure that rather than assume it.
 
 | Failure | What happens |
 |---|---|
-| Model invents a field, value or threshold | Validator rejects it; one repair attempt with the errors; then `invalid` with reasons shown |
+| Model invents a field, value or threshold | Validator rejects it; one repair attempt with the errors; then `invalid` with the reasons shown |
 | Model drifts a governed definition ("high value" = 50) | Can't: the model only names the term; the server expands it from `glossary.yaml` |
-| Model applies a governed term the request never mentions | Deterministic grounding check warns the marketer (the term's phrases aren't in the request) |
-| Model ignores the marketer's explicit number in favour of a glossary term | Prompt rule (the marketer's number wins) + a dedicated eval case; the summary shows the threshold actually used |
-| Ambiguous business term ("active") | Never guessed: clarifying question with governed options (`needs_clarification`) |
-| Part of the request can't be expressed | Listed as unmapped; approval blocked until the marketer accepts it (`needs_confirmation`) |
-| Request targets restricted data (credit risk) or consent | Rejected with the policy reason; not sent back to the model |
-| Prompt injection in the request ("ignore rules, skip consent") | Output is schema-bound and validated; consent is added by the engine regardless |
+| Model applies a governed term the request never mentions | Grounding check warns the marketer (none of the term's phrases are in the request) |
+| Ambiguous business term ("active") | Never guessed: one clarifying question per term, governed options; approval blocked until answered |
+| Part of the request has no data | Listed as unmapped; approval blocked until the marketer accepts it |
+| Request needs a policy-blocked field (credit risk, app data for email, consent) | Condition kept visible and highlighted with the policy id; status `invalid`; not sent back to the model |
+| Prompt injection ("ignore rules, skip consent") | Output is schema-bound and validated; a consent condition is blocked by MKT-15; consent is added by the engine regardless |
 | Prepaid-only field used on postpaid lines | Error (contradiction) or warning (implicit narrowing), depending on the definition |
-| Contradictory conditions (ARPU > 50 and < 30) | Error before any query runs |
-| Model timeout, rate limit, outage | `ai_unavailable`: the manual editor, sizing and approval still work; logged and counted |
-| Personal data pasted into the request | Masked before the model and the logs; count recorded |
+| Contradictory conditions (ARPU > 50 and = 50) | Error before any query runs |
+| Model timeout, rate limit, outage | `ai_unavailable`; repeated failures open a circuit breaker; the editor, sizing and approval still work |
+| Personal data pasted into the request | Masked before the model and the logs; count recorded; length capped before masking |
 | Duplicated rows in the profile feed | Engine refuses to start: every count would be inflated |
-| Client sends a tampered definition at approval | Server re-validates and re-sizes; rejects with 422 |
-| Empty, tiny or very broad audience | Size warnings before approval |
-| Field allowed for SMS but not for email (app analytics) | Policy violation names the policy (MKT-12); switching channel re-checks live |
-| A governed rule or threshold changes after approval | Affected audiences flagged with the change and their size under current rules |
-| Broken governance config (unknown field/label/parameter) | Startup lint fails with the list of errors; nothing serves on a broken definition |
-| Request floods or runaway spend | 429 with Retry-After per client; daily budget switches the assistant off, manual editor stays |
+| Tampered approval (forged "governed" label, unanswered term, re-used request id) | Labels re-derived on the server; 422 for unanswered terms; 409 for a second approval |
+| Governed rule or threshold changes after approval | Affected audiences flagged with the change and their size under current rules |
+| Broken governance config (unknown field, wrong type, mistyped policy status) | Startup lint fails with the list of errors |
+| Request floods or runaway spend | 429 with Retry-After per client; daily budget switches the assistant off; definitions capped at 30 conditions |
+| Unexpected server error | JSON 500 with the request id; logged with the stack trace and the same id |
+
+---
+
+## Architecture
+
+```
+static/              index.html + app.js: no build step
+app/main.py          FastAPI routes, request-id middleware + error handler, app factory (tests inject a fake model)
+app/interpret.py     pipeline: mask → cache → model → glossary expansion → validate → repair once → status → explain
+app/llm.py           the only model call: structured output (strict JSON schema), effort, record/replay, pricing
+app/validate.py      catalog rules: fields, operators, types, ranges, data-usage policy per channel, scope, contradictions
+app/explain.py       plain-English rendering of a definition (templates, no model)
+app/audience.py      definition → parameterized SQL on DuckDB; consent filter; grain check; guardrails
+app/governance.py    provenance verification, edit detection, change impact
+app/store.py         SQLite audit trail (interpretations, approved audiences + governance snapshot) + TTL/LRU cache
+app/insights.py      field-to-product signals: missing-data demand, policy blocks, open-term choices, corrections
+app/lint.py          governance config check (startup + `make lint`)
+app/limits.py        per-client rate limit + daily model budget
+app/observability.py JSON logs with request id (LLM calls use OpenTelemetry gen_ai.* names); metrics
+app/synthdata.py     deterministic synthetic profile store (DuckDB SQL)
+config/              catalog.yaml, policies.yaml, parameters.yaml, glossary.yaml, models.yaml (prices)
+evals/               dev set, held-out set, runner, recorded fixtures, results
+```
+
+Endpoints:
+- `POST /api/interpret`: the only one that calls the model.
+- `POST /api/check`, `POST /api/size`, `POST /api/approve`.
+- `GET /api/audiences`, `GET /api/insights`, `GET /api/catalog`, `GET /api/metrics`.
+- `GET /healthz` (liveness) and `GET /readyz` (readiness).
+
+OpenAPI docs are at `/docs`.
+
+---
+
+## Assumptions
+
+- **Data.** The profile store is a nightly snapshot with one row per mobile line (synthetic, 200k
+  lines by default). Audiences are batch-evaluated; real-time qualification is out of scope.
+- **Governance already exists as config.** In a real engagement, building the catalog, policies
+  and glossary with the business is part of the work, and the open terms are its first backlog.
+- **Logic.** An audience is an AND of conditions; OR is supported within one field (`in`).
+- **Users.** One tenant, trusted internal users, approver identified by name. Authentication,
+  roles and "who asked" would come from the customer's SSO.
+- **Setting.** The fictional customer is an Andean operator (USD, Spanish requests) because that
+  is the data shape I know best from telco work. For an EU deployment the design holds as is.
+  Marketing consent per channel is then mainly an ePrivacy matter, alongside GDPR's purpose
+  limitation, which the labels and policies express.
+- **Activation** (sending the audience to an SMS/email tool) is out of scope; the approved
+  definition and its hash are the hand-off.
 
 ---
 
 ## Testing and reliability
 
-- `make test`: **52 tests**, no network. A scripted fake model drives each failure mode
-  deterministically: repair once then stop, outage fallback, cache hit, PII never reaching the
-  model, policy violations not retried, tampered approvals rejected. SQL counts are checked
-  against independent queries, and values are verified to be bound parameters.
-- `make eval`: the golden set (`evals/cases.yaml`, 34 cases across simple, thresholds, decided and
-  open glossary terms, unmapped phrases, vague qualifiers, policy (including a per-channel
-  conflict), injection, out-of-scope, Spanish and PII). It is scored by audience set equality plus status, clarification, unmapped and
-  forbidden-field checks. Expected outcomes are hand-written, because they encode policy decisions.
-- Live responses can be recorded (`make record`) and replayed (`make eval-replay`), so an eval
-  run is reproducible without the model.
+- **`make test`: 68 tests, no network.** A scripted fake model drives each failure mode
+  deterministically:
+  - repair once, then stop;
+  - outage fallback and the circuit breaker;
+  - cache hits;
+  - PII never reaching the model;
+  - policy-blocked conditions kept visible across a channel switch;
+  - forged provenance, unanswered clarifications and double approvals rejected;
+  - one request id end to end.
+
+  SQL counts are checked against independent queries, and values are checked to be bound
+  parameters. `tests/test_review_fixes.py` holds one regression test per finding from the
+  external review (see "Use of AI").
+- **Evals.**
+  - `evals/cases.yaml` is the development set (34 cases).
+  - `evals/heldout.yaml` is the frozen held-out set (18 cases).
+  - Both cover simple and threshold requests, decided and open glossary terms, missing data,
+    vague qualifiers, policies, injection, out-of-scope, Spanish and PII.
+  - Scoring is by exact audience equality plus status, clarification, unmapped and policy checks.
+  - Repeats show run-to-run variance, and flaky cases are listed in the results.
 
 ## Observability and operability
 
-- **Logs:** one JSON object per line, all carrying `request_id` (also returned as the
-  `x-request-id` header). Key events:
-  - `interpretation`: status, issue codes, cache hit, repaired, LLM calls, total ms, cost, PII
-    count.
-  - `llm_call`: OpenTelemetry GenAI attribute names (`gen_ai.request.model`,
-    `gen_ai.usage.input_tokens`, …) plus latency and cost.
-  - `llm_unavailable`, `audience_approved`, `http_request`.
-- **Metrics:** `GET /api/metrics`:
-  - counters by outcome (`interpret_ready`, `interpret_needs_clarification`, …), cache hits,
-    repairs, model calls, tokens, cumulative cost;
-  - p50/p95/max for `llm_ms`, `interpret_ms`, `size_query_ms` and each route.
-- **Health:** `GET /healthz` reports profiles loaded, provider, model, every governance version,
-  the lint receipt, the eval summary for the active model, and model spend vs today's budget.
-- **Debugging a bad audience:** take the `request_id` from the UI or header, then
-  `SELECT * FROM interpretations WHERE request_id = ?` in `data/audit.sqlite`. It holds the masked
-  request, the raw model proposal, the final definition and telemetry.
-- **What I'd alert on in production:**
-  - a rising `interpret_invalid` or `llm_unavailable` rate;
-  - `llm_ms` p95 above the SLO;
-  - repair rate above baseline (a catalog or prompt regression);
+- **Logs.** One JSON object per line, all carrying the same `request_id` that is returned in the
+  `x-request-id` header, shown in the UI, and used as the key of the audit record. Key events:
+  - `interpretation`: status, issue codes, cache hit, repaired, model calls, ms, cost, PII count.
+  - `llm_call`: OpenTelemetry GenAI names (`gen_ai.request.model`, `gen_ai.usage.input_tokens`,
+    …), latency and cost.
+  - `unhandled_error`, with the stack trace.
+  - `llm_circuit_opened`, `audience_approved`, `http_request`.
+- **Metrics** (`GET /api/metrics`):
+  - counters by outcome and by HTTP status class;
+  - cache hits, repairs, model calls, tokens and cumulative cost;
+  - p50/p95/max per route and for the model call.
+- **Health.**
+  - `/healthz` is liveness: governance versions, lint receipt, measured eval accuracy for the
+    active configuration, model spend vs budget.
+  - `/readyz` returns 503 unless profiles are loaded and the audit store answers. It reports
+    "degraded" when the assistant is paused by the budget or the circuit breaker.
+- **Debugging a bad audience.** Take the request id from the UI or the header, then run
+  `SELECT * FROM interpretations WHERE request_id = ?` in `data/audit.sqlite`. It holds the
+  masked request, the raw model proposal, the final definition, the issues and the telemetry.
+  `grep <request id>` gives the matching log lines.
+- **What I'd alert on:**
+  - rising `interpret_invalid`, `ai_unavailable` or `circuit_open` counts;
+  - model p95 above the SLO;
+  - repair rate above baseline;
   - daily cost above budget.
+- **Data safety.** The server refuses to start without a profile store unless `SYNTHETIC_DATA=1`
+  is set, which `make run` sets for the demo. It never silently invents data in a real deployment.
 
 ## Performance and scalability
 
@@ -337,65 +320,132 @@ measure that rather than assume it.
 | 1M | 5.9 ms | 4.1 ms | 9.1 ms |
 | 5M | 30.4 ms | 16.8 ms | 46.7 ms (p95 55 ms) |
 
-The bottleneck is the model call (seconds), not the data. Scaling notes (approximate counts for
-previews at CDP scale, multi-tenant config, stateless replicas, model routing) are in
-[docs/DESIGN.md](docs/DESIGN.md#scaling-path-not-built).
+The bottleneck is the model call, not the data. `/api/audiences` re-sizes every approved audience
+on each call to show drift. That's fine for one team, but it would move to a scheduled job at
+scale. Scaling notes (approximate counts for previews at CDP scale, multi-tenant config,
+stateless replicas, model routing) are in [docs/DESIGN.md](docs/DESIGN.md#scaling-path-not-built).
+
+---
+
+## How this maps to Adobe Experience Platform
+
+The prototype is platform-neutral. In an AEP engagement I would wire each piece to the platform
+rather than rebuild it:
+
+| Here | Adobe Experience Platform |
+|---|---|
+| `catalog.yaml` fields | XDM profile attributes. Rolling behaviour (ARPU, data used, usage events) would be computed attributes or time-windowed PQL over ExperienceEvents |
+| Decided glossary terms | Reusable audiences or computed attributes, with the decision id and owner kept as governance metadata |
+| Labels + `policies.yaml` + marketing actions | Data usage labels, data governance policies and marketing actions; Policy Service API to evaluate before activation |
+| Consent per channel, enforced by the engine | Consent policies applied at activation |
+| Validated definition → parameterized SQL | Segment definition in PQL |
+| Size before approval | Audience size estimate |
+| Approve | Create the audience (AEP keeps its own audit log; this one adds the business provenance) |
+
+AEP's [Audience Agent](https://experienceleague.adobe.com/en/docs/cx-enterprise-ai/experience-cloud-ai/agents/audience)
+follows a similar shape: identify characteristics, estimate size, approve. What this prototype
+explores is what a customer rollout needs around such an agent:
+- business definitions owned and versioned by the customer;
+- explicit handling of what can't be expressed or isn't allowed;
+- an evaluation set built from the customer's own requests;
+- field-to-product signals.
+
+Not modelled here: identity. One row per line means no identity graph, no merge policies, and no
+person-level consent across a household's lines.
+
+## Standards I mapped it against
+
+- **OWASP Top 10 for LLM Apps (2025).** Each mitigation below is covered by a test:
+  - **LLM01, prompt injection:** the request is data inside delimiters; output is schema-bound;
+    policies and consent are enforced in code.
+  - **LLM02, sensitive information disclosure:** PII is masked before the model and the logs.
+  - **LLM05, improper output handling:** model output never reaches SQL as text.
+  - **LLM06, excessive agency:** the model can only return a proposal.
+  - **LLM10, unbounded consumption:** length caps, `max_tokens`, timeouts, one repair, rate limit,
+    budget, circuit breaker.
+- **Microsoft HAX guidelines:**
+  - G2: measured accuracy shown next to the assistant;
+  - G9: every condition editable;
+  - G10: ask about open terms, surface unmapped parts;
+  - G11: a source badge on every condition;
+  - G18: approved audiences flagged when rules change.
+- **NIST AI RMF:** the governance files, evals and failure-mode handling above are where Govern,
+  Measure and Manage show up. I haven't done a formal mapping.
+- **OpenTelemetry GenAI semantic conventions:** attribute names on the model-call log, with
+  input tokens including cached tokens as the spec requires for Anthropic.
 
 ---
 
 ## Known limitations and what I left out on purpose
 
-- **AND-only logic** (with OR inside one field). Nested groups add little for the target user
-  and make the plain-English summary and the editor much harder to get right.
-- **No lookalike, propensity or churn scores.** There is no approved model in the catalog, so
-  the assistant offers governed proxies instead of inventing one.
-- **No authentication or roles.** The approver is a typed name; real deployments use SSO.
-- **No activation.** Approved audiences are not pushed to a campaign tool.
-- **Single process.** The cache is in-memory and the audit store is SQLite, chosen for a
-  runnable slice. Both are behind small interfaces.
-- **The PII masker is regex-based.** It catches emails, phone numbers and IDs, not names.
-- **The governance config is hand-authored YAML.** There is no UI for owners to settle open
-  terms or publish a parameter version; the open terms are listed with their pending owner.
-- **Rate limit and budget are per process.** With replicas they move to Redis behind the same
-  interface.
-- **The golden set is 34 cases.** That is enough to compare models and catch regressions, not
-  to certify accuracy.
+- **AND-only logic** (with OR inside one field). Nested groups add little for this user and make
+  the summary and the editor much harder to get right.
+- **No lookalike, propensity or churn scores.** There is no approved model in the catalog, so the
+  assistant offers governed proxies instead of inventing one.
+- **No authentication or roles.** The approver is a typed name; real deployments use SSO, which
+  also supplies "who asked".
+- **No activation, no identity graph.** See the AEP section.
+- **Single process.** In-memory cache, rate limiter, budget and breaker; SQLite audit. They are
+  behind small interfaces that would move to Redis and Postgres with replicas. The rate limit
+  keys on client IP, so a shared corporate proxy shares one bucket.
+- **The PII masker is regex-based.** It covers emails, phones, IBAN, ES/IT/UK national IDs and
+  line ids, but not names or free-text addresses.
+- **The grounding check is an alias match.** Correct synonyms missing from the alias list raise a
+  false warning. Each term's aliases are part of its governed definition.
+- **Governance changes have no UI.** Settling an open term or publishing a parameter version is
+  a YAML edit; the open terms are listed with their pending owner.
+- **The eval sets are small** (34 + 18 cases): enough to compare configurations and catch
+  regressions, not to certify accuracy.
 
 ## Use of AI in building this
 
-<!-- EDIT THIS SECTION TO MATCH WHAT YOU ACTUALLY DID BEFORE SUBMITTING -->
-I built this with an AI coding agent (Claude in Cursor) as a pair, which is how I work day to day.
+I built this with an AI coding agent (Claude in Cursor) as my pair, which is how I work day to
+day. The agent wrote most first drafts of code, tests and docs. I set the direction and made the
+decisions:
+- the workflow and the customer framing;
+- the architecture rule (model proposes, code disposes);
+- server-side glossary expansion and "never drop, always surface";
+- policies per marketing action;
+- rules as sentences with versioned parameters;
+- evaluating by audience equality;
+- the choice of default model from the measured results.
 
-- **Where AI was used:** scaffolding the project and first drafts of most modules, tests and
-  docs; generating the synthetic data SQL; drafting eval cases for me to review; researching the
-  standards above (OWASP, NIST, HAX, OpenTelemetry, AEP governance docs), which I then checked
-  against the primary sources; rubber-ducking design alternatives.
-- **What I decided and verified myself:**
-  - the workflow and customer framing;
-  - the architecture rule (model proposes, code disposes);
-  - glossary terms expanded server-side;
-  - "never drop, always surface" for unmapped phrases;
-  - status derived by the validator;
-  - one repair, then stop;
-  - consent enforced in the engine;
-  - evaluation by audience set equality.
-  I also reviewed every eval expectation and the validation rules line by line, and ran the app
-  and the failure paths myself.
-- **Where I deliberately did not rely on AI:**
-  - **Runtime checks.** Anything with a correct answer is deterministic code at runtime: validation,
-    consent, counts and the summary the user approves.
-  - **Eval expectations.** The golden-set expectations are hand-checked, not model-generated:
-    a model grading its own family's output against expectations it wrote would measure nothing.
-  - **Approval text.** The approval summary is never written by a model.
+How I checked the agent's work, with examples from this build:
+- **Running the app headless.** A browser run caught a real bug: "Add condition" defaulted to a
+  field already in use, and the server's de-duplication silently swallowed the new row.
+- **Testing against the live API, not documentation from memory.** The agent's first provider
+  used `temperature` and forced tool calls. The current SDK no longer accepts `temperature`, and
+  Sonnet 5.5 rejects forced tool use, so I moved to structured outputs.
+- **Measuring instead of trusting.** The first live eval exposed the model swapping the
+  marketer's number for a governed term. Fixing that in the prompt alone proved fragile, so the
+  safety-relevant check (the grounding warning) is deterministic code.
+- **An external review before submitting.** I had six reviewer agents, each with its own fresh
+  clone and no access to anything else, review the repo as an engineering manager, staff
+  engineer, SRE, applied-AI engineer, security reviewer and solution architect. All six would
+  have advanced it. They also found real problems:
+  - approval trusted client-supplied provenance;
+  - unanswered clarifications could be approved;
+  - policy-blocked conditions vanished after a channel switch;
+  - the documented debugging path used two different request ids;
+  - p95 was off by one;
+  - this README claimed a "held-out" case that wasn't.
+
+  Each is fixed and pinned by a test in `tests/test_review_fixes.py`.
+
+Where I deliberately did not rely on AI:
+- **Runtime decisions.** Validation, policies, consent, counting and the approval summary are
+  plain code; the model never decides anything the system can check.
+- **Expectations.** The eval expectations encode policy decisions. They were drafted with the
+  agent and reviewed by me; no model grades the model.
 
 ## Extensions I would do next
 
-1. **Owners settle open terms in the UI.** A glossary decision becomes a versioned record with
-   an owner and date, and dependent audiences are flagged for re-approval.
-2. **Re-size on a schedule.** Re-size approved audiences and alert on drift ("your audience
-   grew 40% since approval").
-3. **Model routing.** Small model first, escalate on validation failure; decide using the eval
-   data.
-4. **Activation hand-off** to the campaign tool, keeping the definition hash on the campaign
+1. **Owners settle open terms in the UI.** A decision becomes a versioned record, and audiences
+   built on an interim choice are flagged for re-approval.
+2. **A fresh held-out set from real requests** collected in a pilot, plus marketers' edits
+   turned into new cases.
+3. **Model routing for high volume:** Haiku first, escalate to Sonnet when the grounding check or
+   validator flags the proposal. Measure the blended accuracy and cost before adopting it.
+4. **Scheduled re-sizing** of approved audiences with drift alerts.
+5. **Activation hand-off** to the campaign tool, keeping the definition hash on the campaign
    record.
-5. **Close the learning loop.** Feed marketers' edits back into the eval set as new cases.

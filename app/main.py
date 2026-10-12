@@ -71,12 +71,14 @@ def build_provider(settings: Settings) -> Provider:
 
 
 def load_eval_summary(model: str, effort: str | None) -> dict | None:
-    path = ROOT / "evals" / "results" / f"{model}@{effort or 'default'}.dev.json"
-    if not path.exists():
-        return None
-    summary = json.loads(path.read_text())["summary"]
-    return {k: summary.get(k) for k in ("model", "effort", "cases", "runs", "pass_rate", "audience_exact_match",
-                                        "latency_p50_ms", "case_set")}
+    """Measured accuracy for the active model + effort, from the committed eval results (dev and held-out)."""
+    out = {}
+    for case_set in ("dev", "heldout"):
+        path = ROOT / "evals" / "results" / f"{model}@{effort or 'default'}.{case_set}.json"
+        if path.exists():
+            summary = json.loads(path.read_text())["summary"]
+            out[case_set] = {k: summary.get(k) for k in ("cases", "runs", "pass_rate", "latency_p50_ms")}
+    return out or None
 
 
 def build_services(settings: Settings, provider: Provider | None = None) -> Services:

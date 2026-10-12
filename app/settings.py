@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class Settings:
     llm_provider: str = "replay"  # anthropic | replay | offline
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-haiku-5-5"
+    anthropic_model: str = "claude-sonnet-5-5"
     anthropic_effort: str = "low"  # low | medium | high | xhigh | max | "" for the model default
     llm_timeout_s: float = 10.0
     llm_max_retries: int = 1

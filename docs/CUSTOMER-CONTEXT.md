@@ -29,15 +29,16 @@ Today each audience is a ticket to the data team:
 
 ## What the assistant changes
 
-The marketer types the request, sees the exact definition in plain English, answers at most one
-clarifying question, sees the reachable size and approves. Then they do it again, in minutes.
+The marketer types the request, sees the exact definition in plain English, answers a question
+only when a business term is genuinely ambiguous, sees the reachable size and approves. Then they
+do it again, in minutes.
 
 | | Today | With the assistant |
 |---|---|---|
 | Request → sized audience | 1–3 days | under a minute |
 | Definition disputes | resolved over the ticket thread | resolved once, in the glossary, by an owner |
-| Consent / policy | depends on the analyst remembering | enforced by the system, not by the request |
-| Audit | the SQL lives in someone's notebook | every audience records who asked, what the AI proposed, what was edited, who approved |
+| Consent / policy | depends on the analyst remembering | enforced by the system, not by the request; the blocking policy is named |
+| Audit | the SQL lives in someone's notebook | every audience records the request, what the AI proposed, what was edited, who approved |
 
 ## The value, in the customer's terms
 
@@ -45,20 +46,28 @@ clarifying question, sees the reachable size and approves. Then they do it again
   time-sensitive offers (roaming before holidays, top-up reminders before month-end) that is the
   difference between running the campaign and not.
 - **Analyst capacity back.** At ~40 audiences a month and 1–2 analyst hours each, that is
-  roughly one analyst-week a month returned to analysis instead of ticket SQL.
-- **Fewer wrong audiences.** The two error classes that matter (wrong definition, missing
-  consent) are designed out rather than reviewed out.
+  40–80 hours a month (a quarter to half of one analyst) returned to analysis instead of ticket
+  SQL. On its own that is a modest saving; speed to market is the bigger lever.
+- **Fewer wrong audiences.** Missing consent and forbidden data are blocked in code. Ambiguous
+  definitions are no longer silently guessed: they are asked about, and the definition used is
+  shown in plain English before approval.
 - **A governance asset as a side effect.** Every unresolved definition becomes a visible,
   owned decision ("active": decision D-030 open, Marketing Analytics). That is the backlog the
   business needs to work through anyway.
 
 ## How I would measure it in a pilot
 
-Two marketers, two weeks, shadow mode first (the assistant runs alongside the ticket process):
+Two marketers, two weeks, shadow mode first (the assistant runs alongside the ticket process).
+Capture the baseline first: today's request-to-audience time and how often definitions are disputed.
 
 - **Agreement**: did the assistant's audience match the analyst's? (Set equality, the same
   metric as the eval harness.)
 - **Time** from request to approved audience.
 - **Clarification rate** per term, which tells the business which definitions to settle first.
-- **Edit rate**: how often marketers change the AI's proposal before approving. A high rate on
-  one field is a prompt or glossary fix.
+- **Edit rate**: how often marketers change the AI's proposal before approving (answering a
+  clarification doesn't count). A high rate on one field is a prompt or glossary fix.
+
+**Go / no-go after the pilot:**
+- **Go** if at least 95% of audiences match the analyst's, no approved audience breaks a policy,
+  and the median request-to-approval time is under 5 minutes.
+- **Fix the catalog or glossary first** if one field or term drives most of the mismatches.

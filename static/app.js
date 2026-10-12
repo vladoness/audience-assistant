@@ -44,7 +44,9 @@ async function init() {
   pill.classList.toggle("live", health.provider === "anthropic");
   pill.title = `${health.governance_lint} · governance ${Object.entries(health.governance).map(([k, v]) => `${k} ${v}`).join(", ")}`;
   if (health.eval) {
-    $("accuracy-hint").textContent = `On our ${health.eval.cases}-case test set this model gets ${Math.round(health.eval.pass_rate * 100)}% of requests fully right, so always check the summary before approving.`;
+    const part = (e, label) => e ? `${Math.round(e.pass_rate * 100)}% on ${e.cases} ${label} cases` : null;
+    const measured = [part(health.eval.heldout, "held-out"), part(health.eval.dev, "development")].filter(Boolean).join(", ");
+    $("accuracy-hint").textContent = `Measured accuracy of this configuration: ${measured}. The assistant can misread a request, so always check the summary before approving.`;
   }
 
   catalog.examples.forEach((text) => {
@@ -145,7 +147,7 @@ function renderUnmapped() {
   if (!state.unmapped.length) return;
   const div = document.createElement("div");
   div.className = "unmapped-box";
-  div.innerHTML = `Not included (no data for it, or not allowed by policy): ${state.unmapped.map((p) => `<q>${esc(p)}</q>`).join(", ")}.
+  div.innerHTML = `No data available for: ${state.unmapped.map((p) => `<q>${esc(p)}</q>`).join(", ")}.
     <label class="inline" style="margin-top:8px"><input type="checkbox" id="ack" ${state.acknowledged ? "checked" : ""}>
     Build the audience without this part</label>`;
   box.appendChild(div);

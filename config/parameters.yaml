@@ -1,5 +1,6 @@
 # Versioned parameter sets: the numbers that governed rules use.
-# A rule is one sentence an owner signs ("high value means a top revenue band"); its threshold
+# A rule is one sentence an owner signs ("a line is high value when its revenue reaches the
+# high-value threshold"); its threshold
 # lives here, with a version and effective date, so changing a number is a new parameter
 # version, not a new rule. Approved audiences record the versions they were built with.
 version: "2026-10-09.1"

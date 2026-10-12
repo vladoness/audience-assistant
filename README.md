@@ -26,7 +26,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 make setup        # uv sync
-make run          # http://127.0.0.1:8000  (generates 200k synthetic profiles on first start, ~1 s)
+make run          # http://127.0.0.1:8000  (PORT=8010 make run to change; generates 200k profiles on first start, ~1 s)
 make test         # 52 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 ```

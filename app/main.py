@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -278,7 +279,8 @@ def run() -> None:
     import uvicorn
 
     configure_logging()
-    uvicorn.run(create_app(), host="127.0.0.1", port=8000, log_config=None, access_log=False)
+    host, port = os.getenv("HOST", "127.0.0.1"), int(os.getenv("PORT", "8000"))
+    uvicorn.run(create_app(), host=host, port=port, log_config=None, access_log=False)
 
 
 if __name__ == "__main__":

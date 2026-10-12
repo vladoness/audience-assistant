@@ -27,7 +27,7 @@ from app.catalog import Catalog
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v5"
+PROMPT_VERSION = "v6"
 MAX_OUTPUT_TOKENS = 1024
 
 PROPOSAL_SCHEMA = {
@@ -82,16 +82,18 @@ Rules:
 1. Use only the attributes and glossary terms listed below. Never invent attributes, values or thresholds.
 2. If the request uses a glossary term or one of its phrases, put the term name in glossary_terms and do NOT write
    conditions for it. The system expands decided terms itself and asks the marketer to choose for open terms.
-   But if the request states its own number for that idea ("more than 15 GB", "spending over 60 dollars"), the
+   But if the request states its own number for that idea ("used over 25 GB", "joined in the last 6 months"), the
    marketer's number wins: write it as a condition and do not use the glossary term. A shared word is not enough
-   to use a term: only use it when the request is about that concept ("a new phone" is not "new customers").
-3. Anything you cannot express with the catalog goes into unmapped_phrases, quoted from the request. Never silently
-   drop part of the request.
-4. Attributes marked NOT TARGETABLE must never appear in conditions, and an attribute marked "Not usable for <channel>
-   campaigns" must not be used when the audience is for that channel. If the request needs one, put that phrase in
-   unmapped_phrases; data-usage policies decide this, not you.
-5. Consent is applied automatically: never add consent conditions. Set channel only if the request names one
-   (SMS/text -> sms, email -> email); otherwise "unspecified".
+   to use a term: only use it when the request is about that concept ("heavy roaming" is not "heavy data users").
+3. Anything the catalog has NO data for goes into unmapped_phrases, quoted from the request. Never silently drop part
+   of the request.
+4. If the request asks for an attribute that exists but is marked NOT TARGETABLE, or "Not usable for <channel>
+   campaigns" for this audience's channel, still write that condition. The system blocks it and tells the marketer
+   which data-usage policy applies; do not hide it in unmapped_phrases (that list is only for missing data).
+5. Consent is applied automatically for the channel; do not add consent conditions yourself. If the request asks to
+   include people regardless of consent or opt-outs, write that as a condition on the consent attribute so the
+   system can block it visibly. Set channel only if the request names one (SMS/text -> sms, email -> email);
+   otherwise "unspecified".
 6. Map a relative phrase to a threshold only when the request states it ("more than 30 days without a top-up" ->
    days_since_last_recharge gt 30; "last month" -> the 30-day attributes). If a qualifier is vague ("low data users",
    "big spenders" when not a glossary phrase) put it in unmapped_phrases instead of guessing a number.
@@ -100,12 +102,12 @@ Rules:
 9. Use enum values exactly as listed. between takes [low, high]; in and not_in take a list.
 
 Examples:
-Request: "Postpaid customers in Coast or Valley who roamed last month, email campaign"
--> conditions [line_type eq postpaid, region in [Coast, Valley], roaming_30d eq true]; glossary_terms []; channel email
-Request: "high value active iPhone users"
--> conditions [device_os eq ios]; glossary_terms [high_value, active]; channel unspecified
-Request: "prepaid customers who complained to the call centre"
--> conditions [line_type eq prepaid]; unmapped_phrases ["complained to the call centre"]
+Request: "Postpaid standard-plan lines in the Highlands that used more than 5 GB last month, email campaign"
+-> conditions [line_type eq postpaid, plan_tier eq standard, region eq Highlands, data_gb_30d gt 5]; channel email
+Request: "new joiners on iOS who are active"
+-> conditions [device_os eq ios]; glossary_terms [new_customer, active]; channel unspecified
+Request: "prepaid customers who opened our last marketing email"
+-> conditions [line_type eq prepaid]; unmapped_phrases ["opened our last marketing email"]
 """
 
 
@@ -134,6 +136,10 @@ class ProviderUnavailable(RuntimeError):
 
 class BudgetExhausted(ProviderUnavailable):
     code = "budget_exhausted"
+
+
+class CircuitOpen(ProviderUnavailable):
+    code = "circuit_open"
 
 
 @dataclass
@@ -217,17 +223,26 @@ def fixture_key(messages: list[dict[str, Any]]) -> str:
 
 
 class ReplayProvider:
-    """Serves recorded proposals. Unknown requests raise ProviderUnavailable, like an outage would."""
+    """Serves recorded proposals for one model + effort. Unknown requests raise ProviderUnavailable,
+    like an outage would."""
 
     name = "replay"
 
-    def __init__(self, fixtures_dir: Path, model: str | None = None):
+    def __init__(self, fixtures_dir: Path, model: str | None = None, effort: str | None = None):
         self.model = model or "replay"
+        self.effort = effort
         self._fixtures: dict[str, dict[str, Any]] = {}
         for path in sorted(fixtures_dir.glob("*.json")):
             data = json.loads(path.read_text())
-            if model is None or data.get("model", "").startswith(model):
-                self._fixtures[data["key"]] = data
+            if model is not None and not data.get("model", "").startswith(model):
+                continue
+            if model is not None and data.get("effort") != effort:
+                continue
+            self._fixtures[data["key"]] = data
+
+    @property
+    def size(self) -> int:
+        return len(self._fixtures)
 
     def propose(self, system: str, messages: list[dict[str, Any]]) -> LLMResult:
         fixture = self._fixtures.get(fixture_key(messages))
@@ -255,14 +270,17 @@ class RecordingProvider:
         self._dir.mkdir(parents=True, exist_ok=True)
         self.name = inner.name
         self.model = inner.model
+        self.effort = getattr(inner, "effort", None)
 
     def propose(self, system: str, messages: list[dict[str, Any]]) -> LLMResult:
         result = self._inner.propose(system, messages)
         key = fixture_key(messages)
-        slug = result.model.replace("/", "_")
+        effort = getattr(self._inner, "effort", None)
+        slug = f"{result.model.replace('/', '_')}@{effort or 'default'}"
         (self._dir / f"{slug}-{key}.json").write_text(json.dumps({
             "key": key,
             "model": result.model,
+            "effort": effort,
             "prompt_version": PROMPT_VERSION,
             "request": messages[-1]["content"],
             "proposal": result.proposal,

@@ -19,8 +19,9 @@ from typing import Any
 from app.catalog import Catalog
 from app.explain import explain
 from app.limits import DailyBudget
+from app.governance import verify_provenance
 from app.llm import (
-    MAX_OUTPUT_TOKENS, PROMPT_VERSION, BudgetExhausted, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt,
+    MAX_OUTPUT_TOKENS, PROMPT_VERSION, BudgetExhausted, CircuitOpen, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt,
 )
 from app.models import (
     AudienceDefinition, CheckResult, Clarification, ClarificationOption, Condition, InterpretResult, Issue, Telemetry,
@@ -37,7 +38,8 @@ _NOT_REPAIRABLE = {"policy_violation"}
 
 class Interpreter:
     def __init__(self, catalog: Catalog, provider: Provider, store: AuditStore, cache: TTLCache,
-                 metrics: Metrics, pricing: Pricing, max_request_chars: int = 500, budget: DailyBudget | None = None):
+                 metrics: Metrics, pricing: Pricing, max_request_chars: int = 500, budget: DailyBudget | None = None,
+                 breaker_threshold: int = 3, breaker_cooldown_s: float = 30.0):
         self.catalog = catalog
         self.provider = provider
         self.store = store
@@ -46,22 +48,31 @@ class Interpreter:
         self.pricing = pricing
         self.max_request_chars = max_request_chars
         self.budget = budget
+        self.breaker_threshold = breaker_threshold
+        self.breaker_cooldown_s = breaker_cooldown_s
+        self._consecutive_failures = 0
+        self._open_until = 0.0
         self.system_prompt = build_system_prompt(catalog)
 
-    def interpret(self, request_text: str) -> InterpretResult:
-        started = time.perf_counter()
-        request_id = uuid.uuid4().hex[:12]
-        masked, pii_count = mask_pii(request_text.strip())
-        tel = Telemetry(provider=self.provider.name, model=self.provider.model, prompt_version=PROMPT_VERSION,
-                        pii_masked=pii_count)
+    @property
+    def circuit_open(self) -> bool:
+        return time.monotonic() < self._open_until
 
+    def interpret(self, request_text: str, request_id: str | None = None) -> InterpretResult:
+        started = time.perf_counter()
+        request_id = request_id if request_id and request_id != "-" else uuid.uuid4().hex[:12]
+        text = request_text.strip()
+        tel = Telemetry(provider=self.provider.name, model=self.provider.model, prompt_version=PROMPT_VERSION)
+
+        if len(text) > self.max_request_chars:
+            return self._finish(request_id, "[request too long, not stored]", None, self._empty("invalid", request_id, tel, Issue(
+                level="error", code="request_too_long",
+                message=f"Requests are limited to {self.max_request_chars} characters; describe one audience at a time.")), started)
+        masked, pii_count = mask_pii(text)
+        tel.pii_masked = pii_count
         if not masked:
             return self._finish(request_id, masked, None, self._empty("invalid", request_id, tel,
                                 Issue(level="error", code="empty_request", message="Describe the audience you need.")), started)
-        if len(masked) > self.max_request_chars:
-            return self._finish(request_id, masked, None, self._empty("invalid", request_id, tel, Issue(
-                level="error", code="request_too_long",
-                message=f"Requests are limited to {self.max_request_chars} characters; describe one audience at a time.")), started)
 
         cache_key = TTLCache.key(" ".join(masked.lower().split()), self.provider.model, PROMPT_VERSION,
                                  self.catalog.fingerprint)
@@ -114,6 +125,7 @@ class Interpreter:
                 conditions += [Condition(**c, source=f"glossary:{term.name}={option.id}") for c in option.conditions]
 
         validated, problems = validate_definition(definition.model_copy(update={"conditions": conditions}), self.catalog)
+        validated = verify_provenance(validated, self.catalog)
         issues += problems
         clarifications = [self._clarification(t) for t in still_pending]
         status = "invalid" if any(i.level == "error" for i in issues) else ("needs_clarification" if clarifications else "ready")
@@ -124,7 +136,17 @@ class Interpreter:
     def _call_model(self, messages: list[dict[str, Any]], tel: Telemetry) -> dict[str, Any]:
         if self.budget is not None and not self.budget.available():
             raise BudgetExhausted(f"today's model budget of ${self.budget.limit_usd:.2f} is used up")
-        result: LLMResult = self.provider.propose(self.system_prompt, messages)
+        if self.circuit_open:
+            raise CircuitOpen("several recent model calls failed; pausing the assistant briefly")
+        try:
+            result: LLMResult = self.provider.propose(self.system_prompt, messages)
+        except ProviderUnavailable:
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self.breaker_threshold:
+                self._open_until = time.monotonic() + self.breaker_cooldown_s
+                log.warning("llm_circuit_opened", extra={"cooldown_s": self.breaker_cooldown_s})
+            raise
+        self._consecutive_failures = 0
         cost = self.pricing.cost(result)
         if self.budget is not None:
             self.budget.spend(cost)
@@ -140,7 +162,8 @@ class Interpreter:
         self.metrics.incr("llm_cost_usd", cost)
         self.metrics.incr("llm_input_tokens", result.total_input_tokens)
         self.metrics.incr("llm_output_tokens", result.output_tokens)
-        self.metrics.observe("llm_ms", result.latency_ms)
+        if not result.replayed:
+            self.metrics.observe("llm_ms", result.latency_ms)
         log.info("llm_call", extra={
             "gen_ai.provider.name": self.provider.name,
             "gen_ai.operation.name": "chat",
@@ -243,6 +266,8 @@ class Interpreter:
             "definition_json": result.definition.model_dump_json(),
             "unmapped_json": json.dumps(result.unmapped_phrases),
             "clarifications_json": json.dumps([c.term for c in result.clarifications]),
+            "issues_json": json.dumps([{"code": i.code, "attribute": i.attribute, "message": i.message}
+                                       for i in result.issues]),
             "model": result.telemetry.model,
             "prompt_version": PROMPT_VERSION,
             "governance_versions": json.dumps(self.catalog.versions),

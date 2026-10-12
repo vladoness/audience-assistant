@@ -25,7 +25,12 @@ def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
     example: dict[str, str] = {}
     last_seen: dict[str, str] = {}
     asked: Counter[str] = Counter()
+    blocked: Counter[tuple[str, str]] = Counter()
     for s in signals:
+        for issue in json.loads(s["issues_json"]):
+            if issue["code"] == "policy_violation":
+                policy = re.search(r"policy (\S+)", issue["message"])
+                blocked[(issue["attribute"], policy.group(1) if policy else "?")] += 1
         for phrase in json.loads(s["unmapped_json"]):
             key = _normalize(phrase)
             demand[key] += 1
@@ -43,10 +48,10 @@ def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
             term, _, option = choice.partition("=")
             chosen[term][option] += 1
         if a["edited_by_user"]:
-            proposed = {_key(c) for c in json.loads(a["proposed_definition_json"])["conditions"]
-                        if not c["source"].startswith("glossary:")}
-            final = {_key(c) for c in approved if not c["source"].startswith("glossary:")}
-            edited_fields.update({k[0] for k in proposed ^ final})
+            proposed = {_key(c) for c in json.loads(a["proposed_definition_json"])["conditions"] if c["source"] == "model"}
+            kept = {_key(c) for c in approved if c["source"] == "model"}
+            changed = {c["attribute"] for c in approved if c["source"] == "user"} | {k[0] for k in proposed - kept}
+            edited_fields.update(changed)
 
     edited = sum(1 for a in audiences if a["edited_by_user"])
     return {
@@ -55,6 +60,10 @@ def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
         "unmapped_demand": [
             {"phrase": phrase, "count": n, "last_seen": last_seen[phrase], "example": example[phrase]}
             for phrase, n in demand.most_common(10)
+        ],
+        "blocked_by_policy": [
+            {"field": f, "label": catalog.attributes[f].label if f in catalog.attributes else f, "policy": p, "count": n}
+            for (f, p), n in blocked.most_common(8)
         ],
         "open_terms": [
             {"term": t.name, "asked": asked[t.name], "owner_pending": t.owner_pending,

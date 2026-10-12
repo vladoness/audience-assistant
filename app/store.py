@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS interpretations (
     definition_json TEXT NOT NULL,
     unmapped_json TEXT NOT NULL,
     clarifications_json TEXT NOT NULL,
+    issues_json TEXT NOT NULL,
     model TEXT,
     prompt_version TEXT,
     governance_versions TEXT NOT NULL,
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS audiences (
     governance_json TEXT NOT NULL,
     governance_versions TEXT NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS audiences_one_per_request ON audiences(request_id);
 """
 
 
@@ -91,7 +93,7 @@ class AuditStore:
         with self._lock, self._db:
             self._db.execute(
                 """INSERT INTO interpretations VALUES (:request_id, :created_at, :request_text, :status, :proposal_json,
-                   :definition_json, :unmapped_json, :clarifications_json, :model, :prompt_version,
+                   :definition_json, :unmapped_json, :clarifications_json, :issues_json, :model, :prompt_version,
                    :governance_versions, :telemetry_json)""",
                 {"created_at": _now(), **row},
             )
@@ -100,6 +102,15 @@ class AuditStore:
         with self._lock:
             row = self._db.execute("SELECT * FROM interpretations WHERE request_id = ?", (request_id,)).fetchone()
         return dict(row) if row else None
+
+    def approval_for(self, request_id: str) -> int | None:
+        with self._lock:
+            row = self._db.execute("SELECT id FROM audiences WHERE request_id = ?", (request_id,)).fetchone()
+        return row["id"] if row else None
+
+    def ping(self) -> bool:
+        with self._lock:
+            return self._db.execute("SELECT 1").fetchone()[0] == 1
 
     def record_approval(self, row: dict[str, Any]) -> int:
         with self._lock, self._db:
@@ -128,7 +139,7 @@ class AuditStore:
         """Recent interpretation outcomes, for the insights view."""
         with self._lock:
             rows = self._db.execute(
-                """SELECT created_at, request_text, status, unmapped_json, clarifications_json
+                """SELECT created_at, request_text, status, unmapped_json, clarifications_json, issues_json
                    FROM interpretations ORDER BY created_at DESC LIMIT ?""",
                 (limit,),
             ).fetchall()

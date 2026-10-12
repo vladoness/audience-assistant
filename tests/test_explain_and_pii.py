@@ -13,7 +13,7 @@ def test_explanation_is_generated_from_the_definition_and_names_governed_decisio
     assert e.summary == (
         "Lines where line type is postpaid, average monthly revenue (last 3 months) is at least 40 USD/month "
         "and region is Coast or Valley. Only lines with Email marketing consent are included "
-        "(consent policy for email_marketing, applied automatically)."
+        "(applied automatically for EMAIL campaigns)."
     )
     assert "decision D-014" in e.lines[1] and "parameters v3 from 2026-08-12" in e.lines[1]
     assert e.governed_terms == ["high_value"]

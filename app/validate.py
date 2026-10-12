@@ -14,6 +14,8 @@ from typing import Any
 from app.catalog import Attribute, Catalog
 from app.models import AudienceDefinition, Condition, Issue
 
+MAX_LIST_VALUES = 50
+
 OPS_BY_TYPE = {
     "enum": {"eq", "neq", "in", "not_in"},
     "integer": {"eq", "neq", "gt", "gte", "lt", "lte", "between"},
@@ -31,7 +33,7 @@ def parse_condition(raw: Any, source: str = "model") -> tuple[Condition | None, 
             level="error", code="unknown_operator", attribute=str(raw["attribute"]),
             message=f"Unknown operator '{raw['op']}'.",
         )
-    return Condition(attribute=str(raw["attribute"]), op=raw["op"], value=raw["value"], source=raw.get("source", source)), None
+    return Condition(attribute=str(raw["attribute"]), op=raw["op"], value=raw["value"], source=source), None
 
 
 def normalize(cond: Condition, catalog: Catalog, channel: str) -> tuple[Condition | None, list[Issue]]:
@@ -48,10 +50,17 @@ def normalize(cond: Condition, catalog: Catalog, channel: str) -> tuple[Conditio
             f"{attr.label} can't be used for {channel} campaigns: policy {policy.id} ({policy.name}). {catalog.labels[label]}",
             attr.name,
         )]
+    return normalize_shape(cond, catalog)
+
+
+def normalize_shape(cond: Condition, catalog: Catalog) -> tuple[Condition | None, list[Issue]]:
+    """Field exists, operator fits the type, value coerces and is in range. No policy check."""
+    attr = catalog.attributes.get(cond.attribute)
+    if attr is None:
+        return None, [_err("unknown_attribute", f"'{cond.attribute}' is not in the catalog.", cond.attribute)]
     if cond.op not in OPS_BY_TYPE[attr.type]:
         allowed = ", ".join(sorted(OPS_BY_TYPE[attr.type]))
         return None, [_err("operator_not_allowed", f"'{cond.op}' does not apply to {attr.label} (allowed: {allowed}).", attr.name)]
-
     try:
         value = _coerce_value(attr, cond.op, cond.value)
     except ValueError as exc:
@@ -60,27 +69,34 @@ def normalize(cond: Condition, catalog: Catalog, channel: str) -> tuple[Conditio
 
 
 def validate_definition(definition: AudienceDefinition, catalog: Catalog) -> tuple[AudienceDefinition, list[Issue]]:
-    """Normalize every condition, then run cross-condition checks. Returns the cleaned definition."""
+    """Normalize every condition and run cross-condition checks.
+
+    Conditions that fail (unknown field, policy, bad value) stay in the returned definition so the
+    user sees them and decides; any error makes the status invalid, and invalid definitions are
+    never sized or approved. Cross-condition checks run on the valid conditions only.
+    """
     issues: list[Issue] = []
-    cleaned: list[Condition] = []
+    kept: list[Condition] = []
+    valid: list[Condition] = []
     seen: set[tuple[str, str, str]] = set()
     for cond in definition.conditions:
         normalized, problems = normalize(cond, catalog, definition.channel)
-        issues += problems
-        if normalized is None:
-            continue
-        key = (normalized.attribute, normalized.op, repr(normalized.value))
+        candidate = normalized or cond
+        key = (candidate.attribute, candidate.op, repr(candidate.value))
         if key in seen:
             continue
         seen.add(key)
-        cleaned.append(normalized)
+        issues += problems
+        kept.append(candidate)
+        if normalized is not None:
+            valid.append(normalized)
 
-    result = definition.model_copy(update={"conditions": cleaned})
-    issues += _check_scope(result, catalog)
-    issues += _check_contradictions(result, catalog)
-    if not cleaned and not any(i.level == "error" for i in issues):
+    valid_only = definition.model_copy(update={"conditions": valid})
+    issues += _check_scope(valid_only, catalog)
+    issues += _check_contradictions(valid_only, catalog)
+    if not kept and not any(i.level == "error" for i in issues):
         issues.append(Issue(level="warning", code="no_conditions", message="No conditions: this would target every consented line."))
-    return result, issues
+    return definition.model_copy(update={"conditions": kept}), issues
 
 
 def _coerce_value(attr: Attribute, op: str, value: Any) -> Any:
@@ -88,6 +104,8 @@ def _coerce_value(attr: Attribute, op: str, value: Any) -> Any:
         items = value if isinstance(value, list) else [value]
         if not items:
             raise ValueError("needs at least one value")
+        if len(items) > max(len(attr.values), MAX_LIST_VALUES):
+            raise ValueError(f"too many values ({len(items)})")
         return [_coerce_scalar(attr, v) for v in items]
     if op == "between":
         if not isinstance(value, list) or len(value) != 2:
@@ -114,8 +132,8 @@ def _coerce_scalar(attr: Attribute, value: Any) -> Any:
         number = float(value)
     except (TypeError, ValueError):
         raise ValueError(f"expected a number, got {value!r}") from None
-    if math.isnan(number):
-        raise ValueError("expected a number, got NaN")
+    if not math.isfinite(number):
+        raise ValueError(f"expected a finite number, got {value!r}")
     if attr.type == "integer":
         if number != int(number):
             raise ValueError(f"expected a whole number, got {value!r}")
@@ -177,24 +195,31 @@ def _check_contradictions(definition: AudienceDefinition, catalog: Catalog) -> l
 
 
 def _numeric_range_empty(conds: list[Condition], integer: bool) -> bool:
+    """Intersect every bound; True if no value satisfies all of them."""
     low, high = -math.inf, math.inf
     low_open = high_open = False
+
+    def tighten_low(value: float, is_open: bool) -> None:
+        nonlocal low, low_open
+        if value > low or (value == low and is_open):
+            low, low_open = value, is_open or (value == low and low_open)
+
+    def tighten_high(value: float, is_open: bool) -> None:
+        nonlocal high, high_open
+        if value < high or (value == high and is_open):
+            high, high_open = value, is_open or (value == high and high_open)
+
     for c in conds:
-        if c.op in {"gt", "gte"} and (c.value > low or (c.value == low and c.op == "gt")):
-            low, low_open = c.value, c.op == "gt"
-        elif c.op in {"lt", "lte"} and (c.value < high or (c.value == high and c.op == "lt")):
-            high, high_open = c.value, c.op == "lt"
+        if c.op in {"gt", "gte"}:
+            tighten_low(c.value, c.op == "gt")
+        elif c.op in {"lt", "lte"}:
+            tighten_high(c.value, c.op == "lt")
         elif c.op == "eq":
-            if c.value > low or (c.value == low and low_open):
-                low, low_open = c.value, False
-            if c.value < high or (c.value == high and high_open):
-                high, high_open = c.value, False
+            tighten_low(c.value, False)
+            tighten_high(c.value, False)
         elif c.op == "between":
-            lo, hi = c.value
-            if lo > low or (lo == low and low_open):
-                low, low_open = lo, False
-            if hi < high or (hi == high and high_open):
-                high, high_open = hi, False
+            tighten_low(c.value[0], False)
+            tighten_high(c.value[1], False)
     if integer:
         if low_open:
             low, low_open = math.floor(low) + 1, False

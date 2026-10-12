@@ -6,8 +6,8 @@ setup:          ## install dependencies into .venv
 data:           ## (re)generate the 200k-line synthetic profile store
 	uv run python -m app.synthdata --rows 200000 --out data/profiles.duckdb
 
-run:            ## start the app on http://127.0.0.1:8000
-	uv run python -m app.main
+run:            ## start the app on http://127.0.0.1:8000 (generates the synthetic store on first run)
+	SYNTHETIC_DATA=1 uv run python -m app.main
 
 test:           ## run the test suite (no network, no API key needed)
 	uv run pytest

@@ -17,8 +17,11 @@ class Settings:
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-haiku-5-5"
     anthropic_effort: str = "low"  # low | medium | high | xhigh | max | "" for the model default
-    llm_timeout_s: float = 20.0
-    llm_max_retries: int = 2
+    llm_timeout_s: float = 10.0
+    llm_max_retries: int = 1
+    breaker_threshold: int = 3
+    breaker_cooldown_s: float = 30.0
+    synthetic_data: bool = False
     record_fixtures: bool = False
     config_dir: Path = ROOT / "config"
     data_path: Path = ROOT / "data" / "profiles.duckdb"
@@ -46,6 +49,7 @@ class Settings:
             llm_timeout_s=float(os.getenv("LLM_TIMEOUT_S", cls.llm_timeout_s)),
             llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", cls.llm_max_retries)),
             record_fixtures=os.getenv("RECORD_FIXTURES", "0") == "1",
+            synthetic_data=os.getenv("SYNTHETIC_DATA", "0") == "1",
             data_path=Path(os.getenv("DATA_PATH", cls.data_path)),
             profile_rows=int(os.getenv("PROFILE_ROWS", cls.profile_rows)),
             audit_db_path=Path(os.getenv("AUDIT_DB_PATH", cls.audit_db_path)),

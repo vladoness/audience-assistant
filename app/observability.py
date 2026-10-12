@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
+import math
 import statistics
 import threading
 import time
@@ -70,7 +71,12 @@ class Metrics:
                 timings[name] = {
                     "count": len(ordered),
                     "p50_ms": round(statistics.median(ordered), 1),
-                    "p95_ms": round(ordered[max(0, int(len(ordered) * 0.95) - 1)], 1),
+                    "p95_ms": round(percentile(ordered, 95), 1),
                     "max_ms": round(ordered[-1], 1),
                 }
             return {"counters": dict(sorted(self._counters.items())), "timings": timings}
+
+
+def percentile(ordered: list[float], pct: float) -> float:
+    """Nearest-rank percentile of an already sorted list (p95 of 20 samples is the 19th value)."""
+    return ordered[max(0, math.ceil(pct / 100 * len(ordered)) - 1)]

@@ -13,7 +13,9 @@ import sys
 from dataclasses import dataclass, field
 
 from app.catalog import Catalog, load_catalog
+from app.models import Condition
 from app.settings import ROOT
+from app.validate import normalize_shape
 
 
 @dataclass
@@ -48,6 +50,8 @@ def lint(catalog: Catalog) -> LintReport:
             err(f"marketing action {action.name}: consent field {consent.name} is targetable; it must be policy-blocked")
 
     for p in catalog.policies:
+        if p.status not in {"enabled", "disabled"}:
+            err(f"policy {p.id}: status must be 'enabled' or 'disabled', got {p.status!r} (would silently not apply)")
         for label in p.deny_labels:
             if label not in catalog.labels:
                 err(f"policy {p.id}: unknown label {label}")
@@ -56,6 +60,9 @@ def lint(catalog: Catalog) -> LintReport:
                 err(f"policy {p.id}: unknown marketing action {action}")
 
     for ps in catalog.parameter_sets.values():
+        for key, value in ps.values.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                err(f"parameter set {ps.name}: value {key}={value!r} is not a number")
         if not ps.approved_by:
             warn(f"parameter set {ps.name} v{ps.version}: no approver recorded")
 
@@ -65,6 +72,10 @@ def lint(catalog: Catalog) -> LintReport:
             for c in conditions:
                 if c["attribute"] not in catalog.attributes:
                     err(f"term {t.name}: unknown field {c['attribute']}")
+                    continue
+                _, problems = normalize_shape(Condition(**c), catalog)
+                for problem in problems:
+                    err(f"term {t.name}: {problem.message}")
         if t.status == "decided":
             if not t.conditions:
                 err(f"term {t.name}: decided but has no conditions")

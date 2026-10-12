@@ -69,6 +69,7 @@ async function interpret() {
   if (!text) return;
   const btn = $("interpret-btn");
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Interpreting…';
+  $("interpret-error").hidden = true;
   try {
     const r = await api("/api/interpret", { request: text });
     state.requestId = r.request_id;
@@ -76,11 +77,13 @@ async function interpret() {
     state.acknowledged = false;
     state.pendingTerms = r.clarifications.map((c) => c.term);
     applyResult(r);
-    renderTelemetry(r.telemetry);
+    renderTelemetry(r.telemetry, r.request_id);
     renderAssumptions(r.assumptions);
     $("approve-msg").textContent = "";
   } catch (e) {
-    alert("Request failed: " + (e.data?.detail || e.message));
+    const detail = typeof e.data?.detail === "string" ? e.data.detail : e.message;
+    $("interpret-error").textContent = `Request failed: ${detail}${e.data?.request_id ? ` (request ${e.data.request_id})` : ""}`;
+    $("interpret-error").hidden = false;
   } finally {
     btn.disabled = false; btn.textContent = "Interpret";
   }
@@ -96,6 +99,9 @@ function applyResult(r) {
   renderClarifications(r.clarifications);
   renderUnmapped();
   $("summary").textContent = r.explanation.summary;
+  $("summary-label").textContent = displayStatus() === "ready"
+    ? "This audience is exactly:" : "Current definition (not final until the points above are resolved):";
+  state.errorFields = new Set(r.issues.filter((i) => i.level === "error" && i.attribute).map((i) => i.attribute));
   renderConditions();
   renderIssues($("issues"), r.issues);
   const sizable = ["ready", "needs_confirmation"].includes(displayStatus());
@@ -162,6 +168,7 @@ function renderConditions() {
   state.definition.conditions.forEach((cond, i) => {
     const attr = state.attrs[cond.attribute];
     const tr = document.createElement("tr");
+    if (state.errorFields?.has(cond.attribute)) tr.className = "row-error";
     const attrOptions = state.catalog.attributes
       .map((a) => `<option value="${a.name}" ${a.name === cond.attribute ? "selected" : ""}>${esc(a.label)}</option>`).join("");
     const ops = attr ? OPS[attr.type] : [cond.op];
@@ -190,12 +197,12 @@ function valueWidget(attr, cond) {
     const opts = attr.values.map((v) => `<option ${selected.has(v) ? "selected" : ""}>${esc(v)}</option>`).join("");
     return `<select data-v ${multi ? "multiple" : ""}>${opts}</select>`;
   }
-  const unit = attr.unit ? ` title="${esc(attr.unit)}"` : "";
+  const unit = attr.unit ? `<span class="unit">${esc(attr.unit)}</span>` : "";
   if (cond.op === "between") {
     const [lo, hi] = Array.isArray(cond.value) ? cond.value : [attr.min, attr.max];
-    return `<div class="between-inputs"><input data-v type="number" value="${lo}"${unit}><input data-v type="number" value="${hi}"${unit}></div>`;
+    return `<div class="between-inputs value-cell"><input data-v type="number" value="${esc(lo)}"><input data-v type="number" value="${esc(hi)}">${unit}</div>`;
   }
-  return `<input data-v type="number" value="${esc(cond.value)}"${unit}>`;
+  return `<div class="value-cell"><input data-v type="number" value="${esc(cond.value)}">${unit}</div>`;
 }
 
 function readValue(tr, attr, op) {
@@ -287,8 +294,8 @@ function renderAssumptions(list) {
   $("assumptions").innerHTML = list.map((a) => `<li>${esc(a)}</li>`).join("");
 }
 
-function renderTelemetry(t) {
-  const parts = [`model ${t.model || "n/a"}`, `${(t.total_ms / 1000).toFixed(2)} s`];
+function renderTelemetry(t, requestId) {
+  const parts = [`request ${requestId}`, `model ${t.model || "n/a"}`, `${(t.total_ms / 1000).toFixed(2)} s`];
   if (t.llm_calls) parts.push(`${t.llm_calls} AI call${t.llm_calls > 1 ? "s" : ""}`, `${fmt(t.input_tokens + t.cache_read_tokens + t.cache_write_tokens)} in / ${fmt(t.output_tokens)} out tokens`, `$${t.cost_usd.toFixed(4)}`);
   if (t.cache_hit) parts.push("cached answer");
   if (t.repaired) parts.push("self-corrected once");
@@ -334,7 +341,7 @@ function governanceCell(r) {
   const pct = r.reachable ? ((100 * delta) / r.reachable).toFixed(1) : "0";
   return `<span class="gov-stale">⚠ rules changed since approval</span>
     <div class="hint">${r.governance_changes.map(esc).join("<br>")}</div>
-    <div class="hint">under current rules: ${fmt(r.reachable_under_current_rules)} (${delta >= 0 ? "+" : ""}${pct}%). Re-approve before use.</div>`;
+    <div class="hint">${r.reachable_under_current_rules === null ? "" : `under current rules: ${fmt(r.reachable_under_current_rules)} (${delta >= 0 ? "+" : ""}${pct}%). `}Needs re-approval before use.</div>`;
 }
 
 async function loadInsights() {
@@ -346,6 +353,9 @@ async function loadInsights() {
     const chosen = Object.entries(t.chosen).filter(([, n]) => n).map(([label, n]) => `${esc(label)}: ${n}`).join("; ");
     return `<li><strong>${esc(t.term)}</strong><span class="n">asked ${t.asked}×</span><div class="hint">${chosen || "no approvals yet"} · decides: ${esc(t.owner_pending)}</div></li>`;
   }).join("");
+  $("ins-blocked").innerHTML = ins.blocked_by_policy.map((b) =>
+    `<li>${esc(b.label)} <span class="hint">(${esc(b.policy)})</span><span class="n">${b.count}×</span></li>`).join("")
+    || '<li class="hint">Nothing yet.</li>';
   const e = ins.edits;
   $("ins-edits").innerHTML = `<li>Approved audiences edited before approval<span class="n">${e.edited}/${e.approved}</span></li>`
     + e.by_field.map((f) => `<li>${esc(f.label)}<span class="n">${f.count}×</span></li>`).join("");

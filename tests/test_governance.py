@@ -87,3 +87,15 @@ def test_interim_choice_is_flagged_once_the_term_is_decided(tmp_path, catalog):
 
     changed = load_catalog(config_copy(tmp_path, decide_active))
     assert impact(snap, changed) == ["active: now decided (D-030); this audience used an interim choice"]
+
+
+def test_lint_fails_closed_on_policy_status_typos_and_bad_glossary_values(tmp_path):
+    def edit(cfg):
+        set_yaml(cfg / "policies.yaml", lambda d: d["policies"][0].update(status="Enabled"))
+        set_yaml(cfg / "glossary.yaml", lambda d: d["terms"]["app_user"]["conditions"][0].update(value="sometimes"))
+        set_yaml(cfg / "parameters.yaml", lambda d: d["parameter_sets"]["high_value"]["values"].update(min_arpu_usd="40"))
+
+    report = lint(load_catalog(config_copy(tmp_path, edit)))
+    assert any("MKT-07: status must be" in e for e in report.errors)
+    assert any("app_user" in e and "true/false" in e for e in report.errors)
+    assert any("min_arpu_usd='40' is not a number" in e for e in report.errors)

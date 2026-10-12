@@ -30,6 +30,7 @@
       </div>
       <p class="hint">Describe groups, not people. Personal data (emails, phone numbers) is masked before the AI sees it.</p>
       <p class="hint" id="accuracy-hint"></p>
+      <p class="error-text" id="interpret-error" hidden></p>
     </section>
 
     <section class="card hidden" id="result">
@@ -39,7 +40,7 @@
       <div id="unmapped"></div>
 
       <div class="summary-box">
-        <div class="summary-label">This audience is exactly:</div>
+        <div class="summary-label" id="summary-label">This audience is exactly:</div>
         <p id="summary"></p>
       </div>
 
@@ -98,7 +99,8 @@
         <button id="refresh-insights" class="ghost">Refresh</button>
       </div>
       <div class="insights">
-        <div><h3>Asked for, but no data exists</h3><ul id="ins-demand" class="plain"></ul></div>
+        <div><h3>Asked for, but no data exists</h3><ul id="ins-demand" class="plain"></ul>
+          <h3 style="margin-top:14px">Blocked by data-usage policy</h3><ul id="ins-blocked" class="plain"></ul></div>
         <div><h3>Open definitions: what people chose</h3><ul id="ins-terms" class="plain"></ul></div>
         <div><h3>Where marketers corrected the AI</h3><ul id="ins-edits" class="plain"></ul></div>
       </div>

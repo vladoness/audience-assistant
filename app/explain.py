@@ -22,19 +22,26 @@ _OP_PHRASES = {
 
 
 def describe_condition(cond: Condition, catalog: Catalog) -> str:
-    attr = catalog.attributes[cond.attribute]
+    attr = catalog.attributes.get(cond.attribute)
+    if attr is None:
+        return f"{cond.attribute} {_OP_PHRASES.get(cond.op, cond.op)} {cond.value} (not a known field)"
     unit = f" {attr.unit}" if attr.unit else ""
     if attr.type == "boolean":
-        return f"{attr.label}: {'yes' if cond.value else 'no'}"
+        return f"{attr.label}: {'yes' if cond.value is True else 'no' if cond.value is False else cond.value}"
     if cond.op == "between":
+        if not (isinstance(cond.value, list) and len(cond.value) == 2):
+            return f"{attr.label} is between {cond.value}{unit}"
         low, high = cond.value
         return f"{attr.label} is between {_fmt(low)} and {_fmt(high)}{unit}"
     if cond.op in {"in", "not_in"}:
-        joined = " or ".join(str(v) for v in cond.value) if cond.op == "in" else " nor ".join(str(v) for v in cond.value)
+        values = cond.value if isinstance(cond.value, list) else [cond.value]
+        joined = " or ".join(str(v) for v in values) if cond.op == "in" else " nor ".join(str(v) for v in values)
         verb = "is" if cond.op == "in" else "is neither"
-        if cond.op == "not_in" and len(cond.value) == 1:
-            verb, joined = "is not", str(cond.value[0])
+        if cond.op == "not_in" and len(values) == 1:
+            verb, joined = "is not", str(values[0])
         return f"{attr.label} {verb} {joined}"
+    if cond.value == 1 and attr.unit.endswith("s"):
+        unit = f" {attr.unit[:-1]}"
     return f"{attr.label} {_OP_PHRASES[cond.op]} {_fmt(cond.value)}{unit}"
 
 
@@ -61,7 +68,7 @@ def explain(definition: AudienceDefinition, catalog: Catalog) -> Explanation:
 
     action = catalog.action_for(definition.channel)
     channel_label = catalog.attributes[action.consent_attribute].label
-    consent = f"Only lines with {channel_label} are included (consent policy for {action.name}, applied automatically)."
+    consent = f"Only lines with {channel_label} are included (applied automatically for {definition.channel.upper()} campaigns)."
     parts = [_lower_first(describe_condition(c, catalog)) for c in definition.conditions]
     if not parts:
         summary = f"All lines. {consent}"

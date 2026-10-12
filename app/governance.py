@@ -15,6 +15,47 @@ from app.catalog import Catalog
 from app.models import AudienceDefinition, Condition
 
 
+def verify_provenance(definition: AudienceDefinition, catalog: Catalog) -> AudienceDefinition:
+    """Keep a "glossary:" source only when the condition is exactly that term's (or option's) current
+    definition. Anything else is relabelled "user", so a client can't make an edited threshold look governed."""
+    out = []
+    for c in definition.conditions:
+        if c.source.startswith("glossary:"):
+            term_name, _, option = c.source.removeprefix("glossary:").partition("=")
+            term = catalog.terms.get(term_name)
+            expected: tuple[dict[str, Any], ...] = ()
+            if term is not None and option:
+                chosen = term.option(option)
+                expected = chosen.conditions if chosen else ()
+            elif term is not None and term.status == "decided":
+                expected = term.conditions
+            if _canon(c.model_dump()) not in [_canon(e) for e in expected]:
+                c = c.model_copy(update={"source": "user"})
+        out.append(c)
+    return definition.model_copy(update={"conditions": out})
+
+
+def reconcile_with_proposal(final: AudienceDefinition, proposed: AudienceDefinition) -> tuple[AudienceDefinition, bool]:
+    """Server-side truth for "model" sources, and whether the marketer edited the AI's proposal.
+
+    A condition counts as the model's only if the model actually proposed it. Answering a
+    clarification or keeping governed terms is not an edit; changing, adding or removing
+    targeting conditions is.
+    """
+    model_keys = {_key(c) for c in proposed.conditions if c.source == "model"}
+    conditions = [
+        c.model_copy(update={"source": "user"}) if c.source == "model" and _key(c) not in model_keys else c
+        for c in final.conditions
+    ]
+    kept_model = {_key(c) for c in conditions if c.source == "model"}
+    edited = any(c.source == "user" for c in conditions) or bool(model_keys - kept_model)
+    return final.model_copy(update={"conditions": conditions}), edited
+
+
+def _key(c: Condition) -> str:
+    return json.dumps(_canon(c.model_dump()), sort_keys=True)
+
+
 def snapshot(definition: AudienceDefinition, catalog: Catalog) -> dict[str, Any]:
     """Governed terms this definition depends on, with the versions in force right now."""
     snap: dict[str, Any] = {}

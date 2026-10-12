@@ -26,7 +26,7 @@ class Condition(BaseModel):
 
 
 class AudienceDefinition(BaseModel):
-    conditions: list[Condition] = Field(default_factory=list)
+    conditions: list[Condition] = Field(default_factory=list, max_length=30)
     channel: Literal["sms", "email"] = "sms"
 
 
@@ -96,7 +96,7 @@ class SizeResult(BaseModel):
 
 
 class InterpretRequest(BaseModel):
-    request: str
+    request: str = Field(max_length=2000)
 
 
 class CheckRequest(BaseModel):

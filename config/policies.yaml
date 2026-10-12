@@ -1,11 +1,11 @@
 # Data-usage governance: labels on fields, marketing actions, and the policies that connect them.
 # Same shape as label-based governance in customer data platforms: a field carries labels,
 # each channel is a marketing action, and an enabled policy denies labels for actions.
-version: "2026-10-09.1"
+version: "2026-10-12.1"
 
 labels:
   CREDIT_DECISION_ONLY: Collected for credit decisions; the customer contract forbids marketing use.
-  APP_ANALYTICS: Derived from the app analytics SDK; its consent covers in-app and SMS service messages only.
+  APP_ANALYTICS: Derived from the app analytics SDK; its consent covers in-app and SMS marketing, not email.
   CONSENT_SIGNAL: A consent record. Applied by consent policy, never used as a targeting condition.
 
 default_marketing_action: sms_marketing

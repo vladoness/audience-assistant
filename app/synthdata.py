@@ -6,6 +6,10 @@ The distributions are invented but carry the traps a real operator's data has: s
 whose billing status is still 'current', a top-up attribute that only exists for prepaid,
 and consent coverage that differs by channel.
 
+It also generates a year of past campaigns with holdout groups and responses, from known true
+effects (CAMPAIGN_TYPES), so the app can show what happened last time and the tests can check
+that its measurement recovers the truth. All of it is labelled synthetic wherever it is shown.
+
 Run directly:  uv run python -m app.synthdata --rows 200000 --out data/profiles.duckdb
 """
 
@@ -14,6 +18,7 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+from datetime import date, timedelta
 from pathlib import Path
 
 import duckdb
@@ -114,8 +119,60 @@ FROM behaviour;
 """
 
 
-def generate(path: Path, rows: int) -> float:
-    """Create (or replace) the profiles table at `path`. Returns seconds taken."""
+# Synthetic campaign history: the KNOWN TRUTH it is generated from. Each type has an eligible
+# audience, a channel, the response rate of lines that were NOT contacted (base) and the true
+# effect of contacting them (lift, in absolute response rate). Measurement must recover the lift
+# from the data alone; tests/test_history.py checks that it does.
+CAMPAIGN_TYPES: dict[str, dict] = {
+    "topup_reminder": {"label": "Top-up reminder", "channel": "sms", "base": 0.100, "lift": 0.020,
+                       "audience": "line_type = 'prepaid' AND days_since_last_recharge BETWEEN 15 AND 45"},
+    "data_upsell": {"label": "Data bundle upsell", "channel": "sms", "base": 0.020, "lift": 0.008,
+                    "audience": "data_gb_30d >= 5"},
+    "roaming_offer": {"label": "Roaming offer", "channel": "email", "base": 0.030, "lift": 0.012,
+                      "audience": "roaming_30d OR (line_type = 'postpaid' AND plan_tier = 'premium')"},
+    "winback": {"label": "Lapsed prepaid win-back", "channel": "sms", "base": 0.050, "lift": 0.010,
+                "audience": "line_type = 'prepaid' AND days_since_last_recharge > 30"},
+    "app_adoption": {"label": "App adoption", "channel": "sms", "base": 0.040, "lift": 0.003,
+                     "audience": "NOT app_active_30d AND device_os <> 'feature_phone'"},
+}
+HISTORY_CAMPAIGNS = 60  # one every 6 days over the last year, types in rotation
+HISTORY_SAMPLE_PCT = 40  # share of the eligible, consented lines each past campaign reached
+HISTORY_HOLDOUT_PCT = 10
+
+
+def generate_history(con: duckdb.DuckDBPyConnection, as_of: date) -> None:
+    """Create (or replace) `campaigns`, `campaign_contacts` and `history_meta` from CAMPAIGN_TYPES."""
+    types = list(CAMPAIGN_TYPES)
+    con.execute("CREATE OR REPLACE TABLE history_meta AS SELECT ?::DATE AS as_of, true AS synthetic", [as_of])
+    con.execute("CREATE OR REPLACE TABLE campaigns (campaign_id INTEGER, campaign_type VARCHAR, name VARCHAR, "
+                "channel VARCHAR, sent_at DATE)")
+    for k in range(HISTORY_CAMPAIGNS):
+        t = types[k % len(types)]
+        sent = as_of - timedelta(days=2 + 6 * (HISTORY_CAMPAIGNS - 1 - k))
+        con.execute("INSERT INTO campaigns VALUES (?, ?, ?, ?, ?)",
+                    [k + 1, t, f"{CAMPAIGN_TYPES[t]['label']}, {sent:%d %b %Y}", CAMPAIGN_TYPES[t]["channel"], sent])
+    eligible = " OR ".join(
+        f"(c.campaign_type = '{t}' AND ({spec['audience']}) AND "
+        f"{'marketing_consent_sms' if spec['channel'] == 'sms' else 'marketing_consent_email'})"
+        for t, spec in CAMPAIGN_TYPES.items())
+    rate = " ".join(f"WHEN '{t}' THEN {spec['base']} + CASE WHEN held_out THEN 0 ELSE {spec['lift']} END"
+                    for t, spec in CAMPAIGN_TYPES.items())
+    con.execute(f"""
+        CREATE OR REPLACE TABLE campaign_contacts AS
+        WITH reached AS (
+            SELECT c.campaign_id, c.campaign_type, p.profile_id,
+                   hash(p.profile_id, c.campaign_id, 'h') % 100 < {HISTORY_HOLDOUT_PCT} AS held_out
+            FROM campaigns c JOIN profiles p ON ({eligible})
+            WHERE hash(p.profile_id, c.campaign_id, 's') % 100 < {HISTORY_SAMPLE_PCT}
+        )
+        SELECT campaign_id, profile_id, held_out,
+               (hash(profile_id, campaign_id, 'r') % 1000000) / 1000000.0 < (CASE campaign_type {rate} END) AS responded
+        FROM reached""")
+
+
+def generate(path: Path, rows: int, history: bool = True) -> float:
+    """Create (or replace) the profiles table at `path`, and by default the synthetic campaign
+    history that goes with it. Returns seconds taken."""
     path.parent.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     with duckdb.connect(str(path)) as con:
@@ -126,9 +183,18 @@ def generate(path: Path, rows: int) -> float:
             else:
                 con.execute(sql)
         con.execute("DROP MACRO IF EXISTS u")
+        if history:
+            generate_history(con, date.today())
     elapsed = time.perf_counter() - started
-    log.info("synthetic_data_generated", extra={"rows": rows, "path": str(path), "seconds": round(elapsed, 2)})
+    log.info("synthetic_data_generated", extra={"rows": rows, "path": str(path), "seconds": round(elapsed, 2),
+                                                "history": history})
     return elapsed
+
+
+def add_history(path: Path) -> None:
+    """Add the synthetic campaign history to an existing synthetic profile store."""
+    with duckdb.connect(str(path)) as con:
+        generate_history(con, date.today())
 
 
 def main() -> None:

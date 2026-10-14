@@ -256,12 +256,45 @@ It also asked "which 'active'?" without saying what either answer would do. Two 
   the holdout. A holdout too small to measure is flagged. This is also the measurement the
   business case depends on (BUSINESS-CASE.md).
 
-*Deliberately not done.*
+*Deliberately not done* (this and decision 20).
 - **Recommending an answer, or picking the working default automatically.** The owner of the
   definition, and the marketer for the campaign, decide; the tool shows evidence.
 - **Showing projected revenue in the UI.** Its inputs are unsigned assumptions. They stay in the
   business case document, labelled, until the holdouts measure them.
 - **Dashboards.** The consequence is shown at the moment of the choice, not in a separate view.
+
+**20. Past campaigns are evidence at the moment of decision; here they are synthetic, from a
+known truth, and say so.**
+Decision 19 records how each decision will be judged. Past decisions, judged the same way, are
+the best evidence for the next one, so the app reads a campaign history (`app/history.py`):
+- **Contact pressure, at sizing:** the share of this audience contacted in the last 7 and 30
+  days, and how many already had 3 or more campaigns this month (`contact_policy` parameter set,
+  owned by Marketing Operations). This is the decision that drives fatigue and opt-outs.
+- **What happened last time, at approval:** the marketer picks the campaign type and sees each
+  past campaign's lift (contacted response minus held-out response) with a 95% interval, and
+  all of them pooled. The evidence the approver saw is stored with the approval.
+
+The history in this prototype is generated (60 campaigns over a year, five types), from true
+effects written down in `CAMPAIGN_TYPES`. That makes it a test, not only a demo: the
+measurement must recover each true effect from the data alone, and `tests/test_history.py`
+checks it does, within three standard errors. It also produces the readings a real history
+would. Win-back works (about +1.1 points, clearly above zero). App adoption barely does (about
++0.2, with an interval touching zero). Roaming offers are emailed to fewer people, so their
+evidence is visibly weaker.
+
+*Guardrails.*
+- **Labelled synthetic** in every response, in the UI and over MCP, and recorded as such.
+  Synthetic numbers must never pass for measured ones.
+- **Evidence, not a forecast.** The reading says what past campaigns did. It doesn't predict this
+  one, and it doesn't recommend sending or not sending. A forecast would need segment-level models,
+  and the honest version of that is a holdout on this campaign too.
+- **Same consent rules.** No past contact went to a line without consent for that channel;
+  a test checks it.
+
+*In a real rollout* the history is the campaign tool's send and response records: Journey
+Optimizer's message datasets in AEP, with lift computed in Customer Journey Analytics or Query
+Service. Each approval's own holdout then adds to that history, and the business case's response
+assumption becomes a measured number.
 
 ## Where the time goes (and why that shapes the design)
 

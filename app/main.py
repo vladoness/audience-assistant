@@ -24,6 +24,7 @@ import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
+import duckdb
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -43,7 +44,8 @@ from app.models import (
 from app.observability import Metrics, configure_logging, request_id_var
 from app.settings import ROOT, Settings
 from app.store import AuditStore, TTLCache, definition_hash
-from app.synthdata import generate
+from app.history import CampaignHistory
+from app.synthdata import add_history, generate
 
 log = logging.getLogger("app")
 
@@ -60,6 +62,7 @@ class Services:
     budget: DailyBudget
     lint_report: LintReport
     eval_summary: dict | None
+    history: CampaignHistory | None = None
 
 
 def build_provider(settings: Settings) -> Provider:
@@ -99,6 +102,9 @@ def build_services(settings: Settings, provider: Provider | None = None) -> Serv
                                "to generate the synthetic demo store at startup.")
         log.warning("generating_synthetic_data", extra={"rows": settings.profile_rows, "path": str(settings.data_path)})
         generate(settings.data_path, settings.profile_rows)
+    elif settings.synthetic_data and not _has_history(settings.data_path):
+        log.warning("adding_synthetic_campaign_history", extra={"path": str(settings.data_path)})
+        add_history(settings.data_path)
     guardrails = catalog.parameter_sets.get("audience_guardrails")
     min_audience = int(guardrails.values["min_reachable_lines"]) if guardrails else settings.min_audience
     broad_share = float(guardrails.values["max_share_of_base"]) if guardrails else settings.broad_share
@@ -119,11 +125,19 @@ def build_services(settings: Settings, provider: Provider | None = None) -> Serv
         breaker_cooldown_s=settings.breaker_cooldown_s,
         engine=engine,
     )
+    history = CampaignHistory(engine, catalog)
     log.info("startup", extra={"provider": interpreter.provider.name, "model": interpreter.provider.model,
-                               "profiles": engine.base, "catalog_version": catalog.version})
+                               "profiles": engine.base, "catalog_version": catalog.version,
+                               "campaign_history": "synthetic" if history.synthetic else history.available})
     return Services(settings, catalog, engine, store, interpreter, metrics,
                     limiter=RateLimiter(settings.rate_limit_per_min), budget=budget, lint_report=report,
-                    eval_summary=load_eval_summary(interpreter.provider.model, getattr(interpreter.provider, "effort", None)))
+                    eval_summary=load_eval_summary(interpreter.provider.model, getattr(interpreter.provider, "effort", None)),
+                    history=history)
+
+
+def _has_history(path) -> bool:
+    with duckdb.connect(str(path), read_only=True) as con:
+        return "campaigns" in {r[0] for r in con.execute("SHOW TABLES").fetchall()}
 
 
 def create_app(settings: Settings | None = None, provider: Provider | None = None) -> FastAPI:
@@ -203,7 +217,24 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             raise HTTPException(422, detail=[i.model_dump() for i in checked.issues if i.level == "error"])
         result = s.engine.size(checked.definition)
         s.metrics.observe("size_query_ms", result.query_ms)
+        if s.history is not None:
+            result.contact_pressure = s.history.contact_pressure(checked.definition)
         return result
+
+    @app.get("/api/history")
+    def history(request: Request) -> dict:
+        h = svc(request).history
+        if h is None or not h.available:
+            return {"available": False, "types": []}
+        return {"available": True, "synthetic": h.synthetic, "as_of": str(h.as_of), "types": h.types()}
+
+    @app.get("/api/history/evidence/{campaign_type}")
+    def evidence(campaign_type: str, request: Request) -> dict:
+        h = svc(request).history
+        found = h.evidence(campaign_type) if h is not None else None
+        if found is None:
+            raise HTTPException(404, detail=f"No campaign history for type {campaign_type!r}.")
+        return found
 
     @app.post("/api/approve")
     def approve(body: ApproveRequest, request: Request) -> dict:
@@ -227,11 +258,15 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         unmapped = json.loads(interpretation["unmapped_json"])
         if unmapped and not body.acknowledged_unmapped:
             raise HTTPException(422, detail={"status": "needs_confirmation", "unmapped_phrases": unmapped})
+        known_types = {t["id"] for t in s.history.types()} if s.history is not None else set()
+        if body.campaign_type is not None and body.campaign_type not in known_types:
+            raise HTTPException(422, detail=f"Unknown campaign type {body.campaign_type!r}.")
 
         proposed = AudienceDefinition(**json.loads(interpretation["definition_json"]))
         final, edited = reconcile_with_proposal(checked.definition, proposed)
         sized = s.engine.size(final)
-        measurement = measurement_plan(s, final, body.goal.strip(), salt=body.request_id)
+        measurement = measurement_plan(s, final, body.goal.strip(), salt=body.request_id,
+                                       campaign_type=body.campaign_type)
         definition = final.model_dump()
         audience_id = s.store.record_approval_once({
             "name": body.name.strip(),
@@ -339,16 +374,24 @@ EXAMPLES = [
 REFINE_EXAMPLES = ["also include the Highlands", "only postpaid", "make it SMS instead"]
 
 
-def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, salt: str) -> dict:
+def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, salt: str,
+                     campaign_type: str | None = None) -> dict:
     """How this decision will be judged later: the campaign goal, a governed share of the audience held out
-    (not contacted), and the comparison that says whether it worked. Recorded with the approval."""
+    (not contacted), and the comparison that says whether it worked. Recorded with the approval, together
+    with the evidence the approver had: past lift for this campaign type and the audience's contact pressure."""
     ps = s.catalog.parameter_sets.get("measurement")
     share = float(ps.values["holdout_share"]) if ps else 0.0
     window = int(ps.values["window_days"]) if ps else 0
     target, holdout = s.engine.split(definition, salt, share)
     measurable = ps is not None and holdout >= int(ps.values["min_holdout_lines"])
+    past = s.history.evidence(campaign_type) if s.history is not None and campaign_type else None
+    pressure = s.history.contact_pressure(definition) if s.history is not None else None
     return {
         "goal": goal,
+        "campaign_type": campaign_type,
+        "evidence_at_approval": None if past is None else {
+            "synthetic": past["synthetic"], "as_of": past["as_of"], "campaigns": past["campaigns"], **past["pooled"]},
+        "contact_pressure_at_approval": None if pressure is None else pressure.model_dump(exclude={"warnings"}),
         "success_measure": (f"Response rate of the {target:,} contacted lines minus that of the {holdout:,} held-out "
                             f"lines, over {window} days after the send."),
         "target_lines": target,

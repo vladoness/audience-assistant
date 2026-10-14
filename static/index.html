@@ -81,6 +81,7 @@
         <div><h3>By region</h3><div id="by-region"></div></div>
         <div><h3>By line type</h3><div id="by-line-type"></div></div>
       </div>
+      <div id="pressure" class="pressure hidden"></div>
       <ul id="size-warnings" class="issues"></ul>
       <p class="hint" id="size-meta"></p>
     </section>
@@ -91,6 +92,12 @@
         <input id="goal" class="wide" maxlength="200"
           placeholder="What is this campaign for? e.g. win back lapsed prepaid before month-end">
       </div>
+      <div class="row" id="campaign-type-row" hidden>
+        <label class="inline">Campaign type
+          <select id="campaign-type"><option value="">Choose, to see what happened last time</option></select>
+        </label>
+      </div>
+      <div id="evidence" class="evidence-box hidden"></div>
       <div class="row">
         <input id="aud-name" placeholder="Audience name" maxlength="80">
         <input id="approver" placeholder="Your name" maxlength="60">

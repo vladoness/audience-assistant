@@ -117,9 +117,22 @@ def build_server(s: Services) -> MCPServer:
             return {"error": "This audience can't be sized yet.", "status": reviewed.status,
                     "next_step": NEXT_STEP[reviewed.status], "review_url": view(reviewed)["review_url"]}
         sized = s.engine.size(reviewed.definition)
+        pressure = s.history.contact_pressure(reviewed.definition) if s.history is not None else None
         return {"request_id": request_id, "summary": reviewed.explanation.summary,
-                **sized.model_dump(exclude={"warnings"}),
-                "warnings": [w.message for w in sized.warnings]}
+                **sized.model_dump(exclude={"warnings", "contact_pressure"}),
+                "warnings": [w.message for w in sized.warnings] + [w.message for w in (pressure.warnings if pressure else [])],
+                "contact_pressure": pressure.model_dump(exclude={"warnings"}) if pressure else None}
+
+    @server.tool(annotations=_READS)
+    def past_campaign_evidence(campaign_type: str) -> dict[str, Any]:
+        """What happened last time: measured lift (contacted vs held-out response, with a 95% interval)
+        for past campaigns of one type, each and pooled. Evidence, not a forecast; says when the history
+        is synthetic. Types: topup_reminder, data_upsell, roaming_offer, winback, app_adoption."""
+        found = s.history.evidence(campaign_type) if s.history is not None else None
+        if found is None:
+            return {"error": f"No campaign history for {campaign_type!r}.",
+                    "known_types": [t["id"] for t in s.history.types()] if s.history is not None else []}
+        return {k: v for k, v in found.items() if k != "per_campaign"} | {"recent_campaigns": found["per_campaign"][:5]}
 
     @server.tool(annotations=_READS)
     def explain_term(name: str) -> dict[str, Any]:

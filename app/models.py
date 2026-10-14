@@ -99,6 +99,22 @@ class InterpretResult(BaseModel):
     request_text: str | None = None  # the masked request; set only when an interpretation is loaded for review
 
 
+class ContactPressure(BaseModel):
+    """How recently and how often past campaigns reached this audience's lines."""
+
+    synthetic: bool  # True: from the generated demo history, not a real campaign tool
+    as_of: str
+    reachable: int
+    recent_days: int
+    contacted_recently: int
+    window_days: int
+    contacted_in_window: int
+    cap: int
+    at_or_over_cap: int
+    warnings: list[Issue] = Field(default_factory=list)
+    policy: str | None = None
+
+
 class SizeResult(BaseModel):
     base: int
     matched: int
@@ -109,6 +125,7 @@ class SizeResult(BaseModel):
     by_region: dict[str, int]
     warnings: list[Issue]
     query_ms: float
+    contact_pressure: ContactPressure | None = None
 
 
 class InterpretRequest(BaseModel):
@@ -140,5 +157,6 @@ class ApproveRequest(BaseModel):
     name: str = Field(min_length=3, max_length=80)
     approver: str = Field(min_length=2, max_length=60)
     goal: str = Field(min_length=3, max_length=200)  # what the campaign is for: the decision this audience serves
+    campaign_type: str | None = None  # links the decision to past campaigns of the same type (evidence)
     definition: AudienceDefinition
     acknowledged_unmapped: bool = False

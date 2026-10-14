@@ -22,6 +22,11 @@ marketer's decision (whom to target, under which definition) and never makes it.
 | **What has no data behind it is surfaced, never dropped** | **Sized, approved, audited** |
 | ![Unmapped](docs/screenshots/4-unmapped.png) | ![Sized and approved](docs/screenshots/2-sized-approved.png) |
 
+**Evidence before approving: contact pressure, and what past campaigns of this type achieved**
+(from the synthetic campaign history, labelled as such)
+
+<img src="docs/screenshots/7-evidence.png" alt="Contact pressure and past campaign evidence" width="640">
+
 **Change it in words: only the change is applied, and shown** (offline replay, hence 0.00 s)
 
 <img src="docs/screenshots/5-refine.png" alt="Refinement" width="640">
@@ -35,7 +40,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 105 tests, no network or API key needed
+make test         # 114 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 make mcp          # the same assistant as an MCP server for AI agents (see "Use it from an AI agent")
 ```
@@ -80,7 +85,9 @@ at 200k / 1M / 5M lines.
    linked to the one it refined.
 3. **Size.** Matched lines, minus those without consent for the channel, gives reachable lines,
    with region and line-type breakdowns. Warnings flag empty, tiny (< 100) or very broad (> 50% of
-   base) audiences.
+   base) audiences. **Contact pressure** comes from past campaigns: the share of these lines
+   contacted in the last 7 and 30 days, and how many already had 3 or more campaigns this month
+   (thresholds in the `contact_policy` parameter set).
 4. **Approve.** The server re-validates and re-sizes. It checks that every open term was answered
    and every unmapped part acknowledged, and that "governed" labels are genuine. Then it writes an
    audit record:
@@ -88,6 +95,9 @@ at 200k / 1M / 5M lines.
    - the model and prompt version, and all governance versions;
    - whether the marketer edited the AI's proposal;
    - counts at approval, and the approver;
+   - **what happened last time**: the marketer picks the campaign type and sees the measured lift
+     of past campaigns of that type (contacted against held-out response, with a 95% interval),
+     each and pooled. It is shown as evidence, never as a forecast, and recorded with the approval;
    - **how the decision will be judged**: the campaign goal the marketer states, and a governed
      share of the audience (10%, `measurement` parameter set) held out by a reproducible hash
      split. The record says which lines are contacted, which are held out, and the success
@@ -118,6 +128,7 @@ are decision 18 in [docs/DESIGN.md](docs/DESIGN.md).
 | `refine_audience` | A plain-language change to a draft; returns what changed and a new review link |
 | `size_audience` (read-only) | Matched, excluded for consent, reachable, breakdowns. Refused while questions or policy issues are open |
 | `explain_term` (read-only) | A governed term's rule, decision and owner, or its competing definitions and who decides |
+| `past_campaign_evidence` (read-only) | Measured lift of past campaigns of one type, pooled and recent; labelled synthetic in this demo |
 | resource `audience://catalog` | Fields, governed terms, policies, channels |
 
 **What an agent can't do: approve, or answer the business questions.** There is no approve tool.
@@ -308,6 +319,7 @@ app/main.py          FastAPI routes, request-id middleware + error handler, app 
 app/interpret.py     pipeline: mask → cache → model → glossary expansion → validate → repair once → status → explain
 app/refine.py        plain-language changes: the model's delta applied to the audience on screen; what changed
 app/mcp_server.py    MCP tools for AI agents (draft, change, size, explain); no approve tool, review links instead
+app/history.py       past campaigns as evidence: contact pressure, measured lift vs holdout with 95% intervals
 app/llm.py           the only model call: structured output (strict JSON schema), effort, record/replay, pricing
 app/validate.py      catalog rules: fields, operators, types, ranges, data-usage policy per channel, scope, contradictions
 app/explain.py       plain-English rendering of a definition (templates, no model)
@@ -326,6 +338,8 @@ evals/               dev set, held-out set, runner, recorded fixtures, results
 Endpoints:
 - `POST /api/interpret` and `POST /api/refine`: the only two that call the model.
 - `POST /api/check`, `POST /api/size`, `POST /api/approve`.
+- `GET /api/history` and `GET /api/history/evidence/{campaign_type}`: campaign types with past
+  campaigns, and their measured lift (read-only).
 - `GET /api/interpretations/{id}`: a recorded interpretation, re-checked against today's rules,
   for review (the target of the MCP review links, `/?review=<id>`).
 - `GET /api/audiences`, `GET /api/insights`, `GET /api/catalog`, `GET /api/metrics`.
@@ -348,6 +362,11 @@ OpenAPI docs are at `/docs`.
   is the data shape I know best from telco work. For an EU deployment the design holds as is.
   Marketing consent per channel is then mainly an ePrivacy matter, alongside GDPR's purpose
   limitation, which the labels and policies express.
+- **Campaign history is synthetic.** A year of past campaigns (60, five types, each with a 10%
+  holdout and responses) is generated with the profiles from known true effects
+  (`CAMPAIGN_TYPES` in `app/synthdata.py`). Every place it is shown says "synthetic history". A
+  test checks that the measured lift recovers each true effect. In a real deployment it would
+  be the campaign tool's send and response records.
 - **Activation** (sending the audience to an SMS/email tool) is out of scope; the approved
   definition and its hash are the hand-off.
 
@@ -355,7 +374,7 @@ OpenAPI docs are at `/docs`.
 
 ## Testing and reliability
 
-- **`make test`: 105 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 114 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;
@@ -368,6 +387,9 @@ OpenAPI docs are at `/docs`.
     conditions move only with their term, open questions and unmapped parts carry forward and
     are counted once, an outage changes nothing, and an edit made before a change still counts
     as an edit at approval;
+  - campaign history (`tests/test_history.py`): measured lift recovers the known true effect of
+    each campaign type within three standard errors, no past contact lacked consent, contact
+    pressure matches a direct count, and the evidence shown is the evidence recorded at approval;
   - decision support (`tests/test_decisions.py`): option consequences equal set arithmetic over
     the store, none are shown for an invalid definition, approval needs a goal, and the holdout
     is reproducible from the record and flagged when too small;
@@ -475,6 +497,7 @@ How each piece would be delivered on the platform rather than rebuilt:
 | Size before approval | Audience size estimate |
 | Approve | Create the audience (AEP keeps its own audit log; this one adds the business provenance) |
 | Catalog and policies read from YAML | Read from AEP: schemas and governance policies via the platform APIs, or the read-only tools in the [CX Coworker Gateway](https://experienceleague.adobe.com/en/docs/experience-cloud-ai/experience-cloud-ai/mcp/overview) MCP endpoint (beta) |
+| Synthetic campaign history, contact pressure, lift vs holdout | Journey Optimizer's message send and feedback datasets as the history; lift computed in Customer Journey Analytics or Query Service over the same events |
 | Clarification and policy step | A customer-built agent or tool alongside Audience Agent; Agent Orchestrator is documented as extensible to customer and partner agents. The MCP server here is that shape: drafting tools for agents, approval kept with a person |
 
 Not modelled here: identity. One row per line means no identity graph, no merge policies, and no
@@ -511,6 +534,9 @@ conventions. The mapping, and which parts are tested, is in
 - **The MCP server is local.** It runs over stdio for one user, so there is no authentication or
   per-client rate limit on it (the daily budget and circuit breaker still apply). A shared
   deployment would use the streamable HTTP transport behind the customer's SSO.
+- **Evidence is per campaign type only.** Past lift is pooled by type, not matched to this
+  audience's segments, and responses are a single yes/no; margin per response is still an
+  assumption (see BUSINESS-CASE.md).
 - **Refinement limits.** Changes aren't cached, and a change can't remove a part of the original
   request that has no data: it carries forward until the marketer accepts building without it.
   Offline, only the suggested changes on the example requests are recorded.

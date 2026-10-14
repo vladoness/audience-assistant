@@ -36,6 +36,11 @@ class AudienceEngine:
             raise RuntimeError(f"profiles table is missing catalog columns: {sorted(missing)}")
         self.base = rows
 
+    @property
+    def connection(self) -> duckdb.DuckDBPyConnection:
+        """The read-only store connection, for other read models over the same data (campaign history)."""
+        return self._con
+
     def compile(self, definition: AudienceDefinition) -> tuple[str, list]:
         """Return (WHERE clause, params) for the targeting conditions (consent excluded)."""
         clauses, params = [], []

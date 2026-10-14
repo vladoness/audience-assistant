@@ -49,3 +49,11 @@ parameter_sets:
     owner: Marketing Analytics
     approved_by: M. Rojas
     values: {holdout_share: 0.10, min_holdout_lines: 500, window_days: 14}
+
+  # When a marketer is warned that an audience has been contacted a lot lately.
+  contact_policy:
+    version: 1
+    effective: 2026-10-14
+    owner: Marketing Operations
+    approved_by: A. Flores
+    values: {recent_days: 7, window_days: 30, max_contacts_in_window: 3, warn_share_recent: 0.25}

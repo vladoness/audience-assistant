@@ -52,7 +52,7 @@ def run_bench(tmp: Path, catalog, args) -> None:
     print(f"{'rows':>10}  {'generate':>9}  {'definition':<20} {'p50 ms':>8} {'p95 ms':>8}")
     for rows in args.rows:
         path = tmp / f"profiles_{rows}.duckdb"
-        gen_s = generate(path, rows)
+        gen_s = generate(path, rows, history=False)
         engine = AudienceEngine(path, catalog)
         for name, conds in DEFINITIONS.items():
             definition = AudienceDefinition(conditions=[Condition(**c) for c in conds])

@@ -71,10 +71,47 @@ async function init() {
   ["aud-name", "approver", "goal"].forEach((id) => $(id).addEventListener("input", updateApprove));
   $("approve-btn").onclick = approve;
   $("refresh-insights").onclick = loadInsights;
+  $("campaign-type").onchange = loadEvidence;
   loadAudit();
   loadInsights();
+  loadHistoryTypes();
   const review = new URLSearchParams(location.search).get("review");
   if (review) loadForReview(review);
+}
+
+const SYNTHETIC = '<span class="synthetic-tag">synthetic history</span>';
+
+async function loadHistoryTypes() {
+  const h = await api("/api/history");
+  if (!h.available) return;
+  state.historySynthetic = h.synthetic;
+  h.types.forEach((t) => {
+    const o = document.createElement("option");
+    o.value = t.id; o.textContent = `${t.label} (${t.channel.toUpperCase()}, ${t.campaigns} past)`;
+    $("campaign-type").appendChild(o);
+  });
+  $("campaign-type-row").hidden = false;
+}
+
+async function loadEvidence() {
+  const type = $("campaign-type").value;
+  const box = $("evidence");
+  if (!type) { box.classList.add("hidden"); return; }
+  const e = await api(`/api/history/evidence/${encodeURIComponent(type)}`);
+  const recent = e.per_campaign.slice(0, 4).map((c) =>
+    `<li>${esc(c.name)}: ${c.lift_points >= 0 ? "+" : ""}${c.lift_points} pts (95%: ${c.lift_95_low} to ${c.lift_95_high}), ${fmt(c.contacted)} contacted, ${fmt(c.held_out)} held out</li>`).join("");
+  box.innerHTML = `<strong>What happened last time</strong>${e.synthetic ? SYNTHETIC : ""}<p style="margin:6px 0 0">${esc(e.reading)}</p><ul>${recent}</ul>`;
+  box.classList.remove("hidden");
+}
+
+function renderPressure(p) {
+  const box = $("pressure");
+  if (!p) { box.classList.add("hidden"); return; }
+  const pct = (n) => (p.reachable ? Math.round((100 * n) / p.reachable) : 0) + "%";
+  box.innerHTML = `<strong>Contact pressure</strong>${p.synthetic ? SYNTHETIC : ""}<br>`
+    + `${pct(p.contacted_recently)} of these lines got a campaign in the last ${p.recent_days} days, ${pct(p.contacted_in_window)} in the last ${p.window_days}; `
+    + `${fmt(p.at_or_over_cap)} had ${p.cap} or more in ${p.window_days} days. <span class="hint">(${esc(p.policy || "")}, as of ${esc(p.as_of)})</span>`;
+  box.classList.remove("hidden");
 }
 
 async function loadForReview(requestId) {
@@ -348,7 +385,8 @@ async function size() {
     $("share").textContent = (s.share_of_base * 100).toFixed(1) + "%";
     renderBars($("by-region"), s.by_region, s.reachable);
     renderBars($("by-line-type"), s.by_line_type, s.reachable);
-    renderIssues($("size-warnings"), s.warnings);
+    renderPressure(s.contact_pressure);
+    renderIssues($("size-warnings"), [...s.warnings, ...(s.contact_pressure?.warnings || [])]);
     $("size-meta").textContent = `Counted over ${fmt(s.base)} lines in ${s.query_ms} ms · one row per line, consent applied for ${state.definition.channel.toUpperCase()}.`;
   } catch (e) {
     hideSize();
@@ -398,6 +436,7 @@ async function approve() {
   try {
     const r = await api("/api/approve", {
       request_id: state.requestId, name: $("aud-name").value, approver: $("approver").value, goal: $("goal").value,
+      campaign_type: $("campaign-type").value || null,
       definition: state.definition, acknowledged_unmapped: state.acknowledged,
     });
     const m = r.measurement;

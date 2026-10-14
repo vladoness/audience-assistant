@@ -46,8 +46,9 @@ async function init() {
   if (health.eval) {
     const sets = [health.eval.dev, health.eval.heldout, health.eval.refine].filter(Boolean);
     const cases = sets.reduce((n, e) => n + e.cases, 0);
-    const pct = Math.round(100 * sets.reduce((n, e) => n + e.pass_rate * e.cases, 0) / cases);
-    $("accuracy-hint").textContent = `Measured on our ${cases} test cases (also used to choose this model): ${pct}% fully right. The assistant can misread a request, so always check the summary before approving.`;
+    const runs = sets.reduce((n, e) => n + e.cases * e.runs, 0);
+    const right = sets.reduce((n, e) => n + Math.round(e.pass_rate * e.cases * e.runs), 0);
+    $("accuracy-hint").textContent = `Measured on our ${cases} test cases, ${runs} runs (also used to choose this model): fully right in ${right} of ${runs}. The assistant can misread a request, so always check the summary before approving.`;
   }
 
   catalog.examples.forEach((text) => {

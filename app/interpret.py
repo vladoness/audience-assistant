@@ -19,6 +19,7 @@ import time
 import uuid
 from typing import Any
 
+from app.audience import AudienceEngine
 from app.catalog import Catalog
 from app.explain import explain
 from app.limits import DailyBudget
@@ -49,8 +50,9 @@ class RefineRejected(ValueError):
 class Interpreter:
     def __init__(self, catalog: Catalog, provider: Provider, store: AuditStore, cache: TTLCache,
                  metrics: Metrics, pricing: Pricing, max_request_chars: int = 500, budget: DailyBudget | None = None,
-                 breaker_threshold: int = 3, breaker_cooldown_s: float = 30.0):
+                 breaker_threshold: int = 3, breaker_cooldown_s: float = 30.0, engine: AudienceEngine | None = None):
         self.catalog = catalog
+        self.engine = engine  # when set, every clarification option shows what choosing it would reach
         self.provider = provider
         self.store = store
         self.cache = cache
@@ -219,6 +221,7 @@ class Interpreter:
         validated = verify_provenance(validated, self.catalog)
         issues += problems
         clarifications = [self._clarification(t) for t in still_pending]
+        self._quantify(validated, clarifications, issues)
         status = "invalid" if any(i.level == "error" for i in issues) else ("needs_clarification" if clarifications else "ready")
         self.metrics.incr(f"check_{status}")
         return CheckResult(status=status, definition=validated, clarifications=clarifications, issues=issues,
@@ -322,6 +325,7 @@ class Interpreter:
 
         definition, problems = validate_definition(AudienceDefinition(conditions=conditions, channel=channel), self.catalog)
         issues += problems
+        self._quantify(definition, clarifications, issues)
         unmapped = [str(p) for p in proposal.get("unmapped_phrases") or []]
 
         if proposal.get("out_of_scope") and not definition.conditions and not clarifications:
@@ -346,8 +350,29 @@ class Interpreter:
         )
 
     def _clarification(self, term) -> Clarification:
-        return Clarification(term=term.name, question=term.question,
-                             options=[ClarificationOption(id=o.id, label=o.label) for o in term.options])
+        default = term.working_default.get("option")
+        note = (f"Working default, adopted by {term.working_default['adopted_by']}: {term.working_default['why']} "
+                f"The decision itself is with {term.owner_pending}.") if default else None
+        return Clarification(term=term.name, question=term.question, working_default_note=note,
+                             options=[ClarificationOption(id=o.id, label=o.label, working_default=o.id == default)
+                                      for o in term.options])
+
+    def _quantify(self, definition: AudienceDefinition, clarifications: list[Clarification], issues: list[Issue]) -> None:
+        """Show what each answer would do before it is chosen: reachable lines under each option, with the
+        rest of the definition as it is, and how many of them only that option reaches. Skipped while the
+        definition has errors, because a size for an invalid audience would mislead."""
+        if self.engine is None or not clarifications or any(i.level == "error" for i in issues):
+            return
+        try:
+            for c in clarifications:
+                term = self.catalog.terms[c.term]
+                alternatives = [definition.model_copy(update={"conditions": [
+                    *definition.conditions, *(Condition(**x, source=f"glossary:{term.name}={o.id}") for x in o.conditions)]})
+                    for o in term.options]
+                for option, (reachable, only_here) in zip(c.options, self.engine.compare(alternatives)):
+                    option.reachable, option.only_here = reachable, only_here
+        except Exception:
+            log.exception("quantify_options_failed")
 
     def _empty(self, status: str, request_id: str, tel: Telemetry, issue: Issue) -> InterpretResult:
         definition = AudienceDefinition(channel=self.catalog.default_channel)

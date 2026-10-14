@@ -29,7 +29,7 @@ def refine(client, r, instruction, definition=None):
 
 
 def approve(client, r, definition=None, **extra):
-    return client.post("/api/approve", json={"request_id": r["request_id"], "name": "Test audience", "approver": "Ana",
+    return client.post("/api/approve", json={"request_id": r["request_id"], "name": "Test audience", "approver": "Ana", "goal": "Test campaign",
                                              "definition": definition or r["definition"], **extra})
 
 

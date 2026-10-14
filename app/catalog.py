@@ -79,6 +79,7 @@ class Term:
     question: str = ""
     owner_pending: str = ""
     options: tuple[TermOption, ...] = ()
+    working_default: dict[str, str] = field(default_factory=dict)  # option, adopted_by, why: until the owner decides
 
     def option(self, option_id: str) -> TermOption | None:
         return next((o for o in self.options if o.id == option_id), None)
@@ -215,6 +216,7 @@ def load_catalog(config_dir: Path) -> Catalog:
             name=name, status=spec["status"], aliases=tuple(spec.get("aliases", ())), rule=spec.get("rule", ""),
             decision=spec.get("decision", {}), conditions=conditions, parameter_sets=tuple(dict.fromkeys(used)),
             question=spec.get("question", ""), owner_pending=spec.get("owner_pending", ""), options=tuple(options),
+            working_default=dict(spec.get("working_default") or {}),
         )
 
     default_action = actions[pol["default_marketing_action"]]

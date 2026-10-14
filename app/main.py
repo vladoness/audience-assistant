@@ -117,6 +117,7 @@ def build_services(settings: Settings, provider: Provider | None = None) -> Serv
         budget=budget,
         breaker_threshold=settings.breaker_threshold,
         breaker_cooldown_s=settings.breaker_cooldown_s,
+        engine=engine,
     )
     log.info("startup", extra={"provider": interpreter.provider.name, "model": interpreter.provider.model,
                                "profiles": engine.base, "catalog_version": catalog.version})
@@ -230,6 +231,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         proposed = AudienceDefinition(**json.loads(interpretation["definition_json"]))
         final, edited = reconcile_with_proposal(checked.definition, proposed)
         sized = s.engine.size(final)
+        measurement = measurement_plan(s, final, body.goal.strip(), salt=body.request_id)
         definition = final.model_dump()
         audience_id = s.store.record_approval_once({
             "name": body.name.strip(),
@@ -245,14 +247,17 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             "acknowledged_unmapped_json": json.dumps(unmapped if body.acknowledged_unmapped else []),
             "governance_json": json.dumps(snapshot(final, s.catalog)),
             "governance_versions": json.dumps(s.catalog.versions),
+            "measurement_json": json.dumps(measurement),
         })
         s.metrics.incr("audiences_approved")
         if audience_id is None:
             raise HTTPException(409, detail="This request was just approved by someone else.")
         log.info("audience_approved", extra={"audience_id": audience_id, "reachable": sized.reachable,
                                              "definition_hash": definition_hash(definition),
-                                             "interpretation_request_id": body.request_id, "edited_by_user": edited})
-        return {"id": audience_id, "reachable": sized.reachable, "definition_hash": definition_hash(definition)}
+                                             "interpretation_request_id": body.request_id, "edited_by_user": edited,
+                                             "holdout_lines": measurement["holdout_lines"]})
+        return {"id": audience_id, "reachable": sized.reachable, "definition_hash": definition_hash(definition),
+                "measurement": measurement}
 
     @app.get("/api/audiences")
     def audiences(request: Request) -> list[dict]:
@@ -332,6 +337,30 @@ EXAMPLES = [
     "Postpaid customers with a high credit risk band",
 ]
 REFINE_EXAMPLES = ["also include the Highlands", "only postpaid", "make it SMS instead"]
+
+
+def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, salt: str) -> dict:
+    """How this decision will be judged later: the campaign goal, a governed share of the audience held out
+    (not contacted), and the comparison that says whether it worked. Recorded with the approval."""
+    ps = s.catalog.parameter_sets.get("measurement")
+    share = float(ps.values["holdout_share"]) if ps else 0.0
+    window = int(ps.values["window_days"]) if ps else 0
+    target, holdout = s.engine.split(definition, salt, share)
+    measurable = ps is not None and holdout >= int(ps.values["min_holdout_lines"])
+    return {
+        "goal": goal,
+        "success_measure": (f"Response rate of the {target:,} contacted lines minus that of the {holdout:,} held-out "
+                            f"lines, over {window} days after the send."),
+        "target_lines": target,
+        "holdout_lines": holdout,
+        "holdout_share": share,
+        "window_days": window,
+        "measurable": measurable,
+        "note": None if measurable else "The holdout is too small for the result to be reliable; widen the audience "
+                                        "or treat the outcome as anecdotal.",
+        "split": {"method": "md5_number_lower(salt || ':' || profile_id) % 10000 < share x 10000", "salt": salt},
+        "parameters": f"measurement v{ps.version}" if ps else None,
+    }
 
 
 def catalog_view(c: Catalog) -> dict:

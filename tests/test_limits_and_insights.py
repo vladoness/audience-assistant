@@ -62,7 +62,7 @@ def test_insights_count_unmapped_demand_and_open_term_choices(make_client):
     r = client.post("/api/interpret", json={"request": "active in the north"}).json()
     checked = client.post("/api/check", json={"definition": r["definition"], "pending_terms": ["active"],
                                               "resolutions": {"active": "active_usage"}}).json()
-    client.post("/api/approve", json={"request_id": r["request_id"], "name": "North active", "approver": "Ana",
+    client.post("/api/approve", json={"request_id": r["request_id"], "name": "North active", "approver": "Ana", "goal": "Test campaign",
                                       "definition": checked["definition"]})
 
     insights = client.get("/api/insights").json()

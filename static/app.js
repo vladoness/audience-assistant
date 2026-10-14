@@ -68,7 +68,7 @@ async function init() {
   $("refine-input").addEventListener("keydown", (e) => { if (e.key === "Enter") refine(); });
   $("add-condition").onclick = addCondition;
   $("channel").onchange = () => { state.definition.channel = $("channel").value; recheck(); };
-  ["aud-name", "approver"].forEach((id) => $(id).addEventListener("input", updateApprove));
+  ["aud-name", "approver", "goal"].forEach((id) => $(id).addEventListener("input", updateApprove));
   $("approve-btn").onclick = approve;
   $("refresh-insights").onclick = loadInsights;
   loadAudit();
@@ -205,10 +205,18 @@ function renderClarifications(clarifications) {
     div.innerHTML = `<strong>${esc(c.question)}</strong>`;
     c.options.forEach((o) => {
       const b = document.createElement("button");
-      b.className = "option"; b.textContent = o.label;
+      b.className = "option";
+      const consequence = o.reachable === null || o.reachable === undefined ? ""
+        : `<span class="consequence">${fmt(o.reachable)} reachable · ${fmt(o.only_here)} of them only with this choice</span>`;
+      b.innerHTML = `${esc(o.label)}${o.working_default ? ' <span class="badge default">working default</span>' : ""}${consequence}`;
       b.onclick = () => resolve(c.term, o.id);
       div.appendChild(b);
     });
+    if (c.working_default_note) {
+      const note = document.createElement("p");
+      note.className = "hint"; note.textContent = c.working_default_note;
+      div.appendChild(note);
+    }
     box.appendChild(div);
   });
 }
@@ -381,17 +389,22 @@ function renderTelemetry(t, requestId) {
 
 function updateApprove() {
   const ok = state.sized && displayStatus() === "ready" && !state.pendingTerms.length
-    && $("aud-name").value.trim().length >= 3 && $("approver").value.trim().length >= 2;
+    && $("aud-name").value.trim().length >= 3 && $("approver").value.trim().length >= 2
+    && $("goal").value.trim().length >= 3;
   $("approve-btn").disabled = !ok;
 }
 
 async function approve() {
   try {
     const r = await api("/api/approve", {
-      request_id: state.requestId, name: $("aud-name").value, approver: $("approver").value,
+      request_id: state.requestId, name: $("aud-name").value, approver: $("approver").value, goal: $("goal").value,
       definition: state.definition, acknowledged_unmapped: state.acknowledged,
     });
-    $("approve-msg").textContent = `Approved as audience #${r.id} · ${fmt(r.reachable)} reachable lines · definition ${r.definition_hash}`;
+    const m = r.measurement;
+    $("approve-msg").innerHTML = `Approved as audience #${r.id} · definition ${esc(r.definition_hash)}.<br>`
+      + `<strong>${fmt(m.target_lines)}</strong> lines get the campaign and <strong>${fmt(m.holdout_lines)}</strong> `
+      + `(${Math.round(m.holdout_share * 100)}%) are held out. How we'll know: ${esc(m.success_measure)}`
+      + (m.measurable ? "" : `<br><span class="warn-text">${esc(m.note)}</span>`);
     loadAudit();
     loadInsights();
   } catch (e) {
@@ -401,11 +414,14 @@ async function approve() {
 
 async function loadAudit() {
   const rows = await api("/api/audiences");
-  $("audit").innerHTML = rows.map((r) => `
+  $("audit").innerHTML = rows.map((r) => {
+    const m = JSON.parse(r.measurement_json || "{}");
+    const plan = m.goal ? `<div class="hint"><strong>Goal:</strong> ${esc(m.goal)} · ${fmt(m.holdout_lines)} held out to measure it${m.measurable ? "" : " (too few to be reliable)"}</div>` : "";
+    return `
     <tr><td>${r.id}</td><td>${esc(r.name)}</td><td>${fmt(r.reachable)}</td><td>${esc(r.approver)}</td>
-    <td>${r.edited_by_user ? "yes" : "no"}</td><td class="def">${esc(r.explanation)}<div class="mono">${r.definition_hash} · ${esc(r.model || "manual")} · ${esc(r.created_at.replace("T", " ").replace("+00:00", ""))}</div></td>
-    <td>${governanceCell(r)}</td></tr>`).join("")
-    || '<tr><td colspan="7" class="hint">Nothing approved yet.</td></tr>';
+    <td>${r.edited_by_user ? "yes" : "no"}</td><td class="def">${esc(r.explanation)}${plan}<div class="mono">${r.definition_hash} · ${esc(r.model || "manual")} · ${esc(r.created_at.replace("T", " ").replace("+00:00", ""))}</div></td>
+    <td>${governanceCell(r)}</td></tr>`;
+  }).join("") || '<tr><td colspan="7" class="hint">Nothing approved yet.</td></tr>';
 }
 
 function governanceCell(r) {

@@ -45,6 +45,7 @@ def test_a_drafted_audience_is_audited_as_mcp_and_handed_to_a_person(mcp, settin
     out = call(server, "interpret_audience", request="active customers in the Coast")
     assert out["status"] == "needs_clarification"
     assert out["questions"][0]["term"] == "active" and len(out["questions"][0]["options"]) == 2
+    assert all(o["reachable"] is not None for o in out["questions"][0]["options"])  # consequences go to agents too
     assert out["review_url"].endswith(f"/?review={out['request_id']}")
     assert json.loads(services.store.get_interpretation(out["request_id"])["telemetry_json"])["origin"] == "mcp"
 
@@ -56,7 +57,7 @@ def test_a_drafted_audience_is_audited_as_mcp_and_handed_to_a_person(mcp, settin
         checked = client.post("/api/check", json={"definition": review["definition"], "pending_terms": ["active"],
                                                   "resolutions": {"active": "active_usage"}}).json()
         approved = client.post("/api/approve", json={"request_id": out["request_id"], "name": "Active Coast",
-                                                     "approver": "Ana", "definition": checked["definition"]})
+                                                     "approver": "Ana", "goal": "Test campaign", "definition": checked["definition"]})
         assert approved.status_code == 200
         assert client.get("/api/interpretations/nope").status_code == 404
 

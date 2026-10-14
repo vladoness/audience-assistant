@@ -228,6 +228,41 @@ those surfaces without being rebuilt for each one, and without losing its guaran
 server is unused surface area and the web workflow is enough. The pilot should measure that
 before anyone builds on it.
 
+**19. The tool supports a named decision: every choice shows its consequence, and every approval
+says how it will be judged.**
+I checked the app against three questions I use to decide whether a tool supports a decision or
+only a task:
+1. *What real-world decision does it support?* Whom a campaign targets, under which definition.
+2. *What can the user do, not just see?* Choose, edit and approve, with an auditable record.
+3. *How will we know later whether it was right?* Before this change: no way at all.
+
+It also asked "which 'active'?" without saying what either answer would do. Two changes:
+- **Options show their consequences.** Each answer to an open term shows its reachable lines and
+  how many of those only that answer reaches, with the rest of the definition as it is. It's one
+  scan of the store (`AudienceEngine.compare`), and it's skipped while the definition has errors,
+  because a size for an invalid audience would mislead. The same choice can matter a lot or not
+  at all depending on the rest of the audience. For heavy-data Android users, "used the network"
+  adds about 1,200 overdue-but-active lines and "good standing" adds none. That is why it's
+  shown, not explained.
+- **Working defaults are labelled, not applied.** When the business has adopted an interim
+  answer while the real owner hasn't ruled (`working_default` in `glossary.yaml`: option, who
+  adopted it, why), the option is marked and the note says who will actually decide. The
+  marketer still chooses. The lint rejects a working default that isn't one of the options, or
+  has no adopter and reason.
+- **Approval records how the decision will be judged.** The marketer states the campaign goal.
+  A governed share of the audience (`measurement` parameter set: 10%, 14 days, minimum 500
+  lines) is held out by `md5(request_id:profile_id)`, so the same record always reproduces the
+  same two groups. The record states the success measure: response of the contacted lines minus
+  the holdout. A holdout too small to measure is flagged. This is also the measurement the
+  business case depends on (BUSINESS-CASE.md).
+
+*Deliberately not done.*
+- **Recommending an answer, or picking the working default automatically.** The owner of the
+  definition, and the marketer for the campaign, decide; the tool shows evidence.
+- **Showing projected revenue in the UI.** Its inputs are unsigned assumptions. They stay in the
+  business case document, labelled, until the holdouts measure them.
+- **Dashboards.** The consequence is shown at the moment of the choice, not in a separate view.
+
 ## Where the time goes (and why that shapes the design)
 
 | Stage | Typical | Notes |

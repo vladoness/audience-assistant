@@ -34,9 +34,9 @@ log = logging.getLogger("app.mcp")
 
 INSTRUCTIONS = """Drafts governed marketing audiences for a telco's Marketing Operations team.
 Use interpret_audience for a new request and refine_audience to change it. Show the marketer the
-summary, any questions and anything with no data, exactly as returned. You cannot approve an
-audience or answer the questions on the marketer's behalf: give them the review_url, where a
-person answers the questions and approves."""
+summary, any questions (with what each option would reach) and anything with no data, exactly as
+returned. You cannot approve an audience or answer the questions on the marketer's behalf: give
+them the review_url, where a person answers the questions, states the campaign goal and approves."""
 
 NEXT_STEP = {
     "ready": "Show the marketer the summary. A person approves it at review_url.",
@@ -61,7 +61,9 @@ def build_server(s: Services) -> MCPServer:
             "summary": r.explanation.summary if r.explanation else None,
             "conditions": [c.model_dump() for c in r.definition.conditions],
             "channel": r.definition.channel,
-            "questions": [{"term": c.term, "question": c.question, "options": [o.label for o in c.options]}
+            "questions": [{"term": c.term, "question": c.question, "working_default_note": c.working_default_note,
+                           "options": [{"label": o.label, "reachable": o.reachable, "only_with_this_choice": o.only_here,
+                                        "working_default": o.working_default} for o in c.options]}
                           for c in r.clarifications],
             "no_data_for": r.unmapped_phrases,
             "issues": [{"level": i.level, "code": i.code, "message": i.message} for i in r.issues],

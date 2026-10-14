@@ -27,6 +27,17 @@ Today each audience is a ticket to the data team:
    that skipped the consent filter, means wasted SMS spend at best and a regulatory complaint at
    worst.
 
+## The decisions it supports
+
+Two people make decisions here, and the tool supports both without making either:
+
+| | Campaign manager | Marketing Analytics (definition owner) |
+|---|---|---|
+| Decision | Whom this campaign targets, under which definition | What "active", "likely to churn" and other contested terms mean, for everyone |
+| What they see before deciding | The exact definition in plain English; for each answer to an open term, the lines it reaches and what only it adds; policy blocks with the policy named | How often each open term is asked about and which answer marketers chose (Insights) |
+| What they do | Answer, edit, change in words, approve with a goal | Settle the term in the glossary; affected approved audiences are flagged with their size under the new rule |
+| How we know it was right | The holdout group recorded at approval: contacted minus held-out response | Fewer questions, fewer edits, and approved audiences that measure well |
+
 ## What the assistant changes
 
 The marketer types the request, sees the exact definition in plain English, answers a question

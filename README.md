@@ -2,19 +2,21 @@
 
 A marketing-operations campaign manager types *"prepaid customers in the Coast who haven't
 topped up in over 30 days but still use the app"*. A few seconds later they see the exact audience
-definition in plain English, answer any question about ambiguous business terms, see how many
-lines can actually be reached, and approve it with an audit trail.
+definition in plain English, answer any question about ambiguous business terms (seeing what each
+answer would reach), see how many lines can actually be reached, and approve it with an audit
+trail that also says how the campaign will be judged: its goal, and a holdout group to measure it.
 
 The AI model translates language into a structured proposal. Everything that has a correct
 answer is done by deterministic code: which fields exist, what governed terms mean, which data
-policies apply, consent, counting, and the summary the user approves.
+policies apply, consent, counting, and the summary the user approves. The tool supports the
+marketer's decision (whom to target, under which definition) and never makes it.
 
 - **Customer context and value:** [docs/CUSTOMER-CONTEXT.md](docs/CUSTOMER-CONTEXT.md)
 - **Business case** (base case about $185k a year, payback about three months; `make business-case`):
   [docs/BUSINESS-CASE.md](docs/BUSINESS-CASE.md)
 - **Design note and diagram:** [docs/DESIGN.md](docs/DESIGN.md)
 
-| An open business term asks instead of guessing | A data-usage policy is named, per channel |
+| An open term asks, and shows what each answer would reach | A data-usage policy is named, per channel |
 |---|---|
 | ![Clarification](docs/screenshots/1-clarify.png) | ![Policy](docs/screenshots/3-policy.png) |
 | **What has no data behind it is surfaced, never dropped** | **Sized, approved, audited** |
@@ -33,7 +35,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 97 tests, no network or API key needed
+make test         # 105 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 make mcp          # the same assistant as an MCP server for AI agents (see "Use it from an AI agent")
 ```
@@ -60,7 +62,10 @@ at 200k / 1M / 5M lines.
    **edited**. The marketer can change, add or remove any condition; every change is re-validated
    on the server. The UI shows three kinds of problem:
    - **Ambiguous business term** (e.g. "active", "likely to churn"): one question per such term,
-     with the competing governed definitions as options.
+     with the competing governed definitions as options. Each option shows what choosing it would
+     do before it is chosen: how many lines it reaches, and how many of those only that option
+     reaches. Where the business has adopted an interim answer, it is labelled as the working
+     default, with who adopted it, why, and who will actually decide.
    - **Part of the request has no data behind it** (e.g. "called the call centre"): shown
      explicitly, and approval requires accepting that the audience is built without it.
    - **A field the request needs is blocked by a data-usage policy** (e.g. credit risk for
@@ -82,7 +87,11 @@ at 200k / 1M / 5M lines.
    - the masked request and the model's raw proposal;
    - the model and prompt version, and all governance versions;
    - whether the marketer edited the AI's proposal;
-   - counts at approval, and the approver.
+   - counts at approval, and the approver;
+   - **how the decision will be judged**: the campaign goal the marketer states, and a governed
+     share of the audience (10%, `measurement` parameter set) held out by a reproducible hash
+     split. The record says which lines are contacted, which are held out, and the success
+     measure: response of the contacted group minus the holdout, over 14 days.
 
    Each interpretation can be approved once.
 
@@ -282,6 +291,8 @@ variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 | Personal data pasted into the request | Masked before the model and the logs; count recorded; length capped before masking |
 | Duplicated rows in the profile feed | Engine refuses to start: every count would be inflated |
 | Tampered approval (forged "governed" label, unanswered term, re-used request id) | Labels re-derived on the server; 422 for unanswered terms; 409 for a second approval |
+| A choice made without seeing its effect ("which active?") | Every option shows its reachable lines and what only it adds, computed in one scan; skipped while the definition has errors |
+| An audience approved with no way to tell later whether it worked | Approval requires a campaign goal and records a holdout group and the success measure; a holdout under 500 lines is flagged as too small to measure |
 | Governed rule or threshold changes after approval | Affected audiences flagged with the change and their size under current rules |
 | Broken governance config (unknown field, wrong type, mistyped policy status) | Startup lint fails with the list of errors |
 | Request floods or runaway spend | 429 with Retry-After per client; daily budget switches the assistant off; definitions capped at 30 conditions |
@@ -344,7 +355,7 @@ OpenAPI docs are at `/docs`.
 
 ## Testing and reliability
 
-- **`make test`: 97 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 105 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;
@@ -357,6 +368,9 @@ OpenAPI docs are at `/docs`.
     conditions move only with their term, open questions and unmapped parts carry forward and
     are counted once, an outage changes nothing, and an edit made before a change still counts
     as an edit at approval;
+  - decision support (`tests/test_decisions.py`): option consequences equal set arithmetic over
+    the store, none are shown for an invalid definition, approval needs a goal, and the holdout
+    is reproducible from the record and flagged when too small;
   - the MCP server (`tests/test_mcp.py`): no approve tool, drafts audited as `origin: "mcp"`,
     sizing refused while questions are open, and a draft reviewed and approved through the web
     app. A stdio round trip with the SDK's own client was checked by hand.

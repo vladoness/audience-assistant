@@ -40,12 +40,16 @@ class Issue(BaseModel):
 class ClarificationOption(BaseModel):
     id: str
     label: str
+    reachable: int | None = None  # lines this option would reach, with the other conditions as they are
+    only_here: int | None = None  # of those, lines no other option reaches: what this choice adds
+    working_default: bool = False
 
 
 class Clarification(BaseModel):
     term: str
     question: str
     options: list[ClarificationOption]
+    working_default_note: str | None = None  # who adopted the interim default and why, until the owner decides
 
 
 class Explanation(BaseModel):
@@ -135,5 +139,6 @@ class ApproveRequest(BaseModel):
     request_id: str
     name: str = Field(min_length=3, max_length=80)
     approver: str = Field(min_length=2, max_length=60)
+    goal: str = Field(min_length=3, max_length=200)  # what the campaign is for: the decision this audience serves
     definition: AudienceDefinition
     acknowledged_unmapped: bool = False

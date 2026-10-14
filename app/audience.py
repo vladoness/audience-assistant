@@ -86,6 +86,35 @@ class AudienceEngine:
             query_ms=round(query_ms, 2),
         )
 
+    def compare(self, definitions: list[AudienceDefinition]) -> list[tuple[int, int]]:
+        """For alternative definitions on the same channel: reachable lines of each, and how many of those
+        no other alternative reaches. One scan, so a choice can show its consequence before it is made."""
+        consent = f'"{self._catalog.channels[definitions[0].channel]}"'
+        compiled = [self.compile(d) for d in definitions]
+        exprs, params = [], []
+        for i, (where, where_params) in enumerate(compiled):
+            others = [compiled[j] for j in range(len(compiled)) if j != i]
+            # coalesce: a NULL comparison (e.g. a prepaid-only field on a postpaid line) means "not reached".
+            any_other = " OR ".join(f"coalesce(({w}), false)" for w, _ in others) or "false"
+            exprs += [f"count(*) FILTER (WHERE ({where}))", f"count(*) FILTER (WHERE ({where}) AND NOT ({any_other}))"]
+            params += [*where_params, *where_params, *(p for _, ps in others for p in ps)]
+        row = self._con.cursor().execute(f"SELECT {', '.join(exprs)} FROM profiles WHERE {consent}", params).fetchone()
+        return [(row[2 * i], row[2 * i + 1]) for i in range(len(definitions))]
+
+    def split(self, definition: AudienceDefinition, salt: str, holdout_share: float) -> tuple[int, int]:
+        """Reachable lines that get the campaign, and those held out to measure it. Membership is a hash of
+        salt and profile id, so the same record always reproduces the same two groups."""
+        where, params = self.compile(definition)
+        consent = f'"{self._catalog.channels[definition.channel]}"'
+        bucket = "md5_number_lower(? || ':' || profile_id) % 10000"
+        cutoff = round(holdout_share * 10_000)
+        target, holdout = self._con.cursor().execute(
+            f"SELECT count(*) FILTER (WHERE {bucket} >= ?), count(*) FILTER (WHERE {bucket} < ?) "
+            f"FROM profiles WHERE {where} AND {consent}",
+            [salt, cutoff, salt, cutoff, *params],
+        ).fetchone()
+        return target, holdout
+
     def profile_ids(self, definition: AudienceDefinition, reachable_only: bool = True) -> set[str]:
         """Exact membership, used by the evals to compare two definitions by the audience they produce."""
         where, params = self.compile(definition)

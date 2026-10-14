@@ -83,6 +83,8 @@ def lint(catalog: Catalog) -> LintReport:
                 err(f"term {t.name}: decided without a decision id and owner")
             if not t.rule:
                 err(f"term {t.name}: decided without a rule sentence")
+            if t.working_default:
+                warn(f"term {t.name}: decided, so its working default is no longer used; remove it")
             elif len(re.findall(r"[.!?](\s|$)", t.rule.strip())) > 1:
                 warn(f"term {t.name}: rule is more than one sentence; split out parameters or exceptions")
         elif t.status == "open":
@@ -90,6 +92,11 @@ def lint(catalog: Catalog) -> LintReport:
                 err(f"term {t.name}: open terms need at least two options to choose from")
             if not t.owner_pending:
                 warn(f"term {t.name}: open with no owner named to decide it")
+            if t.working_default:
+                if not t.option(t.working_default.get("option", "")):
+                    err(f"term {t.name}: working default {t.working_default.get('option')!r} is not one of its options")
+                if not t.working_default.get("adopted_by") or not t.working_default.get("why"):
+                    err(f"term {t.name}: a working default needs who adopted it and why")
         else:
             err(f"term {t.name}: unknown status {t.status}")
 

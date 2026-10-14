@@ -88,10 +88,15 @@
     <section class="card hidden" id="approve-card">
       <div class="step">4 · Approve</div>
       <div class="row">
+        <input id="goal" class="wide" maxlength="200"
+          placeholder="What is this campaign for? e.g. win back lapsed prepaid before month-end">
+      </div>
+      <div class="row">
         <input id="aud-name" placeholder="Audience name" maxlength="80">
         <input id="approver" placeholder="Your name" maxlength="60">
         <button id="approve-btn" class="primary" disabled>Approve audience</button>
       </div>
+      <p class="hint">A share of the audience is held out (not contacted), so the campaign's effect can be measured, not assumed.</p>
       <p id="approve-msg" class="hint"></p>
     </section>
 

@@ -119,7 +119,9 @@ The pilot in [CUSTOMER-CONTEXT.md](CUSTOMER-CONTEXT.md) adds the money measures 
 Capture the baseline before it starts:
 
 - **Value per campaign:** a holdout group on every pilot campaign, so the extra margin is measured,
-  not assumed. This replaces the biggest assumption.
+  not assumed. This replaces the biggest assumption. The app already records one at every
+  approval (10% by default, `measurement` parameter set), so the measurement is built in rather
+  than bolted on.
 - **Campaigns and tests per month,** pilot marketers against the others.
 - **Launch delay** for time-sensitive campaigns, request to send.
 - **Policy and consent blocks caught** (already counted in Insights), as risk evidence.

@@ -3,7 +3,7 @@
 # a versioned parameter set (parameters.yaml) and the system expands it itself (the model only
 # names the term). An "open" term has competing definitions and no decision yet, so the marketer
 # chooses; the model is told never to guess one.
-version: "2026-10-11.1"
+version: "2026-10-14.1"
 
 terms:
   high_value:
@@ -52,6 +52,10 @@ terms:
     aliases: [active, active customers, active lines]
     question: '"Active" has two definitions in use and no agreed standard yet. Which one do you mean?'
     owner_pending: Marketing Analytics (decision D-030 open)
+    working_default:
+      option: active_usage
+      adopted_by: Marketing Operations (A. Flores), until D-030 is decided
+      why: campaigns are aimed at people who use the network, and the billing definition includes lines with no usage.
     options:
       - id: active_usage
         label: Used the network in the last 30 days (at least one call, SMS or data session)

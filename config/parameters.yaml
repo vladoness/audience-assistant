@@ -3,7 +3,7 @@
 # high-value threshold"); its threshold
 # lives here, with a version and effective date, so changing a number is a new parameter
 # version, not a new rule. Approved audiences record the versions they were built with.
-version: "2026-10-09.1"
+version: "2026-10-14.1"
 
 parameter_sets:
   high_value:
@@ -40,3 +40,12 @@ parameter_sets:
     owner: Marketing Operations
     approved_by: A. Flores
     values: {min_reachable_lines: 100, max_share_of_base: 0.5}
+
+  # How every approved audience is measured: a share of it is held out (not contacted), so the
+  # campaign's effect is the difference between the two groups, not a guess.
+  measurement:
+    version: 1
+    effective: 2026-10-14
+    owner: Marketing Analytics
+    approved_by: M. Rojas
+    values: {holdout_share: 0.10, min_holdout_lines: 500, window_days: 14}

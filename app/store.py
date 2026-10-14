@@ -5,7 +5,8 @@ and prompt version, and the versions of every governance file. A refinement is i
 linked to the interpretation it refined (parent_request_id). An approval references that
 record and adds a governance snapshot: which governed terms it used, under which decision and
 parameter versions. That is what lets the system tell, later, which approved audiences a
-glossary or parameter change affects.
+glossary or parameter change affects. It also records how the decision will be judged: the
+campaign goal and the holdout group that measures it.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -54,7 +55,8 @@ CREATE TABLE IF NOT EXISTS audiences (
     reachable INTEGER NOT NULL,
     acknowledged_unmapped_json TEXT NOT NULL,
     governance_json TEXT NOT NULL,
-    governance_versions TEXT NOT NULL
+    governance_versions TEXT NOT NULL,
+    measurement_json TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS audiences_one_per_request ON audiences(request_id);
 """
@@ -122,10 +124,10 @@ class AuditStore:
             cur = self._db.execute(
                 """INSERT INTO audiences (created_at, name, approver, request_id, definition_json, definition_hash,
                    edited_by_user, explanation, channel, matched, reachable, acknowledged_unmapped_json,
-                   governance_json, governance_versions)
+                   governance_json, governance_versions, measurement_json)
                    VALUES (:created_at, :name, :approver, :request_id, :definition_json, :definition_hash,
                    :edited_by_user, :explanation, :channel, :matched, :reachable, :acknowledged_unmapped_json,
-                   :governance_json, :governance_versions)""",
+                   :governance_json, :governance_versions, :measurement_json)""",
                 {"created_at": _now(), **row},
             )
             return cur.lastrowid

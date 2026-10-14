@@ -26,8 +26,9 @@ from app.explain import explain
 from app.limits import DailyBudget
 from app.governance import canonical, reconcile_with_proposal, verify_provenance
 from app.llm import (
-    MAX_OUTPUT_TOKENS, PROMPT_VERSION, REFINE_SCHEMA, REFINE_VERSION, BudgetExhausted, CircuitOpen, NotRecorded, LLMResult,
-    Pricing, Provider, ProviderUnavailable, build_messages, build_refine_messages, build_system_prompt,
+    ADVICE_SCHEMA, ADVISOR_SYSTEM, ADVISOR_VERSION, MAX_OUTPUT_TOKENS, PROMPT_VERSION, REFINE_SCHEMA, REFINE_VERSION,
+    BudgetExhausted, CircuitOpen, NotRecorded, LLMResult, Pricing, Provider, ProviderUnavailable, build_advice_messages,
+    build_messages, build_refine_messages, build_system_prompt,
 )
 from app.models import (
     AudienceDefinition, CheckResult, Clarification, ClarificationOption, Condition, InterpretResult, Issue, Telemetry,
@@ -231,14 +232,26 @@ class Interpreter:
         return CheckResult(status=status, definition=validated, clarifications=clarifications, issues=issues,
                            explanation=explain(validated, self.catalog))
 
+    def advise(self, facts: list[dict[str, Any]], goal: str, campaign_type: str | None) -> tuple[dict[str, Any], Telemetry]:
+        """The advisor's raw proposals for these facts. Checking them is the caller's job (app/advisor.py)."""
+        masked, pii_count = mask_pii(goal.strip()[: self.max_request_chars])
+        tel = Telemetry(provider=self.provider.name, model=self.provider.model, prompt_version=ADVISOR_VERSION,
+                        pii_masked=pii_count)
+        started = time.perf_counter()
+        raw = self._call_model(build_advice_messages(facts, masked, campaign_type), tel, schema=ADVICE_SCHEMA,
+                               system=ADVISOR_SYSTEM)
+        tel.total_ms = round((time.perf_counter() - started) * 1000, 1)
+        self.metrics.incr("advice_calls")
+        return raw, tel
+
     def _call_model(self, messages: list[dict[str, Any]], tel: Telemetry,
-                    schema: dict[str, Any] | None = None) -> dict[str, Any]:
+                    schema: dict[str, Any] | None = None, system: str | None = None) -> dict[str, Any]:
         if self.budget is not None and not self.budget.available():
             raise BudgetExhausted(f"today's model budget of ${self.budget.limit_usd:.2f} is used up")
         if self.circuit_open:
             raise CircuitOpen("several recent model calls failed; pausing the assistant briefly")
         try:
-            result: LLMResult = self.provider.propose(self.system_prompt, messages, schema)
+            result: LLMResult = self.provider.propose(system or self.system_prompt, messages, schema)
         except NotRecorded:
             raise
         except ProviderUnavailable:

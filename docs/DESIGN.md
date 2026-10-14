@@ -336,9 +336,43 @@ the same known effects as the synthetic history and posts them through the same 
 path. It refuses to run without the synthetic history, so it can't fabricate outcomes in a real
 deployment.
 
-*Not done.* The loop learns per campaign type, not per segment, and it doesn't change any rule or
-threshold by itself. What the evidence should change (stop a campaign type that doesn't work,
+*Not done here.* The loop itself learns per campaign type and doesn't change any rule or
+threshold by itself; segment-level reading is the advisor's job (decision 22). What the evidence should change (stop a campaign type that doesn't work,
 retarget one that does) stays a person's decision, made with the evidence on screen.
+
+**22. The advisor: AI reads the facts and proposes; code checks every claim and prices every change.**
+Translating a request is not the only thing a model is good at. Reading twenty facts at once
+(segment results, contact pressure, consent, campaign-type evidence) and connecting them to a
+goal in plain language is another. So once an audience is set, an advisor proposes up to three
+improvements. The design keeps the rule of decision 1 (the model proposes, code disposes):
+- **Facts come from code** (`advisor.fact_sheet`), numbered with ids. Aggregates only; fields a
+  policy blocks for the channel never appear, so the model can't suggest them.
+- **The model's output is structured** (`ADVICE_SCHEMA`): a kind (narrow, exclude, switch
+  channel, campaign type, advice), a title, a rationale, and the fact ids it relies on.
+- **Every proposal is checked** (`advisor.check`), not trusted:
+  - its cited facts must exist and support it;
+  - every number in its text must appear in those facts (rounding allowed);
+  - a segment can only be narrowed or excluded if its fact says "clearly different", in the
+    direction the change assumes;
+  - a channel switch must be allowed by policy.
+
+  The "clearly different" bar is 99.5%, not 95%. The fact sheet compares about ten segments at
+  once, and at 95% one of them would look different by chance alone in about half of all audiences.
+- **Every accepted change is priced by code** (`advisor.consequence`): new size, and expected
+  extra responders from each segment's past lift. A narrower audience usually raises the rate
+  and lowers the total; the marketer sees both.
+- **Withheld proposals are shown**, with the reason. They are evidence of what the checks are
+  for, and a signal if the prompt needs work.
+
+*How it is evaluated.* The synthetic history has exactly one planted segment effect (data upsells
+work better on postpaid lines). That makes a known truth to score against: the advisor should
+propose narrowing where the effect exists, not where it doesn't, note weak campaign types and
+contact pressure, never propose a blocked channel or field, and not follow instructions injected
+through the goal (`evals/advisor.yaml`). Separately, the tests check that the segment analysis
+itself flags the planted effect and nothing else.
+
+*Rejected: letting the model compute the impact itself.* It would read well and be wrong in ways
+no one would notice. The model's job is to notice and explain; arithmetic and policy are code's.
 
 ## Where the time goes (and why that shapes the design)
 

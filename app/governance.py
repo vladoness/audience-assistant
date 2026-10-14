@@ -20,7 +20,7 @@ def verify_provenance(definition: AudienceDefinition, catalog: Catalog) -> Audie
     definition. Anything else is relabelled "user", so a client can't make an edited threshold look governed."""
     out = []
     for c in definition.conditions:
-        if c.source not in {"model", "user"} and not c.source.startswith("glossary:"):
+        if c.source not in {"model", "user", "advisor"} and not c.source.startswith("glossary:"):
             c = c.model_copy(update={"source": "user"})
         if c.source.startswith("glossary:"):
             term_name, _, option = c.source.removeprefix("glossary:").partition("=")

@@ -27,6 +27,7 @@ import yaml
 
 from app.audience import AudienceEngine
 from app.catalog import load_catalog
+from app.history import CampaignHistory
 from app.interpret import Interpreter
 from app.llm import AnthropicProvider, Pricing, ProviderUnavailable, RecordingProvider, ReplayProvider
 from app.models import AudienceDefinition, Condition, InterpretResult, Issue, Telemetry
@@ -117,6 +118,62 @@ def run_refine_case(interpreter: Interpreter, case: dict):
                                telemetry=Telemetry(provider=interpreter.provider.name))
 
 
+def _matches(p: dict, matcher: dict) -> bool:
+    return all(p.get(k) == v for k, v in matcher.items())
+
+
+def run_advisor_case(interpreter: Interpreter, engine: AudienceEngine, history, store, catalog, case: dict) -> dict:
+    """One advisor case: facts from code, proposals from the model, checks from code, scored on what is accepted."""
+    from app import advisor
+
+    definition = AudienceDefinition(**case["definition"])
+    facts = advisor.fact_sheet(engine, catalog, history, store, definition, case["campaign_type"])
+    by_id = {f["id"]: f for f in facts}
+    try:
+        raw, tel = interpreter.advise(facts, case["goal"], case["campaign_type"])
+    except ProviderUnavailable as exc:
+        return {"id": case["id"], "category": case["category"], "passed": False, "checks": {"advice": False},
+                "accepted": [], "rejected": [str(exc)], "llm_calls": 0, "llm_ms": 0.0, "cost_usd": 0.0}
+    accepted, rejected = [], []
+    for p in (raw.get("proposals") or [])[:3]:
+        reason = advisor.check(p, by_id, catalog, definition, case["campaign_type"])
+        (rejected if reason else accepted).append(p if not reason else {"title": p.get("title"), "reason": reason})
+    expect = case["expect"]
+    checks = {"advice": True}
+    if "must_include" in expect:
+        checks["must_include"] = all(any(_matches(p, m) for p in accepted) for m in expect["must_include"])
+    if "must_include_any" in expect:
+        checks["must_include_any"] = any(_matches(p, m) for m in expect["must_include_any"] for p in accepted)
+    if "must_not_include" in expect:
+        checks["must_not_include"] = not any(_matches(p, m) for m in expect["must_not_include"] for p in accepted)
+    if "cites_any" in expect:
+        checks["cites_any"] = any(str(c).startswith(prefix) for p in accepted for c in p.get("cites", [])
+                                  for prefix in expect["cites_any"])
+    return {"id": case["id"], "category": case["category"], "passed": all(checks.values()), "checks": checks,
+            "accepted": [{k: p.get(k) for k in ("kind", "title", "attribute", "value", "cites")} for p in accepted],
+            "rejected": rejected, "llm_calls": tel.llm_calls, "llm_ms": tel.llm_ms, "cost_usd": tel.cost_usd}
+
+
+def summarize_advice(model: str, rows: list[dict], runs: int) -> dict:
+    by_case: dict[str, list[bool]] = defaultdict(list)
+    by_cat: dict[str, list[bool]] = defaultdict(list)
+    for r in rows:
+        by_case[r["id"]].append(r["passed"])
+        by_cat[r["category"]].append(r["passed"])
+    latencies = sorted(r["llm_ms"] for r in rows if r["llm_calls"])
+    return {
+        "model": model, "cases": len(by_case), "runs": runs,
+        "pass_rate": round(sum(r["passed"] for r in rows) / len(rows), 3),
+        "proposals_accepted": sum(len(r["accepted"]) for r in rows),
+        "proposals_withheld_by_checks": sum(len(r["rejected"]) for r in rows),
+        "latency_p50_ms": round(percentile(latencies, 50), 0) if latencies else None,
+        "latency_p95_ms": round(percentile(latencies, 95), 0) if latencies else None,
+        "cost_per_1k_requests_usd": round(1000 * statistics.mean(r["cost_usd"] for r in rows), 2),
+        "by_category": {k: f"{sum(v)}/{len(v)}" for k, v in sorted(by_cat.items())},
+        "failures": [{"id": c, "failed_runs": f"{len(v) - sum(v)}/{len(v)}"} for c, v in sorted(by_case.items()) if not all(v)],
+    }
+
+
 def summarize(model: str, rows: list[dict], runs: int) -> dict:
     """Aggregate over every (case, run). With runs > 1, flaky cases are those that passed in some runs only."""
     by_cat: dict[str, list[bool]] = defaultdict(list)
@@ -155,7 +212,7 @@ def main() -> None:
     parser.add_argument("--model", default="claude-sonnet-5-5")
     parser.add_argument("--effort", default="low", help="low | medium | high | xhigh | max | default")
     parser.add_argument("--record", action="store_true", help="save run-1 live responses as replay fixtures")
-    parser.add_argument("--cases", default="dev", choices=["dev", "heldout", "refine"])
+    parser.add_argument("--cases", default="dev", choices=["dev", "heldout", "refine", "advisor"])
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--only", help="run a single case id")
     args = parser.parse_args()
@@ -170,10 +227,16 @@ def main() -> None:
     live = AnthropicProvider(settings.anthropic_api_key, args.model, settings.llm_timeout_s,
                              settings.llm_max_retries, effort=effort) if args.provider == "anthropic" else None
     pricing = Pricing.load(settings.config_dir / "models.yaml")
-    case_file = {"dev": "cases.yaml", "heldout": "heldout.yaml", "refine": "refine.yaml"}[args.cases]
+    case_file = {"dev": "cases.yaml", "heldout": "heldout.yaml", "refine": "refine.yaml", "advisor": "advisor.yaml"}[args.cases]
     cases = yaml.safe_load((ROOT / "evals" / case_file).read_text())["cases"]
     if args.only:
         cases = [c for c in cases if c["id"] == args.only]
+    if args.cases == "advisor":
+        # Its own 200k store, generated from the known truth, so results don't depend on a local database.
+        store_path = Path(tempfile.mkdtemp()) / "profiles.duckdb"
+        generate(store_path, 200_000)
+        engine = AudienceEngine(store_path, catalog)
+        history = CampaignHistory(engine, catalog)
 
     rows = []
     for run in range(1, args.repeat + 1):
@@ -185,13 +248,21 @@ def main() -> None:
         interpreter = Interpreter(catalog, provider, AuditStore(tmp / "audit.sqlite"), TTLCache(0, 0), Metrics(), pricing,
                                   breaker_threshold=10_000)
         for case in cases:
+            if args.cases == "advisor":
+                row = run_advisor_case(interpreter, engine, history, AuditStore(tmp / "audit.sqlite"), catalog, case)
+                row["run"] = run
+                rows.append(row)
+                print(f"{'PASS' if row['passed'] else 'FAIL'}  run {run}  {row['id']:<28} {row['llm_ms']:>7.0f} ms  "
+                      f"accepted={[p['kind'] for p in row['accepted']]} withheld={len(row['rejected'])}  {row['checks']}")
+                continue
             result = run_refine_case(interpreter, case) if args.cases == "refine" else interpreter.interpret(case["request"])
             row = score_case(case, result, engine) | {"run": run}
             rows.append(row)
             mark = "PASS" if row["passed"] else "FAIL"
             print(f"{mark}  run {run}  {row['id']:<18} {row['status']:<20} {row['llm_ms']:>7.0f} ms  {row['checks']}")
 
-    summary = summarize(args.model, rows, args.repeat) | {"effort": args.effort, "case_set": args.cases}
+    summarize_fn = summarize_advice if args.cases == "advisor" else summarize
+    summary = summarize_fn(args.model, rows, args.repeat) | {"effort": args.effort, "case_set": args.cases}
     out_dir = ROOT / "evals" / "results"
     out_dir.mkdir(exist_ok=True)
     suffix = "" if args.provider == "anthropic" else ".replay"

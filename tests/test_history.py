@@ -31,8 +31,9 @@ def test_the_history_is_complete_and_labelled_synthetic(history, engine):
     assert no_consent == 0
 
 
-@pytest.mark.parametrize("campaign_type", list(CAMPAIGN_TYPES))
+@pytest.mark.parametrize("campaign_type", [t for t, spec in CAMPAIGN_TYPES.items() if "lift_by" not in spec])
 def test_measured_lift_recovers_the_true_effect(history, campaign_type):
+    """Types with a planted segment effect are checked per segment in tests/test_advisor.py."""
     pooled = history.evidence(campaign_type)["pooled"]
     se = (pooled["lift_95_high"] - pooled["lift_95_low"]) / (2 * Z95)
     true_points = 100 * CAMPAIGN_TYPES[campaign_type]["lift"]

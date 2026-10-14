@@ -43,14 +43,15 @@ from app.limits import DailyBudget, RateLimiter
 from app.lint import LintReport, lint
 from app.llm import AnthropicProvider, Pricing, Provider, ProviderUnavailable, RecordingProvider, ReplayProvider
 from app.models import (
-    ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, InterpretRequest, InterpretResult, OutcomeRequest,
-    RefineRequest, SizeResult,
+    AdviseRequest, ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, InterpretRequest, InterpretResult,
+    OutcomeRequest, RefineRequest, SizeResult,
 )
 from app.observability import Metrics, configure_logging, request_id_var
 from app.settings import ROOT, Settings
 from app.store import AuditStore, TTLCache, definition_hash
+from app import advisor
 from app.history import CampaignHistory, counts_lift, verdict
-from app.synthdata import add_history, generate
+from app.synthdata import CAMPAIGN_TYPES, HISTORY_VERSION, add_history, generate
 
 log = logging.getLogger("app")
 
@@ -107,8 +108,8 @@ def build_services(settings: Settings, provider: Provider | None = None) -> Serv
                                "to generate the synthetic demo store at startup.")
         log.warning("generating_synthetic_data", extra={"rows": settings.profile_rows, "path": str(settings.data_path)})
         generate(settings.data_path, settings.profile_rows)
-    elif settings.synthetic_data and not _has_history(settings.data_path):
-        log.warning("adding_synthetic_campaign_history", extra={"path": str(settings.data_path)})
+    elif settings.synthetic_data and _history_version(settings.data_path) != HISTORY_VERSION:
+        log.warning("adding_synthetic_campaign_history", extra={"path": str(settings.data_path), "version": HISTORY_VERSION})
         add_history(settings.data_path)
     guardrails = catalog.parameter_sets.get("audience_guardrails")
     min_audience = int(guardrails.values["min_reachable_lines"]) if guardrails else settings.min_audience
@@ -140,9 +141,13 @@ def build_services(settings: Settings, provider: Provider | None = None) -> Serv
                     history=history)
 
 
-def _has_history(path) -> bool:
+def _history_version(path) -> int | None:
+    """Version of the synthetic campaign history in the store, None if there is none (or it predates versions)."""
     with duckdb.connect(str(path), read_only=True) as con:
-        return "campaigns" in {r[0] for r in con.execute("SHOW TABLES").fetchall()}
+        if "history_meta" not in {r[0] for r in con.execute("SHOW TABLES").fetchall()}:
+            return None
+        columns = {r[0] for r in con.execute("DESCRIBE history_meta").fetchall()}
+        return con.execute("SELECT version FROM history_meta").fetchone()[0] if "version" in columns else None
 
 
 def create_app(settings: Settings | None = None, provider: Provider | None = None) -> FastAPI:
@@ -225,6 +230,14 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         if s.history is not None:
             result.contact_pressure = s.history.contact_pressure(checked.definition)
         return result
+
+    @app.post("/api/advise")
+    def advise(body: AdviseRequest, request: Request) -> dict:
+        """The campaign advisor: the model proposes up to three improvements from facts the system computed;
+        each is checked against those facts and sized before the marketer sees it."""
+        s = svc(request)
+        rate_limit(s, request)
+        return run_advice(s, body.definition, body.goal, body.campaign_type)
 
     @app.get("/api/history")
     def history(request: Request) -> dict:
@@ -472,6 +485,41 @@ EXAMPLES = [
     "Postpaid customers with a high credit risk band",
 ]
 REFINE_EXAMPLES = ["also include the Highlands", "only postpaid", "make it SMS instead"]
+
+
+def run_advice(s: Services, definition: AudienceDefinition, goal: str, campaign_type: str | None) -> dict:
+    """Facts by code, proposals by the model, checks and consequences by code. Shared by the API and MCP."""
+    checked = s.interpreter.check(definition, [], {})
+    if checked.status == "invalid":
+        raise HTTPException(422, detail="Fix the audience's errors before asking for advice.")
+    if campaign_type is not None and campaign_type not in CAMPAIGN_TYPES:
+        raise HTTPException(422, detail=f"Unknown campaign type {campaign_type!r}.")
+    facts = advisor.fact_sheet(s.engine, s.catalog, s.history, s.store, checked.definition, campaign_type)
+    try:
+        raw, tel = s.interpreter.advise(facts, goal, campaign_type)
+    except ProviderUnavailable as exc:
+        raise HTTPException(503, detail=f"The advisor is unavailable ({exc}).") from None
+    by_id = {f["id"]: f for f in facts}
+    holdout = s.catalog.parameter_sets.get("measurement")
+    share = float(holdout.values["holdout_share"]) if holdout else 0.1
+    accepted, rejected = [], []
+    for p in (raw.get("proposals") or [])[:3]:
+        reason = advisor.check(p, by_id, s.catalog, checked.definition, campaign_type)
+        if reason:
+            rejected.append({"title": str(p.get("title", ""))[:200], "kind": p.get("kind"), "reason": reason})
+        else:
+            accepted.append({k: p[k] for k in ("kind", "title", "rationale", "cites", "attribute", "value", "channel",
+                                               "campaign_type")}
+                            | {"cited_facts": [by_id[c]["text"] for c in p["cites"]],
+                               "consequence": advisor.consequence(p, by_id, s.engine, s.catalog, checked.definition,
+                                                                  campaign_type, holdout_share=share)})
+    s.metrics.incr("advice_accepted", len(accepted))
+    s.metrics.incr("advice_rejected", len(rejected))
+    log.info("advice", extra={"accepted": [p["kind"] for p in accepted], "rejected": [r["reason"] for r in rejected],
+                              "facts": len(facts), "campaign_type": campaign_type})
+    return {"summary": str(raw.get("summary", ""))[:600], "proposals": accepted, "rejected": rejected,
+            "facts": [{"id": f["id"], "text": f["text"]} for f in facts], "telemetry": tel.model_dump(),
+            "synthetic_history": bool(s.history and s.history.synthetic)}
 
 
 def record_outcome(s: Services, audience_id: int, responders: list[str], source: str, sent_at: str) -> dict:

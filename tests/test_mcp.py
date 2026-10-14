@@ -35,7 +35,7 @@ def test_agents_get_drafting_tools_but_no_way_to_approve(mcp):
     _, server = mcp()
     tools = {t.name: t for t in asyncio.run(server.list_tools())}
     assert set(tools) == {"interpret_audience", "refine_audience", "size_audience", "explain_term",
-                          "past_campaign_evidence"}
+                          "past_campaign_evidence", "advise_audience"}
     assert tools["past_campaign_evidence"].annotations.read_only_hint is True
     assert tools["size_audience"].annotations.read_only_hint is True
     assert tools["interpret_audience"].annotations.destructive_hint is False

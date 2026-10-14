@@ -27,9 +27,11 @@ from typing import Any
 from app.audience import AudienceEngine
 from app.catalog import Catalog
 from app.models import AudienceDefinition, ContactPressure, Issue
-from app.synthdata import CAMPAIGN_TYPES
+from app.synthdata import CAMPAIGN_TYPES, lift_sql
 
 Z95 = 1.96
+Z_SEGMENT = 2.81  # 99.5%: allows for comparing ~10 segments at once without inventing differences
+SEGMENT_ATTRIBUTES = ("line_type", "region", "plan_tier", "device_os")
 
 
 @dataclass
@@ -44,12 +46,17 @@ class Lift:
         return 100 * (self.contacted_rate - self.held_out_rate)
 
     @property
+    def se_points(self) -> float:
+        if not self.contacted or not self.held_out:
+            return math.nan
+        return 100 * math.sqrt(self.contacted_rate * (1 - self.contacted_rate) / self.contacted
+                               + self.held_out_rate * (1 - self.held_out_rate) / self.held_out)
+
+    @property
     def interval(self) -> tuple[float, float]:
         if not self.contacted or not self.held_out:
             return (math.nan, math.nan)
-        se = math.sqrt(self.contacted_rate * (1 - self.contacted_rate) / self.contacted
-                       + self.held_out_rate * (1 - self.held_out_rate) / self.held_out)
-        return (self.points - 100 * Z95 * se, self.points + 100 * Z95 * se)
+        return (self.points - Z95 * self.se_points, self.points + Z95 * self.se_points)
 
     def as_dict(self) -> dict[str, Any]:
         low, high = self.interval
@@ -182,12 +189,38 @@ class CampaignHistory:
         synthetic history (held-out lines respond at the base rate, contacted lines at base + lift)."""
         spec = CAMPAIGN_TYPES[campaign_type]
         rows = self._engine.connection.cursor().execute(
-            "SELECT profile_id FROM (SELECT unnest(?) AS profile_id, unnest(?) AS held_out) "
-            "WHERE (md5_number_lower(? || ':' || profile_id) % 1000000) / 1000000.0 < "
-            "CASE WHEN held_out THEN ? ELSE ? END",
-            [[p for p, _ in members], [g == "held_out" for _, g in members], seed, spec["base"], spec["base"] + spec["lift"]],
+            "SELECT m.profile_id FROM (SELECT unnest(?) AS profile_id, unnest(?) AS held_out) m "
+            "JOIN profiles USING (profile_id) "
+            "WHERE (md5_number_lower(? || ':' || m.profile_id) % 1000000) / 1000000.0 < "
+            f"CASE WHEN m.held_out THEN ? ELSE ? + {lift_sql(spec)} END",
+            [[p for p, _ in members], [g == "held_out" for _, g in members], seed, spec["base"], spec["base"]],
         ).fetchall()
         return [r[0] for r in rows]
+
+    def segment_lift(self, campaign_type: str, attribute: str) -> list[dict[str, Any]]:
+        """Lift of past campaigns of one type, per value of one profile attribute, each compared with all
+        the other values. A segment is only called clearly different at Z_SEGMENT (99.5%), because the
+        advisor looks at many segments at once and some would differ at 95% by chance alone."""
+        if not self.available or campaign_type not in CAMPAIGN_TYPES or attribute not in SEGMENT_ATTRIBUTES:
+            return []
+        rows = self._engine.connection.cursor().execute(f"""
+            SELECT p.{attribute},
+                   count(*) FILTER (WHERE NOT x.held_out), count(*) FILTER (WHERE x.held_out),
+                   count(*) FILTER (WHERE NOT x.held_out AND x.responded), count(*) FILTER (WHERE x.held_out AND x.responded)
+            FROM campaign_contacts x JOIN campaigns k USING (campaign_id) JOIN profiles p USING (profile_id)
+            WHERE k.campaign_type = ? GROUP BY 1 ORDER BY 1""", [campaign_type]).fetchall()
+        total = [sum(r[i] for r in rows) for i in range(1, 5)]
+        out = []
+        for value, *counts in rows:
+            seg = counts_lift(*counts)
+            rest = counts_lift(*(t - c for t, c in zip(total, counts)))
+            diff = seg.points - rest.points
+            se = math.sqrt(seg.se_points ** 2 + rest.se_points ** 2)
+            out.append({"attribute": attribute, "value": value, **seg.as_dict(),
+                        "rest_lift_points": round(rest.points, 2),
+                        "difference_points": round(diff, 2),
+                        "clearly_different": bool(se and abs(diff) > Z_SEGMENT * se)})
+        return out
 
 
 SYNTHETIC_SOURCE = "synthetic history"

@@ -74,6 +74,7 @@ async function init() {
   $("refresh-insights").onclick = loadInsights;
   $("campaign-type").onchange = loadEvidence;
   $("learning-type").onchange = () => loadLearning();
+  $("advise-btn").onclick = advise;
   loadAudit();
   loadInsights();
   loadHistoryTypes();
@@ -116,6 +117,49 @@ function renderPressure(p) {
     + `${pct(p.contacted_recently)} of these lines got a campaign in the last ${p.recent_days} days, ${pct(p.contacted_in_window)} in the last ${p.window_days}; `
     + `${fmt(p.at_or_over_cap)} had ${p.cap} or more in ${p.window_days} days. <span class="hint">(${esc(p.policy || "")}, as of ${esc(p.as_of)})</span>`;
   box.classList.remove("hidden");
+}
+
+const KIND_LABELS = { narrow_segment: "narrow the audience", exclude_segment: "exclude a segment",
+  switch_channel: "change channel", choose_campaign_type: "campaign type", advice: "point to consider" };
+
+async function advise() {
+  const btn = $("advise-btn"), box = $("advice");
+  btn.disabled = true; btn.innerHTML = '<span class="spinner dark"></span>Analysing…';
+  try {
+    const r = await api("/api/advise", { definition: state.definition, goal: $("goal").value, campaign_type: $("campaign-type").value || null });
+    state.advice = r.proposals;
+    const proposals = r.proposals.map((p, i) => {
+      const action = { narrow_segment: "Apply", exclude_segment: "Apply", switch_channel: `Switch to ${(p.channel || "").toUpperCase()}`,
+        choose_campaign_type: "Use this campaign type" }[p.kind];
+      return `<div class="proposal"><div class="kind">${esc(KIND_LABELS[p.kind] || p.kind)}</div><strong>${esc(p.title)}</strong>`
+        + `<p style="margin:4px 0">${esc(p.rationale)}</p>`
+        + (p.consequence?.note ? `<div class="consequence-line">${esc(p.consequence.note)}</div>` : "")
+        + `<details><summary class="hint">Based on ${p.cited_facts.length} fact${p.cited_facts.length > 1 ? "s" : ""}</summary><ul class="cited">${p.cited_facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>`
+        + (action ? `<button class="small apply-advice" data-i="${i}">${esc(action)}</button>` : "") + "</div>";
+    }).join("");
+    const withheld = r.rejected.length ? `<div class="withheld">Withheld by the checks: ${r.rejected.map((x) => `“${esc(x.title)}” (${esc(x.reason)})`).join("; ")}</div>` : "";
+    const t = r.telemetry;
+    box.innerHTML = `<strong>Advisor</strong>${r.synthetic_history ? SYNTHETIC : ""}<p style="margin:6px 0 0">${esc(r.summary)}</p>${proposals}${withheld}`
+      + `<details><summary class="hint">What the advisor saw: ${r.facts.length} facts computed by the system · ${esc(t.model || "")} · ${(t.llm_ms / 1000).toFixed(1)} s · $${t.cost_usd.toFixed(4)}</summary><ul class="cited">${r.facts.map((f) => `<li><span class="mono">${esc(f.id)}</span> ${esc(f.text)}</li>`).join("")}</ul></details>`;
+    box.classList.remove("hidden");
+    box.querySelectorAll(".apply-advice").forEach((b) => (b.onclick = () => applyAdvice(state.advice[Number(b.dataset.i)])));
+  } catch (e) {
+    box.innerHTML = `<span class="error-text">Advisor unavailable: ${esc(e.data?.detail || e.message)}</span>`;
+    box.classList.remove("hidden");
+  } finally {
+    btn.disabled = false; btn.textContent = "Ask the advisor";
+  }
+}
+
+async function applyAdvice(p) {
+  if (p.kind === "choose_campaign_type") {
+    $("campaign-type").value = p.campaign_type;
+    await loadEvidence();
+  } else if (p.consequence?.definition) {
+    state.definition = p.consequence.definition;
+    await recheck();
+  }
+  $("advice").classList.add("hidden");
 }
 
 async function loadForReview(requestId) {
@@ -278,6 +322,7 @@ function renderUnmapped() {
 function sourceBadge(source) {
   if (source === "model") return '<span class="badge model">AI</span>';
   if (source === "user") return '<span class="badge user">edited</span>';
+  if (source === "advisor") return '<span class="badge advisor">advisor</span>';
   const ref = source.replace("glossary:", "");
   if (ref.includes("=")) return `<span class="badge choice" title="${esc(ref)}">your choice</span>`;
   const term = state.catalog.terms[ref];

@@ -126,7 +126,10 @@ FROM behaviour;
 CAMPAIGN_TYPES: dict[str, dict] = {
     "topup_reminder": {"label": "Top-up reminder", "channel": "sms", "base": 0.100, "lift": 0.020,
                        "audience": "line_type = 'prepaid' AND days_since_last_recharge BETWEEN 15 AND 45"},
+    # One planted segment effect: upsells work clearly better on postpaid lines. The advisor should
+    # find this and nothing else (every other type has the same lift in every segment).
     "data_upsell": {"label": "Data bundle upsell", "channel": "sms", "base": 0.020, "lift": 0.008,
+                    "lift_by": {"attribute": "line_type", "values": {"postpaid": 0.016, "prepaid": 0.005}},
                     "audience": "data_gb_30d >= 5"},
     "roaming_offer": {"label": "Roaming offer", "channel": "email", "base": 0.030, "lift": 0.012,
                       "audience": "roaming_30d OR (line_type = 'postpaid' AND plan_tier = 'premium')"},
@@ -135,6 +138,7 @@ CAMPAIGN_TYPES: dict[str, dict] = {
     "app_adoption": {"label": "App adoption", "channel": "sms", "base": 0.040, "lift": 0.003,
                      "audience": "NOT app_active_30d AND device_os <> 'feature_phone'"},
 }
+HISTORY_VERSION = 2  # bump when CAMPAIGN_TYPES change, so existing demo stores regenerate their history
 HISTORY_CAMPAIGNS = 60  # one every 6 days over the last year, types in rotation
 HISTORY_SAMPLE_PCT = 40  # share of the eligible, consented lines each past campaign reached
 HISTORY_HOLDOUT_PCT = 10
@@ -143,7 +147,8 @@ HISTORY_HOLDOUT_PCT = 10
 def generate_history(con: duckdb.DuckDBPyConnection, as_of: date) -> None:
     """Create (or replace) `campaigns`, `campaign_contacts` and `history_meta` from CAMPAIGN_TYPES."""
     types = list(CAMPAIGN_TYPES)
-    con.execute("CREATE OR REPLACE TABLE history_meta AS SELECT ?::DATE AS as_of, true AS synthetic", [as_of])
+    con.execute("CREATE OR REPLACE TABLE history_meta AS SELECT ?::DATE AS as_of, true AS synthetic, ? AS version",
+                [as_of, HISTORY_VERSION])
     con.execute("CREATE OR REPLACE TABLE campaigns (campaign_id INTEGER, campaign_type VARCHAR, name VARCHAR, "
                 "channel VARCHAR, sent_at DATE)")
     for k in range(HISTORY_CAMPAIGNS):
@@ -155,12 +160,12 @@ def generate_history(con: duckdb.DuckDBPyConnection, as_of: date) -> None:
         f"(c.campaign_type = '{t}' AND ({spec['audience']}) AND "
         f"{'marketing_consent_sms' if spec['channel'] == 'sms' else 'marketing_consent_email'})"
         for t, spec in CAMPAIGN_TYPES.items())
-    rate = " ".join(f"WHEN '{t}' THEN {spec['base']} + CASE WHEN held_out THEN 0 ELSE {spec['lift']} END"
+    rate = " ".join(f"WHEN '{t}' THEN {spec['base']} + CASE WHEN held_out THEN 0 ELSE {lift_sql(spec)} END"
                     for t, spec in CAMPAIGN_TYPES.items())
     con.execute(f"""
         CREATE OR REPLACE TABLE campaign_contacts AS
         WITH reached AS (
-            SELECT c.campaign_id, c.campaign_type, p.profile_id,
+            SELECT c.campaign_id, c.campaign_type, p.profile_id, p.line_type, p.region, p.plan_tier, p.device_os,
                    hash(p.profile_id, c.campaign_id, 'h') % 100 < {HISTORY_HOLDOUT_PCT} AS held_out
             FROM campaigns c JOIN profiles p ON ({eligible})
             WHERE hash(p.profile_id, c.campaign_id, 's') % 100 < {HISTORY_SAMPLE_PCT}
@@ -168,6 +173,23 @@ def generate_history(con: duckdb.DuckDBPyConnection, as_of: date) -> None:
         SELECT campaign_id, profile_id, held_out,
                (hash(profile_id, campaign_id, 'r') % 1000000) / 1000000.0 < (CASE campaign_type {rate} END) AS responded
         FROM reached""")
+
+
+def lift_sql(spec: dict) -> str:
+    """The true lift of a campaign type as SQL over the line's columns (constant, or by segment)."""
+    by = spec.get("lift_by")
+    if not by:
+        return str(spec["lift"])
+    cases = " ".join(f"WHEN '{value}' THEN {lift}" for value, lift in by["values"].items())
+    return f"(CASE {by['attribute']} {cases} ELSE {spec['lift']} END)"
+
+
+def true_lift(spec: dict, segment: dict[str, str] | None = None) -> float:
+    """The planted lift for a line with these segment values (for tests and the docs)."""
+    by = spec.get("lift_by")
+    if by and segment and by["attribute"] in segment:
+        return by["values"].get(segment[by["attribute"]], spec["lift"])
+    return spec["lift"]
 
 
 def generate(path: Path, rows: int, history: bool = True) -> float:

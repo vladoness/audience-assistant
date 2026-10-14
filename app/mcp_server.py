@@ -25,7 +25,9 @@ from mcp.types import ToolAnnotations
 
 from app.interpret import RefineRejected
 from app.llm import ProviderUnavailable
-from app.main import Services, build_services, catalog_view
+from fastapi import HTTPException
+
+from app.main import Services, build_services, catalog_view, run_advice
 from app.models import AudienceDefinition, InterpretResult
 from app.observability import configure_logging, request_id_var
 from app.settings import Settings
@@ -149,6 +151,22 @@ def build_server(s: Services) -> MCPServer:
             out |= {"question": term.question, "options": [o.label for o in term.options],
                     "decided_by": term.owner_pending}
         return out
+
+    @server.tool(annotations=_READS)
+    def advise_audience(request_id: str, goal: str = "", campaign_type: str = "") -> dict[str, Any]:
+        """The campaign advisor for a drafted audience: up to three proposals (narrow or exclude a segment,
+        change channel or campaign type, or a point to consider), each checked against facts the system
+        computed and sized. Proposals the facts don't support are returned as withheld, with the reason.
+        Show them to the marketer; applying one is their decision, at review_url."""
+        row = s.store.get_interpretation(request_id)
+        if row is None:
+            return {"error": f"Unknown request_id {request_id!r}."}
+        try:
+            out = run_advice(s, AudienceDefinition(**json.loads(row["definition_json"])), goal, campaign_type or None)
+        except HTTPException as exc:
+            return {"error": exc.detail}
+        return {k: out[k] for k in ("summary", "proposals", "rejected", "synthetic_history")} | {
+            "review_url": f"{s.settings.public_url}/?review={request_id}"}
 
     @server.resource("audience://catalog", mime_type="application/json")
     def catalog() -> str:

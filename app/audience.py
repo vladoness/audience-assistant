@@ -94,6 +94,20 @@ class AudienceEngine:
             query_ms=round(query_ms, 2),
         )
 
+    def mix(self, definition: AudienceDefinition, attributes: list[str]) -> dict[str, dict[str, int]]:
+        """Reachable lines of the audience by value of each attribute (for the advisor's facts)."""
+        where, params = self.compile(definition)
+        consent = f'"{self._catalog.channels[definition.channel]}"'
+        out = {}
+        for attr in attributes:
+            if attr not in self._catalog.attributes:
+                continue
+            rows = self._con.cursor().execute(
+                f'SELECT "{attr}", count(*) FROM profiles WHERE {where} AND {consent} GROUP BY 1 ORDER BY 2 DESC',
+                params).fetchall()
+            out[attr] = {str(v): n for v, n in rows if v is not None}
+        return out
+
     def compare(self, definitions: list[AudienceDefinition]) -> list[tuple[int, int]]:
         """For alternative definitions on the same channel: reachable lines of each, and how many of those
         no other alternative reaches. One scan, so a choice can show its consequence before it is made."""

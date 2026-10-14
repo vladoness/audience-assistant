@@ -157,6 +157,12 @@ class RefineRequest(BaseModel):
     definition: AudienceDefinition  # what is on screen now, including the marketer's edits
 
 
+class AdviseRequest(BaseModel):
+    definition: AudienceDefinition
+    goal: str = Field("", max_length=200)
+    campaign_type: str | None = None
+
+
 class OutcomeRequest(BaseModel):
     """What the campaign tool reports after the send: which lines responded within the window."""
 

@@ -73,6 +73,27 @@ async function init() {
   $("refresh-insights").onclick = loadInsights;
   loadAudit();
   loadInsights();
+  const review = new URLSearchParams(location.search).get("review");
+  if (review) loadForReview(review);
+}
+
+async function loadForReview(requestId) {
+  try {
+    const r = await api(`/api/interpretations/${encodeURIComponent(requestId)}`);
+    state.requestId = r.request_id;
+    state.unmapped = r.unmapped_phrases;
+    state.acknowledged = false;
+    $("request").value = r.request_text || "";
+    applyResult(r);
+    renderChanges(null);
+    renderTelemetry(r.telemetry, r.request_id);
+    const who = r.telemetry.origin === "mcp" ? "drafted by an AI agent (MCP)" : "recorded earlier";
+    $("review-note").textContent = `Reviewing request ${r.request_id}, ${who}. Check it against today's rules, answer any question, then size and approve.`;
+    $("review-note").hidden = false;
+  } catch (e) {
+    $("interpret-error").textContent = `Couldn't load request ${requestId} for review: ${e.data?.detail || e.message}`;
+    $("interpret-error").hidden = false;
+  }
 }
 
 async function interpret() {
@@ -82,6 +103,7 @@ async function interpret() {
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Interpreting…';
   $("interpret-error").hidden = true;
   $("refine-error").hidden = true;
+  $("review-note").hidden = true;
   try {
     const r = await api("/api/interpret", { request: text });
     state.requestId = r.request_id;
@@ -348,7 +370,8 @@ function renderAssumptions(list) {
 }
 
 function renderTelemetry(t, requestId) {
-  const parts = [`request ${requestId}`, `model ${t.model || "n/a"}`, `${(t.total_ms / 1000).toFixed(2)} s`];
+  const parts = [`request ${requestId}`, ...(t.origin === "mcp" ? ["via MCP"] : []), `model ${t.model || "n/a"}`,
+    `${(t.total_ms / 1000).toFixed(2)} s`];
   if (t.llm_calls) parts.push(`${t.llm_calls} AI call${t.llm_calls > 1 ? "s" : ""}`, `${fmt(t.input_tokens + t.cache_read_tokens + t.cache_write_tokens)} in / ${fmt(t.output_tokens)} out tokens`, `$${t.cost_usd.toFixed(4)}`);
   if (t.cache_hit) parts.push("cached answer");
   if (t.repaired) parts.push("self-corrected once");

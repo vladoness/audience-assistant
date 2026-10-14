@@ -31,8 +31,9 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 89 tests, no network or API key needed
+make test         # 94 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
+make mcp          # the same assistant as an MCP server for AI agents (see "Use it from an AI agent")
 ```
 
 **With a model:** `cp .env.example .env`, add `ANTHROPIC_API_KEY`, then `make run`.
@@ -82,6 +83,42 @@ at 200k / 1M / 5M lines.
    - counts at approval, and the approver.
 
    Each interpretation can be approved once.
+
+---
+
+## Use it from an AI agent (MCP)
+
+The same governed logic is available as an [MCP](https://modelcontextprotocol.io) server
+(`app/mcp_server.py`, stdio), so an agent such as Claude, Cursor, or an orchestrator like AEP's
+Agent Orchestrator can draft audiences inside a wider task ("plan the roaming campaign").
+
+| Tool | What it does |
+|---|---|
+| `interpret_audience` | Request → validated definition, summary, questions, parts with no data, policy issues, review link |
+| `refine_audience` | A plain-language change to a draft; returns what changed and a new review link |
+| `size_audience` (read-only) | Matched, excluded for consent, reachable, breakdowns. Refused while questions or policy issues are open |
+| `explain_term` (read-only) | A governed term's rule, decision and owner, or its competing definitions and who decides |
+| resource `audience://catalog` | Fields, governed terms, policies, channels |
+
+**What an agent can't do: approve, or answer the business questions.** There is no approve tool.
+Every result carries a `review_url`, where a person opens the draft in the web app (marked
+"drafted by an AI agent"), answers the open questions, reads the summary and approves, behind the
+same server-side checks. Agent drafts go into the same audit trail with `origin: "mcp"`. The
+model, validation, policies, consent, budget and circuit breaker are the web app's own; the
+server only adapts them.
+
+```json
+{"mcpServers": {"audience-assistant": {
+  "command": "uv",
+  "args": ["run", "--directory", "/path/to/audience-assistant", "python", "-m", "app.mcp_server"],
+  "env": {"SYNTHETIC_DATA": "1", "PUBLIC_URL": "http://127.0.0.1:8000"}
+}}}
+```
+
+Run `make run` alongside it so the review links open. Without a key it replays the recorded
+example requests, like the web app.
+
+<img src="docs/screenshots/6-mcp-review.png" alt="Reviewing an agent-drafted audience" width="640">
 
 ---
 
@@ -230,6 +267,7 @@ variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 | Model drops or rewrites part of the audience during a change | Can't: it returns only a delta, so untouched conditions keep their values and sources; What changed lists every addition and removal |
 | A change tries to edit part of a governed definition | Governed conditions move only with their term; overlapping numbers get a warning |
 | Model unavailable during a change | 503 "your audience is unchanged"; nothing recorded; the previous interpretation is still the one approval uses |
+| An AI agent (over MCP) tries to approve, or to settle an open term for the marketer | No tool for either: the agent gets a review link, and a person answers and approves in the UI; drafts are audited as `origin: "mcp"` |
 | Personal data pasted into the request | Masked before the model and the logs; count recorded; length capped before masking |
 | Duplicated rows in the profile feed | Engine refuses to start: every count would be inflated |
 | Tampered approval (forged "governed" label, unanswered term, re-used request id) | Labels re-derived on the server; 422 for unanswered terms; 409 for a second approval |
@@ -247,6 +285,7 @@ static/              index.html + app.js: no build step
 app/main.py          FastAPI routes, request-id middleware + error handler, app factory (tests inject a fake model)
 app/interpret.py     pipeline: mask → cache → model → glossary expansion → validate → repair once → status → explain
 app/refine.py        plain-language changes: the model's delta applied to the audience on screen; what changed
+app/mcp_server.py    MCP tools for AI agents (draft, change, size, explain); no approve tool, review links instead
 app/llm.py           the only model call: structured output (strict JSON schema), effort, record/replay, pricing
 app/validate.py      catalog rules: fields, operators, types, ranges, data-usage policy per channel, scope, contradictions
 app/explain.py       plain-English rendering of a definition (templates, no model)
@@ -265,6 +304,8 @@ evals/               dev set, held-out set, runner, recorded fixtures, results
 Endpoints:
 - `POST /api/interpret` and `POST /api/refine`: the only two that call the model.
 - `POST /api/check`, `POST /api/size`, `POST /api/approve`.
+- `GET /api/interpretations/{id}`: a recorded interpretation, re-checked against today's rules,
+  for review (the target of the MCP review links, `/?review=<id>`).
 - `GET /api/audiences`, `GET /api/insights`, `GET /api/catalog`, `GET /api/metrics`.
 - `GET /healthz` (liveness) and `GET /readyz` (readiness).
 
@@ -292,7 +333,7 @@ OpenAPI docs are at `/docs`.
 
 ## Testing and reliability
 
-- **`make test`: 89 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 94 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;
@@ -304,7 +345,10 @@ OpenAPI docs are at `/docs`.
   - refinements (`tests/test_refine.py`): untouched conditions keep their sources, governed
     conditions move only with their term, open questions and unmapped parts carry forward and
     are counted once, an outage changes nothing, and an edit made before a change still counts
-    as an edit at approval.
+    as an edit at approval;
+  - the MCP server (`tests/test_mcp.py`): no approve tool, drafts audited as `origin: "mcp"`,
+    sizing refused while questions are open, and a draft reviewed and approved through the web
+    app. A stdio round trip with the SDK's own client was checked by hand.
 
   SQL counts are checked against independent queries, and values are checked to be bound
   parameters. `tests/test_review_fixes.py` holds one regression test per finding from the
@@ -327,7 +371,7 @@ OpenAPI docs are at `/docs`.
 - **Logs.** One JSON object per line, all carrying the same `request_id` that is returned in the
   `x-request-id` header, shown in the UI, and used as the key of the audit record. Key events:
   - `interpretation`: status, issue codes, cache hit, repaired, model calls, ms, cost, PII count,
-    and `parent_request_id` when it is a refinement.
+    `origin` (`ui` or `mcp`), and `parent_request_id` when it is a refinement.
   - `llm_call`: OpenTelemetry GenAI names (`gen_ai.request.model`, `gen_ai.usage.input_tokens`,
     …), latency and cost.
   - `unhandled_error`, with the stack trace.
@@ -406,7 +450,7 @@ How each piece would be delivered on the platform rather than rebuilt:
 | Size before approval | Audience size estimate |
 | Approve | Create the audience (AEP keeps its own audit log; this one adds the business provenance) |
 | Catalog and policies read from YAML | Read from AEP: schemas and governance policies via the platform APIs, or the read-only tools in the [CX Coworker Gateway](https://experienceleague.adobe.com/en/docs/experience-cloud-ai/experience-cloud-ai/mcp/overview) MCP endpoint (beta) |
-| Clarification and policy step | A customer-built agent or tool alongside Audience Agent; Agent Orchestrator is documented as extensible to customer and partner agents |
+| Clarification and policy step | A customer-built agent or tool alongside Audience Agent; Agent Orchestrator is documented as extensible to customer and partner agents. The MCP server here is that shape: drafting tools for agents, approval kept with a person |
 
 Not modelled here: identity. One row per line means no identity graph, no merge policies, and no
 person-level consent across a household's lines. Real-time (streaming or edge) qualification is
@@ -439,6 +483,9 @@ conventions. The mapping, and which parts are tested, is in
   false warning. Each term's aliases are part of its governed definition.
 - **Governance changes have no UI.** Settling an open term or publishing a parameter version is
   a YAML edit; the open terms are listed with their pending owner.
+- **The MCP server is local.** It runs over stdio for one user, so there is no authentication or
+  per-client rate limit on it (the daily budget and circuit breaker still apply). A shared
+  deployment would use the streamable HTTP transport behind the customer's SSO.
 - **Refinement limits.** Changes aren't cached, and a change can't remove a part of the original
   request that has no data: it carries forward until the marketer accepts building without it.
   Offline, only the suggested changes on the example requests are recorded.

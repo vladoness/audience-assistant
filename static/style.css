@@ -71,6 +71,7 @@ button.remove { border: none; color: var(--muted); padding: 4px 8px; }
 .changes-box .removed { color: var(--err); }
 .refine-row { margin: 0 0 6px; }
 .refine-chips { margin: 0 0 14px; }
+.review-note { background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: 10px 0 0; }
 .spinner.dark { border-color: rgba(15, 110, 110, .25); border-top-color: var(--accent); }
 .summary-label { font-size: 12px; color: var(--muted); }
 #summary { font-size: 16px; line-height: 1.5; margin: 4px 0 0; }

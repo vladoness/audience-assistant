@@ -1,4 +1,4 @@
-.PHONY: setup data run test lint eval eval-heldout eval-refine eval-replay record bench
+.PHONY: setup data run mcp test lint eval eval-heldout eval-refine eval-replay record bench
 
 setup:          ## install dependencies into .venv
 	uv sync
@@ -8,6 +8,9 @@ data:           ## (re)generate the 200k-line synthetic profile store
 
 run:            ## start the app on http://127.0.0.1:8000 (generates the synthetic store on first run)
 	SYNTHETIC_DATA=1 uv run python -m app.main
+
+mcp:            ## MCP server over stdio for AI agents (same governance; drafts only, a person approves in the UI)
+	SYNTHETIC_DATA=1 uv run python -m app.mcp_server
 
 test:           ## run the test suite (no network, no API key needed)
 	uv run pytest

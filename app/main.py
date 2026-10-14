@@ -5,6 +5,7 @@
     POST /api/check       re-validate after edits or clarification answers (deterministic)
     POST /api/size        audience size, consent exclusions, breakdowns, guardrail warnings
     POST /api/approve     server-side re-check + re-size, then an audit record with provenance
+    GET  /api/interpretations/{id}  a recorded interpretation, re-checked, for review (e.g. drafted over MCP)
     GET  /api/audiences   approved audiences + whether a governance change affects them (blast radius)
     GET  /api/insights    unmapped-request demand, open-term choices, edit rates (field-to-product signals)
     GET  /api/catalog     attributes, terms and policies for the editor
@@ -276,28 +277,18 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         s = svc(request)
         return build_insights(s.store, s.catalog)
 
+    @app.get("/api/interpretations/{request_id}", response_model=InterpretResult)
+    def interpretation(request_id: str, request: Request) -> InterpretResult:
+        """A recorded interpretation, re-checked, for review and approval (e.g. drafted by an agent over MCP)."""
+        s = svc(request)
+        row = s.store.get_interpretation(request_id)
+        if row is None:
+            raise HTTPException(404, detail="Unknown request_id.")
+        return s.interpreter.review(row)
+
     @app.get("/api/catalog")
     def catalog(request: Request) -> dict:
-        c = svc(request).catalog
-        return {
-            "version": c.version,
-            "attributes": [
-                {"name": a.name, "label": a.label, "type": a.type, "values": list(a.values), "min": a.min,
-                 "max": a.max, "unit": a.unit, "description": a.description}
-                for a in c.attributes.values() if c.targetable_somewhere(a.name)
-            ],
-            "terms": {
-                t.name: {"status": t.status, "rule": t.rule, "decision_id": t.decision.get("id"),
-                         "owner": t.decision.get("owner"),
-                         "parameters": {n: c.parameter_sets[n].version for n in t.parameter_sets}}
-                for t in c.terms.values()
-            },
-            "policies": [{"id": p.id, "name": p.name, "deny_labels": list(p.deny_labels),
-                          "marketing_actions": list(p.marketing_actions)} for p in c.policies],
-            "channels": list(c.channels),
-            "examples": EXAMPLES,
-            "refine_examples": REFINE_EXAMPLES,
-        }
+        return catalog_view(svc(request).catalog) | {"examples": EXAMPLES, "refine_examples": REFINE_EXAMPLES}
 
     @app.get("/api/metrics")
     def metrics(request: Request) -> dict:
@@ -341,6 +332,27 @@ EXAMPLES = [
     "Postpaid customers with a high credit risk band",
 ]
 REFINE_EXAMPLES = ["also include the Highlands", "only postpaid", "make it SMS instead"]
+
+
+def catalog_view(c: Catalog) -> dict:
+    """Fields, governed terms, policies and channels: what the editor and an MCP client need to know."""
+    return {
+        "version": c.version,
+        "attributes": [
+            {"name": a.name, "label": a.label, "type": a.type, "values": list(a.values), "min": a.min,
+             "max": a.max, "unit": a.unit, "description": a.description}
+            for a in c.attributes.values() if c.targetable_somewhere(a.name)
+        ],
+        "terms": {
+            t.name: {"status": t.status, "rule": t.rule, "decision_id": t.decision.get("id"),
+                     "owner": t.decision.get("owner"),
+                     "parameters": {n: c.parameter_sets[n].version for n in t.parameter_sets}}
+            for t in c.terms.values()
+        },
+        "policies": [{"id": p.id, "name": p.name, "deny_labels": list(p.deny_labels),
+                      "marketing_actions": list(p.marketing_actions)} for p in c.policies],
+        "channels": list(c.channels),
+    }
 
 
 def run() -> None:

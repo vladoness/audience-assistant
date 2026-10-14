@@ -56,6 +56,7 @@ class Explanation(BaseModel):
 
 class Telemetry(BaseModel):
     provider: str
+    origin: str = "ui"  # ui | mcp: who asked (the web UI, or an AI agent through the MCP server)
     model: str | None = None
     prompt_version: str | None = None
     llm_calls: int = 0
@@ -91,6 +92,7 @@ class InterpretResult(BaseModel):
     telemetry: Telemetry
     parent_request_id: str | None = None  # set when this result refines an earlier interpretation
     changes: Changes | None = None
+    request_text: str | None = None  # the masked request; set only when an interpretation is loaded for review
 
 
 class SizeResult(BaseModel):

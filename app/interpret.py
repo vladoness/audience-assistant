@@ -68,11 +68,12 @@ class Interpreter:
     def circuit_open(self) -> bool:
         return time.monotonic() < self._open_until
 
-    def interpret(self, request_text: str, request_id: str | None = None) -> InterpretResult:
+    def interpret(self, request_text: str, request_id: str | None = None, origin: str = "ui") -> InterpretResult:
         started = time.perf_counter()
         request_id = request_id if request_id and request_id != "-" else uuid.uuid4().hex[:12]
         text = request_text.strip()
-        tel = Telemetry(provider=self.provider.name, model=self.provider.model, prompt_version=PROMPT_VERSION)
+        tel = Telemetry(provider=self.provider.name, origin=origin, model=self.provider.model,
+                        prompt_version=PROMPT_VERSION)
 
         if len(text) > self.max_request_chars:
             return self._finish(request_id, "[request too long, not stored]", None, self._empty("invalid", request_id, tel, Issue(
@@ -119,7 +120,7 @@ class Interpreter:
         return self._finish(request_id, masked, proposal, result, started)
 
     def refine(self, parent: dict[str, Any], current: AudienceDefinition, change_text: str,
-               request_id: str | None = None) -> InterpretResult:
+               request_id: str | None = None, origin: str = "ui") -> InterpretResult:
         """Apply a plain-language change to the audience on screen.
 
         `parent` is the audit row of the interpretation being refined. The definition on screen is
@@ -135,8 +136,8 @@ class Interpreter:
         masked, pii_count = mask_pii(text)
         if not masked:
             raise RefineRejected("Describe the change you want.")
-        tel = Telemetry(provider=self.provider.name, model=self.provider.model, prompt_version=_REFINE_PROMPT_VERSION,
-                        pii_masked=pii_count)
+        tel = Telemetry(provider=self.provider.name, origin=origin, model=self.provider.model,
+                        prompt_version=_REFINE_PROMPT_VERSION, pii_masked=pii_count)
 
         parent_proposed = AudienceDefinition(**json.loads(parent["definition_json"]))
         current, _ = validate_definition(current, self.catalog)
@@ -174,6 +175,20 @@ class Interpreter:
         self.metrics.incr("refinements")
         return self._finish(request_id, masked, delta, result, started, parent_request_id=parent["request_id"],
                             prompt_version=_REFINE_PROMPT_VERSION)
+
+    def review(self, row: dict[str, Any]) -> InterpretResult:
+        """A recorded interpretation, re-checked against today's governance, for a person to review and
+        approve (for example one an agent drafted through the MCP server). No model call."""
+        definition = AudienceDefinition(**json.loads(row["definition_json"]))
+        unmapped = json.loads(row["unmapped_json"])
+        checked = self.check(definition, json.loads(row["clarifications_json"]), {})
+        status = "needs_confirmation" if checked.status == "ready" and unmapped else checked.status
+        return InterpretResult(
+            request_id=row["request_id"], status=status, definition=checked.definition,
+            clarifications=checked.clarifications, unmapped_phrases=unmapped, issues=checked.issues,
+            explanation=checked.explanation, telemetry=Telemetry(**json.loads(row["telemetry_json"])),
+            parent_request_id=row["parent_request_id"], request_text=row["request_text"],
+        )
 
     def _evaluate_refinement(self, request_id: str, current: AudienceDefinition, delta: dict[str, Any],
                              pending: list[str], carried_unmapped: list[str], tel: Telemetry,
@@ -362,7 +377,7 @@ class Interpreter:
             "parent_request_id": parent_request_id,
         })
         log.info("interpretation", extra={
-            "parent_request_id": parent_request_id,
+            "origin": result.telemetry.origin, "parent_request_id": parent_request_id,
             "status": result.status, "conditions": len(result.definition.conditions),
             "clarifications": [c.term for c in result.clarifications], "unmapped": len(result.unmapped_phrases),
             "issue_codes": [i.code for i in result.issues], "cache_hit": result.telemetry.cache_hit,

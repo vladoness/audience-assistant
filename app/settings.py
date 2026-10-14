@@ -34,6 +34,7 @@ class Settings:
     min_audience: int = 100
     broad_share: float = 0.5
     rate_limit_per_min: int = 20
+    public_url: str = "http://127.0.0.1:8000"  # where people open review links for agent-drafted audiences
     daily_budget_usd: float = 5.0
 
     @classmethod
@@ -56,5 +57,6 @@ class Settings:
             cache_ttl_s=int(os.getenv("CACHE_TTL_S", cls.cache_ttl_s)),
             min_audience=int(os.getenv("MIN_AUDIENCE", cls.min_audience)),
             rate_limit_per_min=int(os.getenv("RATE_LIMIT_PER_MIN", cls.rate_limit_per_min)),
+            public_url=os.getenv("PUBLIC_URL", cls.public_url).rstrip("/"),
             daily_budget_usd=float(os.getenv("DAILY_BUDGET_USD", cls.daily_budget_usd)),
         )

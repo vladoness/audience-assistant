@@ -178,6 +178,13 @@ thousands of fields that needs retrieval, or work that spans tools (create, acti
 journey). In AEP that orchestration already exists, and this logic would be one tool or skill
 inside it.
 
+`app/mcp_server.py` is that shape. It exposes the same pipeline as MCP tools: draft, change,
+size and explain a governed term. It deliberately has no tool to approve and none to answer an
+open business question. An agent can do the drafting inside a larger task; the decisions that
+carry accountability (which "active", whether this audience goes out) come back to a person
+through a review link, and agent drafts are audited as `origin: "mcp"`. That is the
+excessive-agency line drawn in the tool surface, not in a prompt.
+
 ## Where the time goes (and why that shapes the design)
 
 | Stage | Typical | Notes |
@@ -218,7 +225,8 @@ passes the eval bar, and the repair cap.
     policies and consent are enforced in code.
   - **LLM02, sensitive information disclosure:** PII is masked before the model and the logs.
   - **LLM05, improper output handling:** model output never reaches SQL as text.
-  - **LLM06, excessive agency:** the model can only return a proposal.
+  - **LLM06, excessive agency:** the model can only return a proposal, and agents calling the MCP
+    server get no approve tool.
   - **LLM10, unbounded consumption:** length caps, `max_tokens`, timeouts, one repair, rate limit,
     budget, circuit breaker.
 - **Microsoft HAX guidelines:**

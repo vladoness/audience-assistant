@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 Op = Literal["eq", "neq", "in", "not_in", "gt", "gte", "lt", "lte", "between"]
 
@@ -18,11 +18,30 @@ Status = Literal[
 ]
 
 
+MAX_VALUE_CHARS = 200
+MAX_VALUES = 100
+
+
 class Condition(BaseModel):
-    attribute: str
+    attribute: str = Field(max_length=64)
     op: Op
     value: Any
     source: str = Field("model", max_length=80)  # model | user | glossary:<term> | glossary:<term>=<option>
+
+    @field_validator("value")
+    @classmethod
+    def _bounded(cls, value: Any) -> Any:
+        """Client- and model-supplied values are scalars or flat lists of bounded size: nothing else can
+        reach a query, a log line or a prompt."""
+        items = value if isinstance(value, list) else [value]
+        if len(items) > MAX_VALUES:
+            raise ValueError(f"at most {MAX_VALUES} values")
+        for item in items:
+            if isinstance(item, (list, dict)):
+                raise ValueError("nested values are not allowed")
+            if isinstance(item, str) and len(item) > MAX_VALUE_CHARS:
+                raise ValueError(f"values are limited to {MAX_VALUE_CHARS} characters")
+        return value
 
 
 class AudienceDefinition(BaseModel):
@@ -154,9 +173,10 @@ class CheckResult(BaseModel):
 
 class ApproveRequest(BaseModel):
     request_id: str
-    name: str = Field(min_length=3, max_length=80)
-    approver: str = Field(min_length=2, max_length=60)
-    goal: str = Field(min_length=3, max_length=200)  # what the campaign is for: the decision this audience serves
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=80)]
+    approver: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=60)]
+    # What the campaign is for: the decision this audience serves.
+    goal: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=200)]
     campaign_type: str | None = None  # links the decision to past campaigns of the same type (evidence)
     definition: AudienceDefinition
     acknowledged_unmapped: bool = False

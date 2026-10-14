@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from typing import Any
@@ -23,7 +24,7 @@ from app.audience import AudienceEngine
 from app.catalog import Catalog
 from app.explain import explain
 from app.limits import DailyBudget
-from app.governance import reconcile_with_proposal, verify_provenance
+from app.governance import canonical, reconcile_with_proposal, verify_provenance
 from app.llm import (
     MAX_OUTPUT_TOKENS, PROMPT_VERSION, REFINE_SCHEMA, REFINE_VERSION, BudgetExhausted, CircuitOpen, NotRecorded, LLMResult,
     Pricing, Provider, ProviderUnavailable, build_messages, build_refine_messages, build_system_prompt,
@@ -35,7 +36,7 @@ from app.observability import Metrics
 from app.pii import mask_pii
 from app.refine import answered_terms, describe_changes, model_state, plan_refinement
 from app.store import AuditStore, TTLCache
-from app.validate import parse_condition, validate_definition
+from app.validate import normalize, parse_condition, validate_definition
 
 log = logging.getLogger(__name__)
 
@@ -147,7 +148,10 @@ class Interpreter:
         answered = answered_terms(current)
         pending = [t for t in json.loads(parent["clarifications_json"]) if t not in answered]
         carried_unmapped = json.loads(parent["unmapped_json"])
-        state = model_state(current, pending)
+        # The model sees only conditions that validate: typed catalog values, so client text that failed
+        # validation (or was never masked) can't reach the prompt. Invalid ones stay on screen, flagged.
+        valid = [c for c in current.conditions if normalize(c, self.catalog, current.channel)[0] is not None]
+        state = model_state(current.model_copy(update={"conditions": valid}), pending)
 
         try:
             delta = self._call_model(build_refine_messages(state, masked), tel, schema=REFINE_SCHEMA)
@@ -315,6 +319,8 @@ class Interpreter:
             else:
                 clarifications.append(self._clarification(term))
 
+        self._check_unnamed_terms(request_text, proposal, conditions, clarifications, issues)
+
         channel = proposal.get("channel")
         if channel in (None, "", "unspecified"):
             channel = self.catalog.default_channel
@@ -348,6 +354,38 @@ class Interpreter:
             unmapped_phrases=unmapped, assumptions=[str(a) for a in proposal.get("assumptions") or []][:3],
             issues=issues, explanation=explain(definition, self.catalog), telemetry=tel,
         )
+
+    def _check_unnamed_terms(self, request_text: str, proposal: dict[str, Any], conditions: list[Condition],
+                             clarifications: list[Clarification], issues: list[Issue]) -> None:
+        """The reverse of the grounding check: the request uses a governed phrase, but the model didn't
+        name the term. An open term is asked about anyway, so it can't be guessed. A decided term gets a
+        warning saying whether the model wrote its own condition instead, or left it out."""
+        named = {str(t) for t in proposal.get("glossary_terms") or []}
+        in_use = {c.source.removeprefix("glossary:").partition("=")[0] for c in conditions if c.source.startswith("glossary:")}
+        asked = {c.term for c in clarifications}
+        model_attributes = {c.attribute for c in conditions if c.source == "model"}
+        model_keys = {_condition_key(c.model_dump()) for c in conditions if c.source == "model"}
+        for term in self.catalog.terms.values():
+            if term.name in named | in_use | asked:
+                continue
+            phrase = _phrase_in(request_text, term)
+            if phrase is None:
+                continue
+            if term.status == "decided" and {_condition_key(c) for c in term.conditions} <= model_keys:
+                continue  # the model wrote exactly the governed definition: same audience, nothing to flag
+            if term.status != "decided":
+                clarifications.append(self._clarification(term))
+                issues.append(Issue(level="warning", code="unflagged_open_term", message=(
+                    f'Your request uses "{phrase}", which has competing definitions, so it is asked about below '
+                    "even though the assistant didn't flag it.")))
+            elif {c["attribute"] for c in term.conditions} & model_attributes:
+                issues.append(Issue(level="warning", code="governed_term_overridden", message=(
+                    f'"{phrase}" has a governed definition ({term.rule.rstrip(".")}), but this audience uses its own condition '
+                    "instead. Keep it only if that is what you meant.")))
+            else:
+                issues.append(Issue(level="warning", code="governed_term_missed", message=(
+                    f'Your request mentions "{phrase}", but its governed definition ({term.rule.rstrip(".")}) is not applied. '
+                    "Add it if you meant it.")))
 
     def _clarification(self, term) -> Clarification:
         default = term.working_default.get("option")
@@ -417,3 +455,15 @@ def _mentions(request_text: str, term) -> bool:
     """Deterministic grounding check: does the request contain one of the term's phrases?"""
     text = request_text.lower()
     return any(alias.lower() in text for alias in term.aliases) or term.name.replace("_", " ") in text
+
+
+def _condition_key(c: dict[str, Any]) -> str:
+    return json.dumps(canonical(c), sort_keys=True)
+
+
+def _phrase_in(request_text: str, term) -> str | None:
+    """The first of the term's phrases used in the request as whole words ("active", not "inactive")."""
+    for phrase in (*term.aliases, term.name.replace("_", " ")):
+        if re.search(rf"(?<!\w){re.escape(phrase.lower())}(?!\w)", request_text.lower()):
+            return phrase
+    return None

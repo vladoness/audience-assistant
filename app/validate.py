@@ -11,6 +11,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.catalog import Attribute, Catalog
 from app.models import AudienceDefinition, Condition, Issue
 
@@ -30,10 +32,14 @@ def parse_condition(raw: Any, source: str = "model") -> tuple[Condition | None, 
         return None, Issue(level="error", code="malformed_condition", message=f"Malformed condition: {raw!r}")
     if raw["op"] not in {op for ops in OPS_BY_TYPE.values() for op in ops}:
         return None, Issue(
-            level="error", code="unknown_operator", attribute=str(raw["attribute"]),
-            message=f"Unknown operator '{raw['op']}'.",
+            level="error", code="unknown_operator", attribute=str(raw["attribute"])[:64],
+            message=f"Unknown operator '{str(raw['op'])[:20]}'.",
         )
-    return Condition(attribute=str(raw["attribute"]), op=raw["op"], value=raw["value"], source=source), None
+    try:
+        return Condition(attribute=str(raw["attribute"]), op=raw["op"], value=raw["value"], source=source), None
+    except ValidationError as exc:
+        return None, Issue(level="error", code="malformed_condition", attribute=str(raw["attribute"])[:64],
+                           message=f"Malformed condition: {exc.errors()[0]['msg']}")
 
 
 def normalize(cond: Condition, catalog: Catalog, channel: str) -> tuple[Condition | None, list[Issue]]:

@@ -152,10 +152,10 @@ def test_percentile_is_nearest_rank():
 
 # --- Second review round (regressions found by the re-review) ---------------------------------
 
-def test_offline_misses_do_not_trip_the_circuit_breaker(make_client, tmp_path):
-    from app.llm import RecordingProvider, build_messages, ReplayProvider
+def test_offline_misses_do_not_trip_the_circuit_breaker(make_client, tmp_path, catalog):
+    from app.llm import RecordingProvider, ReplayProvider, build_messages, build_system_prompt
     recorded = proposal(conditions=[{"attribute": "roaming_30d", "op": "eq", "value": True}])
-    RecordingProvider(ScriptedProvider(recorded), tmp_path).propose("system", build_messages("roamers"))
+    RecordingProvider(ScriptedProvider(recorded), tmp_path).propose(build_system_prompt(catalog), build_messages("roamers"))
     client = make_client(ReplayProvider(tmp_path, model="scripted-model", effort=None))
     for i in range(4):
         assert client.post("/api/interpret", json={"request": f"unrecorded {i}"}).json()["status"] == "ai_unavailable"

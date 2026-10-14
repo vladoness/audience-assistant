@@ -81,18 +81,21 @@ under revenue.
 
 | | Low | Base | High |
 |---|---|---|---|
-| Value of one campaign (extra margin) | $1k | $2k | $4k |
-| Revenue: time-sensitive campaigns on time | $7k | $60k | $269k |
+| Value of one campaign (extra margin) | $400 | $2k | $4k |
+| Revenue: time-sensitive campaigns on time | $3k | $60k | $269k |
 | Revenue: extra campaigns and tests | $0 | $96k | $384k |
 | Consent penalties avoided (expected) | $5k | $15k | $30k |
 | Analyst time redeployed | $6k | $14k | $26k |
-| **Benefit per year** | **$18k** | **$185k** | **$709k** |
-| Payback on delivery | ~3.5 years | ~3 months | under a month |
+| **Benefit per year** | **$14k** | **$185k** | **$709k** |
+| Payback on delivery | ~5.1 years | ~3 months | under a month |
 | Payback from analyst time alone | ~25.0 years | ~5.1 years | ~2.2 years |
-| Extra campaigns a month that alone cover year 1 | 4.5 | 2.2 | 1.1 |
+| Extra campaigns a month that alone cover year 1 | 11.2 | 2.2 | 1.1 |
 
-The low case is what happens if marketers don't change how much they run: it still pays back, but
-slowly, so the pilot has to test the behaviour change, not just the tool.
+The low case is what happens if marketers don't change how much they run and a responder is worth
+only $2: it takes about five years to pay back, so the pilot has to test the behaviour change and
+the margin, not just the tool. A middle reading a cautious buyer might pick, $1.50 a responder
+and one extra campaign a month (`make business-case ARGS="--set margin_per_response_usd=1.5
+--set extra_campaigns_per_month=1"`), gives about $54k a year and a payback of about a year.
 
 ## What moves the answer
 
@@ -100,8 +103,8 @@ Total benefit with one assumption at its low or high value and everything else a
 
 | Assumption | Low | High |
 |---|---|---|
+| Margin per responder | $91k | $341k |
 | Extra campaigns per month | $89k | $281k |
-| Margin per responder | $185k | $341k |
 | Extra response rate vs holdout | $107k | $185k |
 | Value a late campaign loses | $149k | $221k |
 | Share of campaigns that are time-sensitive | $161k | $209k |

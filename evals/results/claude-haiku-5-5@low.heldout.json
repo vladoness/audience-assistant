@@ -3,21 +3,21 @@
     "model": "claude-haiku-5-5",
     "cases": 18,
     "runs": 3,
-    "pass_rate": 0.852,
+    "pass_rate": 0.833,
     "pass_rate_per_run": [
-      0.889,
+      0.833,
       0.833,
       0.833
     ],
-    "status_accuracy": 0.907,
-    "audience_exact_match": 0.93,
+    "status_accuracy": 0.889,
+    "audience_exact_match": 0.933,
     "repair_rate": 0.0,
-    "latency_p50_ms": 1493.0,
-    "latency_p95_ms": 2456.0,
-    "latency_max_ms": 3071.0,
+    "latency_p50_ms": 1410.0,
+    "latency_p95_ms": 2432.0,
+    "latency_max_ms": 6917.0,
     "avg_tokens_in": 3073.0,
-    "avg_tokens_out": 154.0,
-    "cost_per_1k_requests_usd": 0.12,
+    "avg_tokens_out": 149.0,
+    "cost_per_1k_requests_usd": 0.11,
     "by_category": {
       "glossary_decided": "6/6",
       "glossary_open": "6/6",
@@ -25,17 +25,15 @@
       "out_of_scope": "3/3",
       "pii": "0/3",
       "policy": "6/6",
-      "simple": "4/9",
+      "simple": "3/9",
       "thresholds": "12/12",
       "unmapped": "6/6"
     },
-    "flaky_cases": [
-      "h-channel-01"
-    ],
+    "flaky_cases": [],
     "failures": [
       {
         "id": "h-channel-01",
-        "failed_runs": "2/3"
+        "failed_runs": "3/3"
       },
       {
         "id": "h-pii-01",
@@ -86,10 +84,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2115.1,
+      "llm_ms": 1287.0,
       "tokens_in": 3075,
-      "tokens_out": 161,
-      "cost_usd": 0.000464,
+      "tokens_out": 157,
+      "cost_usd": 0.000114,
       "run": 1
     },
     {
@@ -130,10 +128,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1164.7,
+      "llm_ms": 1900.0,
       "tokens_in": 3069,
-      "tokens_out": 111,
-      "cost_usd": 9e-05,
+      "tokens_out": 160,
+      "cost_usd": 0.000115,
       "run": 1
     },
     {
@@ -169,10 +167,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1902.7,
+      "llm_ms": 1976.5,
       "tokens_in": 3085,
-      "tokens_out": 144,
-      "cost_usd": 0.000108,
+      "tokens_out": 164,
+      "cost_usd": 0.000118,
       "run": 1
     },
     {
@@ -205,7 +203,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1310.9,
+      "llm_ms": 1374.2,
       "tokens_in": 3077,
       "tokens_out": 151,
       "cost_usd": 0.000111,
@@ -235,7 +233,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1348.1,
+      "llm_ms": 1005.7,
       "tokens_in": 3072,
       "tokens_out": 111,
       "cost_usd": 9e-05,
@@ -271,10 +269,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1413.2,
+      "llm_ms": 1916.1,
       "tokens_in": 3069,
-      "tokens_out": 169,
-      "cost_usd": 0.000119,
+      "tokens_out": 162,
+      "cost_usd": 0.000116,
       "run": 1
     },
     {
@@ -313,10 +311,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1451.0,
+      "llm_ms": 1507.2,
       "tokens_in": 3072,
-      "tokens_out": 149,
-      "cost_usd": 0.000109,
+      "tokens_out": 164,
+      "cost_usd": 0.000117,
       "run": 1
     },
     {
@@ -349,10 +347,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1304.6,
+      "llm_ms": 1925.5,
       "tokens_in": 3065,
-      "tokens_out": 91,
-      "cost_usd": 8e-05,
+      "tokens_out": 142,
+      "cost_usd": 0.000105,
       "run": 1
     },
     {
@@ -388,7 +386,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1395.6,
+      "llm_ms": 1477.8,
       "tokens_in": 3068,
       "tokens_out": 165,
       "cost_usd": 0.000117,
@@ -421,7 +419,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2028.5,
+      "llm_ms": 1594.2,
       "tokens_in": 3074,
       "tokens_out": 138,
       "cost_usd": 0.000104,
@@ -454,7 +452,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1288.6,
+      "llm_ms": 2018.5,
       "tokens_in": 3071,
       "tokens_out": 123,
       "cost_usd": 9.6e-05,
@@ -493,10 +491,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1369.5,
+      "llm_ms": 1365.3,
       "tokens_in": 3072,
-      "tokens_out": 138,
-      "cost_usd": 0.000104,
+      "tokens_out": 133,
+      "cost_usd": 0.000101,
       "run": 1
     },
     {
@@ -506,6 +504,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -532,10 +531,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1929.7,
+      "llm_ms": 1448.8,
       "tokens_in": 3073,
-      "tokens_out": 164,
-      "cost_usd": 0.000117,
+      "tokens_out": 186,
+      "cost_usd": 0.000128,
       "run": 1
     },
     {
@@ -545,6 +544,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -559,16 +559,18 @@
         }
       ],
       "clarifications": [],
-      "unmapped": [],
+      "unmapped": [
+        "new plans"
+      ],
       "issues": [
         "policy_violation"
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1663.9,
+      "llm_ms": 1986.9,
       "tokens_in": 3072,
-      "tokens_out": 141,
-      "cost_usd": 0.000105,
+      "tokens_out": 127,
+      "cost_usd": 9.8e-05,
       "run": 1
     },
     {
@@ -591,9 +593,9 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1346.5,
+      "llm_ms": 1200.6,
       "tokens_in": 3070,
-      "tokens_out": 102,
+      "tokens_out": 103,
       "cost_usd": 8.6e-05,
       "run": 1
     },
@@ -633,10 +635,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1584.3,
+      "llm_ms": 1897.8,
       "tokens_in": 3083,
-      "tokens_out": 194,
-      "cost_usd": 0.000133,
+      "tokens_out": 193,
+      "cost_usd": 0.000132,
       "run": 1
     },
     {
@@ -671,22 +673,23 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1394.9,
+      "llm_ms": 2033.7,
       "tokens_in": 3079,
-      "tokens_out": 161,
-      "cost_usd": 0.000116,
+      "tokens_out": 163,
+      "cost_usd": 0.000117,
       "run": 1
     },
     {
       "id": "h-channel-01",
       "category": "simple",
       "request": "iOS users on basic plans, email campaign",
-      "passed": true,
+      "passed": false,
       "checks": {
-        "status": true,
+        "status": false,
+        "only_request_conflicts": true,
         "audience": true
       },
-      "status": "ready",
+      "status": "invalid",
       "jaccard": 1.0,
       "conditions": [
         {
@@ -700,17 +703,26 @@
           "op": "eq",
           "value": "basic",
           "source": "model"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
         }
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [],
+      "issues": [
+        "ungrounded_term",
+        "policy_violation"
+      ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 3070.9,
+      "llm_ms": 1764.9,
       "tokens_in": 3071,
-      "tokens_out": 325,
-      "cost_usd": 0.000197,
+      "tokens_out": 210,
+      "cost_usd": 0.00014,
       "run": 1
     },
     {
@@ -749,10 +761,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1402.3,
+      "llm_ms": 1301.4,
       "tokens_in": 3075,
-      "tokens_out": 156,
-      "cost_usd": 0.000113,
+      "tokens_out": 169,
+      "cost_usd": 0.00012,
       "run": 2
     },
     {
@@ -793,10 +805,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2166.6,
+      "llm_ms": 1736.7,
       "tokens_in": 3069,
-      "tokens_out": 170,
-      "cost_usd": 0.00012,
+      "tokens_out": 111,
+      "cost_usd": 9e-05,
       "run": 2
     },
     {
@@ -832,10 +844,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1386.7,
+      "llm_ms": 1363.4,
       "tokens_in": 3085,
-      "tokens_out": 141,
-      "cost_usd": 0.000107,
+      "tokens_out": 162,
+      "cost_usd": 0.000117,
       "run": 2
     },
     {
@@ -868,7 +880,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1325.3,
+      "llm_ms": 1521.5,
       "tokens_in": 3077,
       "tokens_out": 151,
       "cost_usd": 0.000111,
@@ -898,10 +910,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1337.9,
+      "llm_ms": 1464.8,
       "tokens_in": 3072,
-      "tokens_out": 112,
-      "cost_usd": 9.1e-05,
+      "tokens_out": 111,
+      "cost_usd": 9e-05,
       "run": 2
     },
     {
@@ -934,10 +946,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1397.2,
+      "llm_ms": 1968.9,
       "tokens_in": 3069,
-      "tokens_out": 164,
-      "cost_usd": 0.000117,
+      "tokens_out": 163,
+      "cost_usd": 0.000116,
       "run": 2
     },
     {
@@ -976,10 +988,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1287.6,
+      "llm_ms": 1352.0,
       "tokens_in": 3072,
-      "tokens_out": 166,
-      "cost_usd": 0.000118,
+      "tokens_out": 136,
+      "cost_usd": 0.000103,
       "run": 2
     },
     {
@@ -1012,10 +1024,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1420.9,
+      "llm_ms": 1822.6,
       "tokens_in": 3065,
-      "tokens_out": 138,
-      "cost_usd": 0.000103,
+      "tokens_out": 161,
+      "cost_usd": 0.000115,
       "run": 2
     },
     {
@@ -1051,10 +1063,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1536.5,
+      "llm_ms": 1211.9,
       "tokens_in": 3068,
-      "tokens_out": 168,
-      "cost_usd": 0.000118,
+      "tokens_out": 144,
+      "cost_usd": 0.000106,
       "run": 2
     },
     {
@@ -1084,10 +1096,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2007.5,
+      "llm_ms": 1359.8,
       "tokens_in": 3074,
-      "tokens_out": 137,
-      "cost_usd": 0.000104,
+      "tokens_out": 150,
+      "cost_usd": 0.00011,
       "run": 2
     },
     {
@@ -1117,10 +1129,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1359.7,
+      "llm_ms": 1398.6,
       "tokens_in": 3071,
-      "tokens_out": 116,
-      "cost_usd": 9.3e-05,
+      "tokens_out": 128,
+      "cost_usd": 9.9e-05,
       "run": 2
     },
     {
@@ -1151,15 +1163,15 @@
       ],
       "clarifications": [],
       "unmapped": [
-        "complained on social media"
+        "who complained on social media"
       ],
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1450.9,
+      "llm_ms": 1299.3,
       "tokens_in": 3072,
-      "tokens_out": 155,
-      "cost_usd": 0.000112,
+      "tokens_out": 150,
+      "cost_usd": 0.00011,
       "run": 2
     },
     {
@@ -1169,6 +1181,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -1195,10 +1208,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1489.0,
+      "llm_ms": 1402.4,
       "tokens_in": 3073,
-      "tokens_out": 151,
-      "cost_usd": 0.00011,
+      "tokens_out": 192,
+      "cost_usd": 0.000131,
       "run": 2
     },
     {
@@ -1208,6 +1221,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -1228,10 +1242,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1691.3,
+      "llm_ms": 1661.7,
       "tokens_in": 3072,
-      "tokens_out": 165,
-      "cost_usd": 0.000117,
+      "tokens_out": 115,
+      "cost_usd": 9.2e-05,
       "run": 2
     },
     {
@@ -1254,10 +1268,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1305.9,
+      "llm_ms": 1203.0,
       "tokens_in": 3070,
-      "tokens_out": 101,
-      "cost_usd": 8.5e-05,
+      "tokens_out": 102,
+      "cost_usd": 8.6e-05,
       "run": 2
     },
     {
@@ -1296,10 +1310,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1635.4,
+      "llm_ms": 3773.9,
       "tokens_in": 3083,
-      "tokens_out": 180,
-      "cost_usd": 0.000126,
+      "tokens_out": 185,
+      "cost_usd": 0.000128,
       "run": 2
     },
     {
@@ -1334,10 +1348,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2042.9,
+      "llm_ms": 1271.2,
       "tokens_in": 3079,
-      "tokens_out": 163,
-      "cost_usd": 0.000117,
+      "tokens_out": 173,
+      "cost_usd": 0.000122,
       "run": 2
     },
     {
@@ -1346,10 +1360,11 @@
       "request": "iOS users on basic plans, email campaign",
       "passed": false,
       "checks": {
-        "status": false
+        "status": false,
+        "audience": true
       },
-      "status": "invalid",
-      "jaccard": null,
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
       "conditions": [
         {
           "attribute": "device_os",
@@ -1362,26 +1377,19 @@
           "op": "eq",
           "value": "basic",
           "source": "model"
-        },
-        {
-          "attribute": "app_active_30d",
-          "op": "eq",
-          "value": true,
-          "source": "glossary:app_user"
         }
       ],
       "clarifications": [],
-      "unmapped": [],
-      "issues": [
-        "ungrounded_term",
-        "policy_violation"
+      "unmapped": [
+        "users"
       ],
+      "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2788.8,
+      "llm_ms": 6917.2,
       "tokens_in": 3071,
-      "tokens_out": 173,
-      "cost_usd": 0.000121,
+      "tokens_out": 179,
+      "cost_usd": 0.000124,
       "run": 2
     },
     {
@@ -1420,10 +1428,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1613.5,
+      "llm_ms": 1228.5,
       "tokens_in": 3075,
-      "tokens_out": 169,
-      "cost_usd": 0.00012,
+      "tokens_out": 155,
+      "cost_usd": 0.000113,
       "run": 3
     },
     {
@@ -1464,118 +1472,118 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1555.4,
+      "llm_ms": 1809.6,
       "tokens_in": 3069,
-      "tokens_out": 214,
-      "cost_usd": 0.000142,
-      "run": 3
-    },
-    {
-      "id": "h-threshold-01",
-      "category": "thresholds",
-      "request": "Prepaid lines that used between 5 and 15 GB of data in the last 30 days",
-      "passed": true,
-      "checks": {
-        "status": true,
-        "audience": true
-      },
-      "status": "ready",
-      "jaccard": 1.0,
-      "conditions": [
-        {
-          "attribute": "line_type",
-          "op": "eq",
-          "value": "prepaid",
-          "source": "model"
-        },
-        {
-          "attribute": "data_gb_30d",
-          "op": "between",
-          "value": [
-            5.0,
-            15.0
-          ],
-          "source": "model"
-        }
-      ],
-      "clarifications": [],
-      "unmapped": [],
-      "issues": [],
-      "llm_calls": 1,
-      "repaired": false,
-      "llm_ms": 1737.4,
-      "tokens_in": 3085,
-      "tokens_out": 160,
-      "cost_usd": 0.000116,
-      "run": 3
-    },
-    {
-      "id": "h-threshold-02",
-      "category": "thresholds",
-      "request": "Customers with less than 6 months of tenure in the Coast region",
-      "passed": true,
-      "checks": {
-        "status": true,
-        "audience": true
-      },
-      "status": "ready",
-      "jaccard": 1.0,
-      "conditions": [
-        {
-          "attribute": "tenure_months",
-          "op": "lt",
-          "value": 6,
-          "source": "model"
-        },
-        {
-          "attribute": "region",
-          "op": "eq",
-          "value": "Coast",
-          "source": "model"
-        }
-      ],
-      "clarifications": [],
-      "unmapped": [],
-      "issues": [],
-      "llm_calls": 1,
-      "repaired": false,
-      "llm_ms": 2104.8,
-      "tokens_in": 3077,
-      "tokens_out": 151,
-      "cost_usd": 0.000111,
-      "run": 3
-    },
-    {
-      "id": "h-threshold-03",
-      "category": "thresholds",
-      "request": "Lines using more than 30 GB of data a month",
-      "passed": true,
-      "checks": {
-        "status": true,
-        "audience": true
-      },
-      "status": "ready",
-      "jaccard": 1.0,
-      "conditions": [
-        {
-          "attribute": "data_gb_30d",
-          "op": "gt",
-          "value": 30.0,
-          "source": "model"
-        }
-      ],
-      "clarifications": [],
-      "unmapped": [],
-      "issues": [],
-      "llm_calls": 1,
-      "repaired": false,
-      "llm_ms": 1876.3,
-      "tokens_in": 3072,
       "tokens_out": 111,
       "cost_usd": 9e-05,
       "run": 3
     },
     {
+      "id": "h-threshold-01",
+      "category": "thresholds",
+      "request": "Prepaid lines that used between 5 and 15 GB of data in the last 30 days",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "between",
+          "value": [
+            5.0,
+            15.0
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1249.8,
+      "tokens_in": 3085,
+      "tokens_out": 167,
+      "cost_usd": 0.00012,
+      "run": 3
+    },
+    {
+      "id": "h-threshold-02",
+      "category": "thresholds",
+      "request": "Customers with less than 6 months of tenure in the Coast region",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 6,
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1266.7,
+      "tokens_in": 3077,
+      "tokens_out": 152,
+      "cost_usd": 0.000111,
+      "run": 3
+    },
+    {
+      "id": "h-threshold-03",
+      "category": "thresholds",
+      "request": "Lines using more than 30 GB of data a month",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 30.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1144.6,
+      "tokens_in": 3072,
+      "tokens_out": 125,
+      "cost_usd": 9.7e-05,
+      "run": 3
+    },
+    {
       "id": "h-threshold-04",
       "category": "thresholds",
       "request": "Silent lines that are still billed as current",
@@ -1605,10 +1613,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1556.2,
+      "llm_ms": 1433.2,
       "tokens_in": 3069,
-      "tokens_out": 165,
-      "cost_usd": 0.000117,
+      "tokens_out": 163,
+      "cost_usd": 0.000116,
       "run": 3
     },
     {
@@ -1647,10 +1655,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1143.0,
+      "llm_ms": 1238.0,
       "tokens_in": 3072,
-      "tokens_out": 141,
-      "cost_usd": 0.000105,
+      "tokens_out": 164,
+      "cost_usd": 0.000117,
       "run": 3
     },
     {
@@ -1683,10 +1691,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1535.9,
+      "llm_ms": 1974.7,
       "tokens_in": 3065,
-      "tokens_out": 141,
-      "cost_usd": 0.000105,
+      "tokens_out": 144,
+      "cost_usd": 0.000106,
       "run": 3
     },
     {
@@ -1722,10 +1730,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1615.0,
+      "llm_ms": 1409.9,
       "tokens_in": 3068,
-      "tokens_out": 170,
-      "cost_usd": 0.000119,
+      "tokens_out": 161,
+      "cost_usd": 0.000115,
       "run": 3
     },
     {
@@ -1755,10 +1763,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1296.1,
+      "llm_ms": 1239.6,
       "tokens_in": 3074,
-      "tokens_out": 148,
-      "cost_usd": 0.000109,
+      "tokens_out": 134,
+      "cost_usd": 0.000102,
       "run": 3
     },
     {
@@ -1788,10 +1796,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1342.0,
+      "llm_ms": 1192.4,
       "tokens_in": 3071,
-      "tokens_out": 130,
-      "cost_usd": 0.0001,
+      "tokens_out": 121,
+      "cost_usd": 9.5e-05,
       "run": 3
     },
     {
@@ -1822,15 +1830,15 @@
       ],
       "clarifications": [],
       "unmapped": [
-        "complained on social media"
+        "who complained on social media"
       ],
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1516.5,
+      "llm_ms": 1128.9,
       "tokens_in": 3072,
-      "tokens_out": 160,
-      "cost_usd": 0.000115,
+      "tokens_out": 132,
+      "cost_usd": 0.000101,
       "run": 3
     },
     {
@@ -1840,6 +1848,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -1866,10 +1875,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1568.5,
+      "llm_ms": 1392.1,
       "tokens_in": 3073,
-      "tokens_out": 177,
-      "cost_usd": 0.000123,
+      "tokens_out": 167,
+      "cost_usd": 0.000118,
       "run": 3
     },
     {
@@ -1879,6 +1888,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -1899,10 +1909,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1493.4,
+      "llm_ms": 1679.4,
       "tokens_in": 3072,
-      "tokens_out": 152,
-      "cost_usd": 0.000111,
+      "tokens_out": 104,
+      "cost_usd": 8.7e-05,
       "run": 3
     },
     {
@@ -1925,10 +1935,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1367.6,
+      "llm_ms": 1721.5,
       "tokens_in": 3070,
-      "tokens_out": 102,
-      "cost_usd": 8.6e-05,
+      "tokens_out": 100,
+      "cost_usd": 8.5e-05,
       "run": 3
     },
     {
@@ -1967,10 +1977,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1820.9,
+      "llm_ms": 2431.8,
       "tokens_in": 3083,
-      "tokens_out": 189,
-      "cost_usd": 0.00013,
+      "tokens_out": 161,
+      "cost_usd": 0.000116,
       "run": 3
     },
     {
@@ -2005,10 +2015,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2096.3,
+      "llm_ms": 1107.1,
       "tokens_in": 3079,
-      "tokens_out": 187,
-      "cost_usd": 0.000129,
+      "tokens_out": 160,
+      "cost_usd": 0.000116,
       "run": 3
     },
     {
@@ -2017,10 +2027,11 @@
       "request": "iOS users on basic plans, email campaign",
       "passed": false,
       "checks": {
-        "status": false
+        "status": false,
+        "audience": true
       },
-      "status": "invalid",
-      "jaccard": null,
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
       "conditions": [
         {
           "attribute": "device_os",
@@ -2033,26 +2044,19 @@
           "op": "eq",
           "value": "basic",
           "source": "model"
-        },
-        {
-          "attribute": "app_active_30d",
-          "op": "eq",
-          "value": true,
-          "source": "glossary:app_user"
         }
       ],
       "clarifications": [],
-      "unmapped": [],
-      "issues": [
-        "ungrounded_term",
-        "policy_violation"
+      "unmapped": [
+        "users"
       ],
+      "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2456.3,
+      "llm_ms": 1373.2,
       "tokens_in": 3071,
-      "tokens_out": 182,
-      "cost_usd": 0.000126,
+      "tokens_out": 171,
+      "cost_usd": 0.00012,
       "run": 3
     }
   ]

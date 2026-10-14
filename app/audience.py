@@ -35,6 +35,9 @@ class AudienceEngine:
         if missing:
             raise RuntimeError(f"profiles table is missing catalog columns: {sorted(missing)}")
         self.base = rows
+        columns = ", ".join(f'"{name}"' for name in sorted(catalog.attributes))
+        (digest,) = self._con.execute(f"SELECT bit_xor(hash(profile_id, {columns})) FROM profiles").fetchone()
+        self.snapshot = f"{rows}-{digest:016x}"  # changes whenever any profile row changes (e.g. the nightly load)
 
     @property
     def connection(self) -> duckdb.DuckDBPyConnection:
@@ -119,6 +122,28 @@ class AudienceEngine:
             [salt, cutoff, salt, cutoff, *params],
         ).fetchone()
         return target, holdout
+
+    def _groups_sql(self, definition: AudienceDefinition, salt: str, holdout_share: float) -> tuple[str, str, list]:
+        where, params = self.compile(definition)
+        consent = f'"{self._catalog.channels[definition.channel]}"'
+        bucket = f"md5_number_lower(? || ':' || profile_id) % 10000 < {round(holdout_share * 10_000)}"
+        return f"FROM profiles WHERE {where} AND {consent}", bucket, params
+
+    def members(self, definition: AudienceDefinition, salt: str, holdout_share: float) -> list[tuple[str, str]]:
+        """Every reachable line with its group, for the hand-off to the campaign tool."""
+        source, bucket, params = self._groups_sql(definition, salt, holdout_share)
+        return self._con.cursor().execute(
+            f"SELECT profile_id, CASE WHEN {bucket} THEN 'held_out' ELSE 'contacted' END {source} ORDER BY profile_id",
+            [salt, *params]).fetchall()
+
+    def member_digests(self, definition: AudienceDefinition, salt: str, holdout_share: float) -> dict[str, str]:
+        """Digest of exactly which lines are in each group, so a later export can prove it is the approved set."""
+        source, bucket, params = self._groups_sql(definition, salt, holdout_share)
+        contacted, held_out = self._con.cursor().execute(
+            f"SELECT md5(coalesce(string_agg(profile_id, ',' ORDER BY profile_id) FILTER (WHERE NOT ({bucket})), '')), "
+            f"md5(coalesce(string_agg(profile_id, ',' ORDER BY profile_id) FILTER (WHERE {bucket}), '')) {source}",
+            [salt, salt, *params]).fetchone()
+        return {"contacted": contacted[:16], "held_out": held_out[:16]}
 
     def profile_ids(self, definition: AudienceDefinition, reachable_only: bool = True) -> set[str]:
         """Exact membership, used by the evals to compare two definitions by the audience they produce."""

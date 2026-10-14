@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS audiences (
     acknowledged_unmapped_json TEXT NOT NULL,
     governance_json TEXT NOT NULL,
     governance_versions TEXT NOT NULL,
-    measurement_json TEXT NOT NULL
+    measurement_json TEXT NOT NULL,
+    client_json TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS audiences_one_per_request ON audiences(request_id);
 """
@@ -124,11 +125,11 @@ class AuditStore:
             cur = self._db.execute(
                 """INSERT INTO audiences (created_at, name, approver, request_id, definition_json, definition_hash,
                    edited_by_user, explanation, channel, matched, reachable, acknowledged_unmapped_json,
-                   governance_json, governance_versions, measurement_json)
+                   governance_json, governance_versions, measurement_json, client_json)
                    VALUES (:created_at, :name, :approver, :request_id, :definition_json, :definition_hash,
                    :edited_by_user, :explanation, :channel, :matched, :reachable, :acknowledged_unmapped_json,
-                   :governance_json, :governance_versions, :measurement_json)""",
-                {"created_at": _now(), **row},
+                   :governance_json, :governance_versions, :measurement_json, :client_json)""",
+                {"created_at": _now(), "client_json": "{}", **row},
             )
             return cur.lastrowid
 
@@ -138,6 +139,11 @@ class AuditStore:
             return self.record_approval(row)
         except sqlite3.IntegrityError:
             return None
+
+    def get_audience(self, audience_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._db.execute("SELECT * FROM audiences WHERE id = ?", (audience_id,)).fetchone()
+        return dict(row) if row else None
 
     def list_audiences(self, limit: int = 50) -> list[dict[str, Any]]:
         with self._lock:

@@ -3,21 +3,21 @@
     "model": "claude-sonnet-5-5",
     "cases": 34,
     "runs": 3,
-    "pass_rate": 1.0,
+    "pass_rate": 0.99,
     "pass_rate_per_run": [
       1.0,
-      1.0,
+      0.971,
       1.0
     ],
     "status_accuracy": 1.0,
-    "audience_exact_match": 1.0,
+    "audience_exact_match": 0.989,
     "repair_rate": 0.029,
-    "latency_p50_ms": 1902.0,
-    "latency_p95_ms": 3607.0,
-    "latency_max_ms": 6763.0,
-    "avg_tokens_in": 3175.0,
-    "avg_tokens_out": 151.0,
-    "cost_per_1k_requests_usd": 2.02,
+    "latency_p50_ms": 1873.0,
+    "latency_p95_ms": 4914.0,
+    "latency_max_ms": 12364.0,
+    "avg_tokens_in": 3174.0,
+    "avg_tokens_out": 148.0,
+    "cost_per_1k_requests_usd": 1.98,
     "by_category": {
       "glossary_decided": "15/15",
       "glossary_open": "9/9",
@@ -26,11 +26,18 @@
       "pii": "3/3",
       "policy": "12/12",
       "simple": "15/15",
-      "thresholds": "18/18",
+      "thresholds": "17/18",
       "unmapped": "18/18"
     },
-    "flaky_cases": [],
-    "failures": [],
+    "flaky_cases": [
+      "scope-01"
+    ],
+    "failures": [
+      {
+        "id": "scope-01",
+        "failed_runs": "1/3"
+      }
+    ],
     "effort": "low",
     "case_set": "dev"
   },
@@ -65,7 +72,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2197.3,
+      "llm_ms": 2406.0,
       "tokens_in": 3068,
       "tokens_out": 107,
       "cost_usd": 0.008719,
@@ -101,10 +108,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2114.0,
+      "llm_ms": 2229.3,
       "tokens_in": 3076,
-      "tokens_out": 172,
-      "cost_usd": 0.002123,
+      "tokens_out": 180,
+      "cost_usd": 0.002203,
       "run": 1
     },
     {
@@ -143,7 +150,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1770.8,
+      "llm_ms": 1408.1,
       "tokens_in": 3080,
       "tokens_out": 117,
       "cost_usd": 0.001581,
@@ -185,10 +192,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2027.9,
+      "llm_ms": 1982.3,
       "tokens_in": 3078,
-      "tokens_out": 183,
-      "cost_usd": 0.002237,
+      "tokens_out": 212,
+      "cost_usd": 0.002527,
       "run": 1
     },
     {
@@ -218,13 +225,15 @@
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1930.7,
+      "llm_ms": 1962.4,
       "tokens_in": 3078,
-      "tokens_out": 154,
-      "cost_usd": 0.001947,
+      "tokens_out": 152,
+      "cost_usd": 0.001927,
       "run": 1
     },
     {
@@ -257,10 +266,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2045.8,
+      "llm_ms": 1700.7,
       "tokens_in": 3085,
-      "tokens_out": 179,
-      "cost_usd": 0.002211,
+      "tokens_out": 166,
+      "cost_usd": 0.002081,
       "run": 1
     },
     {
@@ -296,7 +305,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 3569.6,
+      "llm_ms": 2981.9,
       "tokens_in": 3075,
       "tokens_out": 138,
       "cost_usd": 0.001781,
@@ -332,10 +341,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1830.2,
+      "llm_ms": 1576.6,
       "tokens_in": 3087,
-      "tokens_out": 142,
-      "cost_usd": 0.001845,
+      "tokens_out": 141,
+      "cost_usd": 0.001835,
       "run": 1
     },
     {
@@ -368,7 +377,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1841.8,
+      "llm_ms": 1631.7,
       "tokens_in": 3075,
       "tokens_out": 153,
       "cost_usd": 0.001931,
@@ -391,19 +400,23 @@
           "op": "gt",
           "value": 60,
           "source": "model"
+        },
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
         }
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [
-        "implicit_scope"
-      ],
+      "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2123.9,
+      "llm_ms": 1861.8,
       "tokens_in": 3072,
-      "tokens_out": 178,
-      "cost_usd": 0.002175,
+      "tokens_out": 202,
+      "cost_usd": 0.002415,
       "run": 1
     },
     {
@@ -436,10 +449,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1866.4,
+      "llm_ms": 1469.2,
       "tokens_in": 3066,
-      "tokens_out": 119,
-      "cost_usd": 0.001573,
+      "tokens_out": 113,
+      "cost_usd": 0.001513,
       "run": 1
     },
     {
@@ -469,13 +482,15 @@
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2027.0,
+      "llm_ms": 2302.3,
       "tokens_in": 3069,
-      "tokens_out": 139,
-      "cost_usd": 0.001779,
+      "tokens_out": 177,
+      "cost_usd": 0.002159,
       "run": 1
     },
     {
@@ -508,10 +523,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1810.0,
+      "llm_ms": 6131.9,
       "tokens_in": 3065,
-      "tokens_out": 127,
-      "cost_usd": 0.001651,
+      "tokens_out": 130,
+      "cost_usd": 0.001681,
       "run": 1
     },
     {
@@ -550,10 +565,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1859.1,
+      "llm_ms": 1729.4,
       "tokens_in": 3081,
-      "tokens_out": 132,
-      "cost_usd": 0.001733,
+      "tokens_out": 148,
+      "cost_usd": 0.001893,
       "run": 1
     },
     {
@@ -592,7 +607,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1542.2,
+      "llm_ms": 1413.2,
       "tokens_in": 3074,
       "tokens_out": 92,
       "cost_usd": 0.001319,
@@ -605,6 +620,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -637,10 +653,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1847.6,
+      "llm_ms": 1836.0,
       "tokens_in": 3072,
-      "tokens_out": 133,
-      "cost_usd": 0.001725,
+      "tokens_out": 165,
+      "cost_usd": 0.002045,
       "run": 1
     },
     {
@@ -670,10 +686,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1699.9,
+      "llm_ms": 1545.8,
       "tokens_in": 3066,
-      "tokens_out": 121,
-      "cost_usd": 0.001593,
+      "tokens_out": 120,
+      "cost_usd": 0.001583,
       "run": 1
     },
     {
@@ -703,10 +719,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1831.6,
+      "llm_ms": 2178.5,
       "tokens_in": 3070,
-      "tokens_out": 118,
-      "cost_usd": 0.001571,
+      "tokens_out": 143,
+      "cost_usd": 0.001821,
       "run": 1
     },
     {
@@ -736,10 +752,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1965.2,
+      "llm_ms": 2038.6,
       "tokens_in": 3063,
-      "tokens_out": 145,
-      "cost_usd": 0.001827,
+      "tokens_out": 117,
+      "cost_usd": 0.001547,
       "run": 1
     },
     {
@@ -775,10 +791,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 6763.4,
+      "llm_ms": 1818.5,
       "tokens_in": 3073,
-      "tokens_out": 148,
-      "cost_usd": 0.001877,
+      "tokens_out": 157,
+      "cost_usd": 0.001967,
       "run": 1
     },
     {
@@ -808,10 +824,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2062.2,
+      "llm_ms": 2343.1,
       "tokens_in": 3079,
-      "tokens_out": 144,
-      "cost_usd": 0.001849,
+      "tokens_out": 145,
+      "cost_usd": 0.001859,
       "run": 1
     },
     {
@@ -841,10 +857,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2580.1,
+      "llm_ms": 1503.0,
       "tokens_in": 3069,
-      "tokens_out": 118,
-      "cost_usd": 0.001569,
+      "tokens_out": 110,
+      "cost_usd": 0.001489,
       "run": 1
     },
     {
@@ -874,10 +890,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1750.7,
+      "llm_ms": 1694.9,
       "tokens_in": 3066,
-      "tokens_out": 133,
-      "cost_usd": 0.001713,
+      "tokens_out": 135,
+      "cost_usd": 0.001733,
       "run": 1
     },
     {
@@ -907,10 +923,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1791.5,
+      "llm_ms": 1625.1,
       "tokens_in": 3072,
-      "tokens_out": 132,
-      "cost_usd": 0.001715,
+      "tokens_out": 122,
+      "cost_usd": 0.001615,
       "run": 1
     },
     {
@@ -937,13 +953,15 @@
       "unmapped": [
         "haven't topped up in 30 days"
       ],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 2,
       "repaired": true,
-      "llm_ms": 4778.9,
-      "tokens_in": 6483,
-      "tokens_out": 409,
-      "cost_usd": 0.005558,
+      "llm_ms": 4914.4,
+      "tokens_in": 6459,
+      "tokens_out": 367,
+      "cost_usd": 0.00509,
       "run": 1
     },
     {
@@ -953,6 +971,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -979,10 +998,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2182.1,
+      "llm_ms": 5897.8,
       "tokens_in": 3072,
-      "tokens_out": 165,
-      "cost_usd": 0.002045,
+      "tokens_out": 157,
+      "cost_usd": 0.001965,
       "run": 1
     },
     {
@@ -992,6 +1011,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -1024,10 +1044,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2949.3,
+      "llm_ms": 3388.6,
       "tokens_in": 3083,
-      "tokens_out": 202,
-      "cost_usd": 0.002437,
+      "tokens_out": 206,
+      "cost_usd": 0.002477,
       "run": 1
     },
     {
@@ -1061,10 +1081,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2437.7,
+      "llm_ms": 3099.2,
       "tokens_in": 3093,
-      "tokens_out": 139,
-      "cost_usd": 0.001827,
+      "tokens_out": 182,
+      "cost_usd": 0.002257,
       "run": 1
     },
     {
@@ -1085,10 +1105,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1874.5,
+      "llm_ms": 2158.0,
       "tokens_in": 3074,
-      "tokens_out": 86,
-      "cost_usd": 0.001259,
+      "tokens_out": 84,
+      "cost_usd": 0.001239,
       "run": 1
     },
     {
@@ -1109,10 +1129,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1710.1,
+      "llm_ms": 1837.3,
       "tokens_in": 3075,
-      "tokens_out": 83,
-      "cost_usd": 0.001231,
+      "tokens_out": 84,
+      "cost_usd": 0.001241,
       "run": 1
     },
     {
@@ -1151,7 +1171,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 3607.0,
+      "llm_ms": 3477.8,
       "tokens_in": 3075,
       "tokens_out": 151,
       "cost_usd": 0.001911,
@@ -1193,10 +1213,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1942.4,
+      "llm_ms": 2255.7,
       "tokens_in": 3074,
-      "tokens_out": 161,
-      "cost_usd": 0.002009,
+      "tokens_out": 173,
+      "cost_usd": 0.002129,
       "run": 1
     },
     {
@@ -1223,7 +1243,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1437.2,
+      "llm_ms": 1601.4,
       "tokens_in": 3072,
       "tokens_out": 83,
       "cost_usd": 0.001225,
@@ -1259,10 +1279,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2028.4,
+      "llm_ms": 1609.1,
       "tokens_in": 3088,
-      "tokens_out": 149,
-      "cost_usd": 0.001917,
+      "tokens_out": 142,
+      "cost_usd": 0.001847,
       "run": 1
     },
     {
@@ -1295,7 +1315,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1765.3,
+      "llm_ms": 1882.2,
       "tokens_in": 3068,
       "tokens_out": 107,
       "cost_usd": 0.001457,
@@ -1331,7 +1351,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1910.4,
+      "llm_ms": 1701.8,
       "tokens_in": 3076,
       "tokens_out": 166,
       "cost_usd": 0.002063,
@@ -1373,7 +1393,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1665.6,
+      "llm_ms": 1536.4,
       "tokens_in": 3080,
       "tokens_out": 117,
       "cost_usd": 0.001581,
@@ -1415,10 +1435,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2257.4,
+      "llm_ms": 1829.9,
       "tokens_in": 3078,
-      "tokens_out": 214,
-      "cost_usd": 0.002547,
+      "tokens_out": 176,
+      "cost_usd": 0.002167,
       "run": 2
     },
     {
@@ -1448,13 +1468,15 @@
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1824.8,
+      "llm_ms": 1614.4,
       "tokens_in": 3078,
-      "tokens_out": 142,
-      "cost_usd": 0.001827,
+      "tokens_out": 146,
+      "cost_usd": 0.001867,
       "run": 2
     },
     {
@@ -1487,10 +1509,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2087.4,
+      "llm_ms": 1759.9,
       "tokens_in": 3085,
-      "tokens_out": 179,
-      "cost_usd": 0.002211,
+      "tokens_out": 166,
+      "cost_usd": 0.002081,
       "run": 2
     },
     {
@@ -1526,7 +1548,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2219.0,
+      "llm_ms": 5913.2,
       "tokens_in": 3075,
       "tokens_out": 138,
       "cost_usd": 0.001781,
@@ -1562,10 +1584,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1845.0,
+      "llm_ms": 1540.2,
       "tokens_in": 3087,
-      "tokens_out": 155,
-      "cost_usd": 0.001975,
+      "tokens_out": 111,
+      "cost_usd": 0.001535,
       "run": 2
     },
     {
@@ -1598,27 +1620,27 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1863.9,
+      "llm_ms": 2244.7,
       "tokens_in": 3075,
-      "tokens_out": 153,
-      "cost_usd": 0.001931,
+      "tokens_out": 169,
+      "cost_usd": 0.002091,
       "run": 2
     },
     {
       "id": "scope-01",
       "category": "thresholds",
       "request": "Customers who haven't recharged in 60 days",
-      "passed": true,
+      "passed": false,
       "checks": {
         "status": true,
-        "audience": true
+        "audience": false
       },
       "status": "ready",
-      "jaccard": 1.0,
+      "jaccard": 0.9771,
       "conditions": [
         {
           "attribute": "days_since_last_recharge",
-          "op": "gt",
+          "op": "gte",
           "value": 60,
           "source": "model"
         }
@@ -1630,10 +1652,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2051.2,
+      "llm_ms": 2125.0,
       "tokens_in": 3072,
-      "tokens_out": 165,
-      "cost_usd": 0.002045,
+      "tokens_out": 196,
+      "cost_usd": 0.002355,
       "run": 2
     },
     {
@@ -1666,10 +1688,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2121.9,
+      "llm_ms": 1780.2,
       "tokens_in": 3066,
-      "tokens_out": 141,
-      "cost_usd": 0.001793,
+      "tokens_out": 142,
+      "cost_usd": 0.001803,
       "run": 2
     },
     {
@@ -1699,13 +1721,15 @@
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2199.0,
+      "llm_ms": 2816.7,
       "tokens_in": 3069,
-      "tokens_out": 177,
-      "cost_usd": 0.002159,
+      "tokens_out": 174,
+      "cost_usd": 0.002129,
       "run": 2
     },
     {
@@ -1738,10 +1762,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2007.3,
+      "llm_ms": 1635.7,
       "tokens_in": 3065,
-      "tokens_out": 124,
-      "cost_usd": 0.001621,
+      "tokens_out": 121,
+      "cost_usd": 0.001591,
       "run": 2
     },
     {
@@ -1780,10 +1804,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1880.9,
+      "llm_ms": 1777.6,
       "tokens_in": 3081,
-      "tokens_out": 151,
-      "cost_usd": 0.001923,
+      "tokens_out": 147,
+      "cost_usd": 0.001883,
       "run": 2
     },
     {
@@ -1822,7 +1846,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1562.8,
+      "llm_ms": 1406.1,
       "tokens_in": 3074,
       "tokens_out": 92,
       "cost_usd": 0.001319,
@@ -1835,6 +1859,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -1867,10 +1892,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1901.7,
+      "llm_ms": 1925.1,
       "tokens_in": 3072,
-      "tokens_out": 144,
-      "cost_usd": 0.001835,
+      "tokens_out": 165,
+      "cost_usd": 0.002045,
       "run": 2
     },
     {
@@ -1900,10 +1925,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1723.9,
+      "llm_ms": 1535.6,
       "tokens_in": 3066,
-      "tokens_out": 131,
-      "cost_usd": 0.001693,
+      "tokens_out": 113,
+      "cost_usd": 0.001513,
       "run": 2
     },
     {
@@ -1933,10 +1958,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1984.6,
+      "llm_ms": 2057.8,
       "tokens_in": 3070,
-      "tokens_out": 128,
-      "cost_usd": 0.001671,
+      "tokens_out": 140,
+      "cost_usd": 0.001791,
       "run": 2
     },
     {
@@ -1966,10 +1991,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1897.7,
+      "llm_ms": 2195.4,
       "tokens_in": 3063,
-      "tokens_out": 124,
-      "cost_usd": 0.001617,
+      "tokens_out": 132,
+      "cost_usd": 0.001697,
       "run": 2
     },
     {
@@ -2005,10 +2030,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 3855.7,
+      "llm_ms": 2069.8,
       "tokens_in": 3073,
-      "tokens_out": 145,
-      "cost_usd": 0.001847,
+      "tokens_out": 155,
+      "cost_usd": 0.001947,
       "run": 2
     },
     {
@@ -2038,10 +2063,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1860.8,
+      "llm_ms": 2187.2,
       "tokens_in": 3079,
-      "tokens_out": 143,
-      "cost_usd": 0.001839,
+      "tokens_out": 145,
+      "cost_usd": 0.001859,
       "run": 2
     },
     {
@@ -2071,10 +2096,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2081.8,
+      "llm_ms": 1472.7,
       "tokens_in": 3069,
-      "tokens_out": 119,
-      "cost_usd": 0.001579,
+      "tokens_out": 108,
+      "cost_usd": 0.001469,
       "run": 2
     },
     {
@@ -2104,10 +2129,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1818.0,
+      "llm_ms": 1852.3,
       "tokens_in": 3066,
-      "tokens_out": 132,
-      "cost_usd": 0.001703,
+      "tokens_out": 134,
+      "cost_usd": 0.001723,
       "run": 2
     },
     {
@@ -2137,10 +2162,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1773.0,
+      "llm_ms": 1662.5,
       "tokens_in": 3072,
-      "tokens_out": 139,
-      "cost_usd": 0.001785,
+      "tokens_out": 136,
+      "cost_usd": 0.001755,
       "run": 2
     },
     {
@@ -2167,13 +2192,15 @@
       "unmapped": [
         "haven't topped up in 30 days"
       ],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 2,
       "repaired": true,
-      "llm_ms": 5392.5,
-      "tokens_in": 6502,
-      "tokens_out": 574,
-      "cost_usd": 0.007246,
+      "llm_ms": 4810.8,
+      "tokens_in": 6436,
+      "tokens_out": 335,
+      "cost_usd": 0.004724,
       "run": 2
     },
     {
@@ -2183,6 +2210,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -2209,10 +2237,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2026.4,
+      "llm_ms": 2974.5,
       "tokens_in": 3072,
-      "tokens_out": 158,
-      "cost_usd": 0.001975,
+      "tokens_out": 156,
+      "cost_usd": 0.001955,
       "run": 2
     },
     {
@@ -2222,6 +2250,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -2254,10 +2283,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2263.7,
+      "llm_ms": 2925.1,
       "tokens_in": 3083,
-      "tokens_out": 210,
-      "cost_usd": 0.002517,
+      "tokens_out": 212,
+      "cost_usd": 0.002537,
       "run": 2
     },
     {
@@ -2291,10 +2320,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2605.5,
+      "llm_ms": 3244.3,
       "tokens_in": 3093,
-      "tokens_out": 165,
-      "cost_usd": 0.002087,
+      "tokens_out": 154,
+      "cost_usd": 0.001977,
       "run": 2
     },
     {
@@ -2315,7 +2344,7 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1757.5,
+      "llm_ms": 1931.2,
       "tokens_in": 3074,
       "tokens_out": 84,
       "cost_usd": 0.001239,
@@ -2339,7 +2368,7 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1791.3,
+      "llm_ms": 1902.5,
       "tokens_in": 3075,
       "tokens_out": 83,
       "cost_usd": 0.001231,
@@ -2381,7 +2410,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2529.4,
+      "llm_ms": 1872.6,
       "tokens_in": 3075,
       "tokens_out": 151,
       "cost_usd": 0.001911,
@@ -2423,10 +2452,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2531.0,
+      "llm_ms": 2277.0,
       "tokens_in": 3074,
-      "tokens_out": 168,
-      "cost_usd": 0.002079,
+      "tokens_out": 161,
+      "cost_usd": 0.002009,
       "run": 2
     },
     {
@@ -2453,7 +2482,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1652.9,
+      "llm_ms": 1454.9,
       "tokens_in": 3072,
       "tokens_out": 83,
       "cost_usd": 0.001225,
@@ -2489,10 +2518,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1891.1,
+      "llm_ms": 1862.3,
       "tokens_in": 3088,
-      "tokens_out": 141,
-      "cost_usd": 0.001837,
+      "tokens_out": 156,
+      "cost_usd": 0.001987,
       "run": 2
     },
     {
@@ -2525,7 +2554,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1621.0,
+      "llm_ms": 2010.0,
       "tokens_in": 3068,
       "tokens_out": 107,
       "cost_usd": 0.001457,
@@ -2561,10 +2590,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1914.7,
+      "llm_ms": 1751.8,
       "tokens_in": 3076,
-      "tokens_out": 166,
-      "cost_usd": 0.002063,
+      "tokens_out": 173,
+      "cost_usd": 0.002133,
       "run": 3
     },
     {
@@ -2603,7 +2632,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1586.3,
+      "llm_ms": 1655.7,
       "tokens_in": 3080,
       "tokens_out": 117,
       "cost_usd": 0.001581,
@@ -2645,10 +2674,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2018.7,
+      "llm_ms": 2007.6,
       "tokens_in": 3078,
-      "tokens_out": 175,
-      "cost_usd": 0.002157,
+      "tokens_out": 216,
+      "cost_usd": 0.002567,
       "run": 3
     },
     {
@@ -2678,13 +2707,15 @@
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1775.6,
+      "llm_ms": 1695.3,
       "tokens_in": 3078,
-      "tokens_out": 148,
-      "cost_usd": 0.001887,
+      "tokens_out": 149,
+      "cost_usd": 0.001897,
       "run": 3
     },
     {
@@ -2717,10 +2748,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1900.8,
+      "llm_ms": 1798.4,
       "tokens_in": 3085,
-      "tokens_out": 172,
-      "cost_usd": 0.002141,
+      "tokens_out": 170,
+      "cost_usd": 0.002121,
       "run": 3
     },
     {
@@ -2756,10 +2787,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1739.2,
+      "llm_ms": 2995.4,
       "tokens_in": 3075,
-      "tokens_out": 135,
-      "cost_usd": 0.001751,
+      "tokens_out": 136,
+      "cost_usd": 0.001761,
       "run": 3
     },
     {
@@ -2792,10 +2823,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1863.8,
+      "llm_ms": 1596.0,
       "tokens_in": 3087,
-      "tokens_out": 155,
-      "cost_usd": 0.001975,
+      "tokens_out": 141,
+      "cost_usd": 0.001835,
       "run": 3
     },
     {
@@ -2828,10 +2859,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2150.6,
+      "llm_ms": 2224.6,
       "tokens_in": 3075,
-      "tokens_out": 177,
-      "cost_usd": 0.002171,
+      "tokens_out": 148,
+      "cost_usd": 0.001881,
       "run": 3
     },
     {
@@ -2860,10 +2891,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2027.7,
+      "llm_ms": 1839.9,
       "tokens_in": 3072,
-      "tokens_out": 155,
-      "cost_usd": 0.001945,
+      "tokens_out": 179,
+      "cost_usd": 0.002185,
       "run": 3
     },
     {
@@ -2896,10 +2927,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1751.5,
+      "llm_ms": 1669.0,
       "tokens_in": 3066,
-      "tokens_out": 130,
-      "cost_usd": 0.001683,
+      "tokens_out": 136,
+      "cost_usd": 0.001743,
       "run": 3
     },
     {
@@ -2929,13 +2960,15 @@
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2189.8,
+      "llm_ms": 2496.8,
       "tokens_in": 3069,
-      "tokens_out": 178,
-      "cost_usd": 0.002169,
+      "tokens_out": 183,
+      "cost_usd": 0.002219,
       "run": 3
     },
     {
@@ -2968,10 +3001,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1698.9,
+      "llm_ms": 1809.9,
       "tokens_in": 3065,
-      "tokens_out": 121,
-      "cost_usd": 0.001591,
+      "tokens_out": 148,
+      "cost_usd": 0.001861,
       "run": 3
     },
     {
@@ -3010,10 +3043,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1893.3,
+      "llm_ms": 1686.0,
       "tokens_in": 3081,
-      "tokens_out": 138,
-      "cost_usd": 0.001793,
+      "tokens_out": 143,
+      "cost_usd": 0.001843,
       "run": 3
     },
     {
@@ -3052,7 +3085,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1460.1,
+      "llm_ms": 1465.4,
       "tokens_in": 3074,
       "tokens_out": 92,
       "cost_usd": 0.001319,
@@ -3065,6 +3098,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -3097,10 +3131,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1912.2,
+      "llm_ms": 1889.2,
       "tokens_in": 3072,
-      "tokens_out": 134,
-      "cost_usd": 0.001735,
+      "tokens_out": 142,
+      "cost_usd": 0.001815,
       "run": 3
     },
     {
@@ -3130,10 +3164,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1743.8,
+      "llm_ms": 1570.2,
       "tokens_in": 3066,
-      "tokens_out": 120,
-      "cost_usd": 0.001583,
+      "tokens_out": 115,
+      "cost_usd": 0.001533,
       "run": 3
     },
     {
@@ -3163,10 +3197,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2102.8,
+      "llm_ms": 1869.1,
       "tokens_in": 3070,
-      "tokens_out": 142,
-      "cost_usd": 0.001811,
+      "tokens_out": 118,
+      "cost_usd": 0.001571,
       "run": 3
     },
     {
@@ -3196,10 +3230,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2161.9,
+      "llm_ms": 2124.4,
       "tokens_in": 3063,
-      "tokens_out": 120,
-      "cost_usd": 0.001577,
+      "tokens_out": 124,
+      "cost_usd": 0.001617,
       "run": 3
     },
     {
@@ -3235,10 +3269,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2377.7,
+      "llm_ms": 1926.9,
       "tokens_in": 3073,
-      "tokens_out": 129,
-      "cost_usd": 0.001687,
+      "tokens_out": 142,
+      "cost_usd": 0.001817,
       "run": 3
     },
     {
@@ -3268,7 +3302,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1890.9,
+      "llm_ms": 1764.7,
       "tokens_in": 3079,
       "tokens_out": 145,
       "cost_usd": 0.001859,
@@ -3301,7 +3335,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1710.8,
+      "llm_ms": 1840.5,
       "tokens_in": 3069,
       "tokens_out": 108,
       "cost_usd": 0.001469,
@@ -3334,10 +3368,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1847.9,
+      "llm_ms": 1855.1,
       "tokens_in": 3066,
-      "tokens_out": 149,
-      "cost_usd": 0.001873,
+      "tokens_out": 135,
+      "cost_usd": 0.001733,
       "run": 3
     },
     {
@@ -3367,10 +3401,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1649.9,
+      "llm_ms": 2261.5,
       "tokens_in": 3072,
-      "tokens_out": 133,
-      "cost_usd": 0.001725,
+      "tokens_out": 136,
+      "cost_usd": 0.001755,
       "run": 3
     },
     {
@@ -3397,13 +3431,15 @@
       "unmapped": [
         "haven't topped up in 30 days"
       ],
-      "issues": [],
+      "issues": [
+        "governed_term_overridden"
+      ],
       "llm_calls": 2,
       "repaired": true,
-      "llm_ms": 5579.9,
-      "tokens_in": 6491,
-      "tokens_out": 635,
-      "cost_usd": 0.007834,
+      "llm_ms": 5089.6,
+      "tokens_in": 6463,
+      "tokens_out": 362,
+      "cost_usd": 0.005048,
       "run": 3
     },
     {
@@ -3413,6 +3449,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -3439,10 +3476,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2104.1,
+      "llm_ms": 3467.2,
       "tokens_in": 3072,
-      "tokens_out": 159,
-      "cost_usd": 0.001985,
+      "tokens_out": 177,
+      "cost_usd": 0.002165,
       "run": 3
     },
     {
@@ -3452,6 +3489,7 @@
       "passed": true,
       "checks": {
         "status": true,
+        "only_request_conflicts": true,
         "policy_enforced": true,
         "issues": true
       },
@@ -3484,10 +3522,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2001.8,
+      "llm_ms": 2568.8,
       "tokens_in": 3083,
-      "tokens_out": 201,
-      "cost_usd": 0.002427,
+      "tokens_out": 209,
+      "cost_usd": 0.002507,
       "run": 3
     },
     {
@@ -3521,10 +3559,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2977.6,
+      "llm_ms": 3281.5,
       "tokens_in": 3093,
-      "tokens_out": 170,
-      "cost_usd": 0.002137,
+      "tokens_out": 163,
+      "cost_usd": 0.002067,
       "run": 3
     },
     {
@@ -3545,7 +3583,7 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1801.2,
+      "llm_ms": 12363.5,
       "tokens_in": 3074,
       "tokens_out": 84,
       "cost_usd": 0.001239,
@@ -3569,10 +3607,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1750.0,
+      "llm_ms": 1814.4,
       "tokens_in": 3075,
-      "tokens_out": 86,
-      "cost_usd": 0.001261,
+      "tokens_out": 83,
+      "cost_usd": 0.001231,
       "run": 3
     },
     {
@@ -3611,10 +3649,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 2479.2,
+      "llm_ms": 2643.2,
       "tokens_in": 3075,
-      "tokens_out": 152,
-      "cost_usd": 0.001921,
+      "tokens_out": 151,
+      "cost_usd": 0.001911,
       "run": 3
     },
     {
@@ -3653,10 +3691,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1804.2,
+      "llm_ms": 2171.2,
       "tokens_in": 3074,
-      "tokens_out": 161,
-      "cost_usd": 0.002009,
+      "tokens_out": 152,
+      "cost_usd": 0.001919,
       "run": 3
     },
     {
@@ -3683,7 +3721,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1516.2,
+      "llm_ms": 2633.3,
       "tokens_in": 3072,
       "tokens_out": 83,
       "cost_usd": 0.001225,
@@ -3719,7 +3757,7 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1920.5,
+      "llm_ms": 1811.4,
       "tokens_in": 3088,
       "tokens_out": 158,
       "cost_usd": 0.002007,

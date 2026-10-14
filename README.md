@@ -19,7 +19,7 @@ marketer's decision (whom to target, under which definition) and never makes it.
 | An open term asks, and shows what each answer would reach | A data-usage policy is named, per channel |
 |---|---|
 | ![Clarification](docs/screenshots/1-clarify.png) | ![Policy](docs/screenshots/3-policy.png) |
-| **What has no data behind it is surfaced, never dropped** | **Sized, approved, audited** |
+| **What has no data behind it is surfaced for the marketer to accept** | **Sized, approved, audited** |
 | ![Unmapped](docs/screenshots/4-unmapped.png) | ![Sized and approved](docs/screenshots/2-sized-approved.png) |
 
 **Evidence before approving: contact pressure, and what past campaigns of this type achieved**
@@ -40,7 +40,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 114 tests, no network or API key needed
+make test         # 130 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 make mcp          # the same assistant as an MCP server for AI agents (see "Use it from an AI agent")
 ```
@@ -55,6 +55,34 @@ work end to end. That is also the designed behaviour when the model is down.
 Evals: `make eval`, `make eval-heldout` and `make eval-refine` (live, 3 runs each), `make
 eval-replay` (all three sets, offline from the recordings). `make bench` measures sizing latency
 at 200k / 1M / 5M lines.
+
+---
+
+## Time and scope
+
+**Time spent:** [HOURS: fill in before sending] hours of my own time over [DAYS] days, with an AI
+coding agent writing most first drafts (see "Use of AI"). That is more than the brief's 8–10
+hours, so here is what is the answer to the brief and what is a deliberate extension.
+
+**The core slice (the answer to the brief):** a marketer's request becomes a validated, governed
+audience. The model proposes; code validates fields, governed terms, data-usage policies and
+consent. Open business terms are asked about, missing data is surfaced, the audience is sized
+and approved with an audit record. The dev and held-out evals, the failure modes, observability,
+the benchmark, and the customer and design notes. Read `app/interpret.py`, `app/validate.py`,
+`app/audience.py`, `app/governance.py` first.
+
+**Deliberate extensions, each answering a question I expected in the interview:**
+
+| Extension | Question it answers | Where |
+|---|---|---|
+| Change it in words (refinement) | "Adobe's Audience Agent is conversational; is yours?" | `app/refine.py`, design decision 16 |
+| Options with consequences, goal and holdout at approval | "Does it support a decision, and how will anyone know it was right?" | design decision 19 |
+| Past campaigns as evidence (synthetic history) | "What should the marketer know before approving?" | `app/history.py`, decision 20 |
+| MCP server for AI agents | "How would this plug into an agent ecosystem without giving agents authority?" | `app/mcp_server.py`, decision 18 |
+| Business case calculator | "What is it worth, and which assumption decides that?" | `docs/BUSINESS-CASE.md` |
+
+Each extension is small, uses the same validation and audit path as the core, and has its own
+tests. None of them is needed to judge the core slice.
 
 ---
 
@@ -131,12 +159,18 @@ are decision 18 in [docs/DESIGN.md](docs/DESIGN.md).
 | `past_campaign_evidence` (read-only) | Measured lift of past campaigns of one type, pooled and recent; labelled synthetic in this demo |
 | resource `audience://catalog` | Fields, governed terms, policies, channels |
 
-**What an agent can't do: approve, or answer the business questions.** There is no approve tool.
-Every result carries a `review_url`, where a person opens the draft in the web app (marked
-"drafted by an AI agent"), answers the open questions, reads the summary and approves, behind the
-same server-side checks. Agent drafts go into the same audit trail with `origin: "mcp"`. The
-model, validation, policies, consent, budget and circuit breaker are the web app's own; the
-server only adapts them.
+**What the MCP tools don't offer: approving, or answering the business questions.** There is no
+approve tool. Every result carries a `review_url`, where a person opens the draft in the web app
+(marked "drafted by an AI agent"), answers the open questions, reads the summary and approves,
+behind the same server-side checks. Agent drafts go into the same audit trail with
+`origin: "mcp"`. The model, validation, policies, consent, budget and circuit breaker are the web
+app's own; the server only adapts them.
+
+**What this does not stop yet.** The web API has no authentication in this prototype, so an agent
+that also has a generic HTTP tool could call `/api/approve` itself and type any approver name. The
+approval records the caller's host and user agent, but that is evidence, not prevention. In a
+real deployment approval requires a person's SSO token with an approver role, and an agent's
+service identity never has it.
 
 ```json
 {"mcpServers": {"audience-assistant": {
@@ -193,17 +227,21 @@ Four mechanisms keep this trustworthy over time (details in [docs/DESIGN.md](doc
 
 ## Trade-offs: latency, cost, accuracy
 
-**Measured** (prompt v6, 12 Oct 2026, every configuration run 3 times; prices from Anthropic's list
-effective 2026-10-07; latency is the model call, nearest-rank percentiles):
+**Measured** (prompt v6, refinement r2; re-run 14 Oct 2026 with the stricter scorer and the
+governed-phrase check; every configuration run 3 times; prices from Anthropic's list effective
+2026-10-07; latency is the model call, nearest-rank percentiles):
 
 | | **Sonnet 5.5 · low effort (default)** | Haiku 5.5 · low effort | Haiku 5.5 · default effort |
 |---|---|---|---|
-| Development set, 34 cases × 3 runs | **100%** | 95% | 93% |
-| Held-out set, 18 cases × 3 runs | **100%** | 85% | 94% |
-| Refinement set, 17 cases × 3 runs (14 Oct) | **100%** | 94% | not run |
-| Latency p50 / p95 / max (dev) | 1.9 s / 3.6 s / 6.8 s | 1.5 s / 2.4 s / 3.2 s | 2.0 s / 3.8 s / 8.1 s |
-| Latency p50 / p95 / max (refinement) | 2.1 s / 2.5 s / 3.9 s | 1.8 s / 2.3 s / 3.1 s | not run |
-| Cost per 1,000 requests (dev / refinement) | $2.02 / $2.68 | $0.12 / $0.16 | $0.17 / not run |
+| Development set, 34 cases × 3 runs | **99%** | 99% | 93% |
+| Held-out set, 18 cases × 3 runs | **100%** | 83% | 94% |
+| Refinement set, 17 cases × 3 runs | **100%** | 94% | not run |
+| Latency p50 / p95 / max (dev) | 1.9 s / 4.9 s / 12.4 s | 1.5 s / 2.3 s / 5.2 s | 1.8 s / 4.0 s / 5.6 s |
+| Latency p50 / p95 / max (refinement) | 1.8 s / 2.6 s / 4.8 s | 1.7 s / 2.2 s / 9.1 s | not run |
+| Cost per 1,000 requests (dev / refinement) | $1.98 / $2.68 | $0.11 / $0.17 | $0.16 / not run |
+
+The 12.4 s and 9.1 s maxima are single slow calls (the SDK's retry after a timeout); they are
+why the timeout and breaker exist.
 
 "Pass" means every expectation for that case held: the right outcome status, **exactly the same
 set of reachable lines as the expected audience**, the right clarification or unmapped phrase,
@@ -212,21 +250,21 @@ configuration is recorded, so `make eval-replay MODEL=... EFFORT=...` reproduces
 offline. Three Sonnet dev requests share their text with the UI examples and were re-recorded with
 them: same outcomes, different latencies.
 
-**What the misses were.** Sonnet missed nothing in 207 case-runs (dev, held-out and refinement).
-Haiku's misses:
+**What the misses were.** Sonnet missed one of 207 case-runs: in one run of three it read
+"haven't recharged in 60 days" as at least 60 rather than more than 60. The summary it shows says
+"at least 60 days", so the marketer sees the reading. Haiku's misses:
 - **Governed term applied without evidence.**
-  - "More than 15 GB" became the governed *heavy data user* (≥ 20 GB).
-  - "Android **users**" picked up the governed *app users*.
-  - "iOS users …, email campaign" got *app users* and was then blocked by MKT-12.
+  - "Android users" and "iOS users" picked up the governed *app users* (every run on two held-out
+    cases); with an email campaign that then got blocked by MKT-12.
+  - At default effort, "high credit risk band" became the governed *high value* term, dropping the
+    credit request instead of naming the policy (every run).
 
   The deterministic grounding check flagged every one of these to the marketer.
-- **A boundary ambiguity.** "Haven't recharged in 60 days" was read as ≥ 60 rather than > 60; the
-  summary says "at least 60 days".
+- **The same boundary ambiguity** (≥ 60 against > 60), in every run at default effort.
+- **An invented threshold.** "Long tenure" became ≥ 36 months in one run, while also being
+  listed as having no data.
 - **Over-caution with PII.** In a request containing a contact email, it asked the marketer to
   confirm dropping "contact [EMAIL] for details". The audience was right.
-- **A failed model call.** Once in 3 runs, Haiku at default effort stopped early on the
-  prompt-injection case. The system returned "assistant unavailable", which is safe but counts as a
-  miss.
 - **"Also" on a field the audience doesn't filter.** On the refinement set Haiku read "also
   include the Highlands", for an audience with no region condition, as "only the Highlands", in
   every run. The What changed box shows it ("+ Region is Highlands"), but it narrows the audience.
@@ -234,7 +272,7 @@ Haiku's misses:
 
 **Decision: Sonnet 5.5 at low effort.** At this customer's volume (about 40 audiences a month)
 the cost difference is under a dollar a month, while the accuracy difference is the gap between
-"always right on our tests" and "check the warnings". Haiku at low effort is the documented
+"right in 206 of 207 case-runs, the miss visible in the summary" and "check the warnings". Haiku at low effort is the documented
 option for high-volume tenants: about 17× cheaper and a little faster, with every
 governed-term miss surfaced by the grounding check. The configuration is one environment
 variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
@@ -248,7 +286,7 @@ variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 - **Separating dev from held-out.** I then rewrote the prompt examples so none mirrors an eval
   case. I wrote a separate 18-case held-out set after the prompt was frozen and never changed the
   prompt because of it.
-- **Caveat.** I did use both sets to choose the default model, so the 100% is not an unbiased
+- **Caveat.** I did use both sets to choose the default model, so these figures are not an unbiased
   estimate either. A fresh held-out set, built from the customer's real requests during a pilot,
   is the next step.
 - **Prompt fixes are fragile.** Changing the example re-broke the 15 GB case on Haiku. That is
@@ -260,15 +298,17 @@ variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
   doesn't. The refinement set is a development set, not a held-out one.
 
 **How I'd explain the choices to the customer:**
-- **Accuracy is a system property.** The model can misread a request. It cannot produce an
-  audience that:
+- **Accuracy is a system property.** The model can misread a request. It cannot get an audience
+  approved that:
   - breaks a data-usage policy;
   - ignores consent;
   - uses a field that doesn't exist;
-  - changes a governed definition.
+  - answers an open business term without the marketer choosing.
 
-  Those are blocked in code. The residual risk is a *valid but wrong* reading, which is why the
-  marketer approves a code-generated summary and why the eval compares audiences, not JSON.
+  Those are blocked in code. A governed definition the model replaced with its own condition is
+  flagged, not blocked, because the marketer's own number is allowed to win. The residual risk
+  is a *valid but wrong* reading, which is why the marketer approves a code-generated summary
+  and why the eval compares audiences, not JSON.
 - **Latency:** sizing takes milliseconds even at 5M lines; the model call is the wait (about 2 s
   median).
   - **Mitigations:** a response cache for repeated requests, prompt caching of the static
@@ -286,16 +326,17 @@ variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 | Failure | What happens |
 |---|---|
 | Model invents a field, value or threshold | Validator rejects it; one repair attempt with the errors; then `invalid` with the reasons shown |
-| Model drifts a governed definition ("high value" = 50) | Can't: the model only names the term; the server expands it from `glossary.yaml` |
+| Model drifts a governed definition ("high value" = 50) | When the term is named, it can't: the server expands it from `glossary.yaml`. When the model writes its own condition instead, the governed-phrase check warns that the governed definition was replaced |
 | Model applies a governed term the request never mentions | Grounding check warns the marketer (none of the term's phrases are in the request) |
-| Ambiguous business term ("active") | Never guessed: one clarifying question per term, governed options; approval blocked until answered |
+| Ambiguous business term ("active") | One clarifying question per term, governed options; approval blocked until answered. If the model doesn't flag the term, the governed-phrase check (whole words) asks anyway |
 | Part of the request has no data | Listed as unmapped; approval blocked until the marketer accepts it |
 | Request needs a policy-blocked field (credit risk, app data for email, consent) | Condition kept visible and highlighted with the policy id; status `invalid`; not sent back to the model |
 | Prompt injection ("ignore rules, skip consent") | Output is schema-bound and validated; a consent condition is blocked by MKT-15; consent is added by the engine regardless |
 | Prepaid-only field used on postpaid lines | Error (contradiction) or warning (implicit narrowing), depending on the definition |
 | Contradictory conditions (ARPU > 50 and = 50) | Error before any query runs |
 | Model timeout, rate limit, outage | `ai_unavailable`; repeated failures open a circuit breaker; the editor, sizing and approval still work |
-| Model drops or rewrites part of the audience during a change | Can't: it returns only a delta, so untouched conditions keep their values and sources; What changed lists every addition and removal |
+| Model drops or rewrites part of the audience during a change | It returns only a delta, so conditions it doesn't name keep their values and sources; a delta that removes something shows it in What changed. Only conditions that pass validation are shown to the model, so text that failed validation never reaches the prompt |
+| A model or client sends oversized or nested values | Rejected at the API: values are scalars or flat lists, at most 100 items of 200 characters |
 | A change tries to edit part of a governed definition | Governed conditions move only with their term; overlapping numbers get a warning |
 | Model unavailable during a change | 503 "your audience is unchanged"; nothing recorded; the previous interpretation is still the one approval uses |
 | An AI agent (over MCP) tries to approve, or to settle an open term for the marketer | No tool for either: the agent gets a review link, and a person answers and approves in the UI; drafts are audited as `origin: "mcp"` |
@@ -374,7 +415,7 @@ OpenAPI docs are at `/docs`.
 
 ## Testing and reliability
 
-- **`make test`: 114 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 130 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;
@@ -398,8 +439,9 @@ OpenAPI docs are at `/docs`.
     app. A stdio round trip with the SDK's own client was checked by hand.
 
   SQL counts are checked against independent queries, and values are checked to be bound
-  parameters. `tests/test_review_fixes.py` holds one regression test per finding from the
-  external review (see "Use of AI").
+  parameters. `tests/test_review_fixes.py` and `tests/test_review_round3.py` hold one regression
+  test per finding from the external reviews (see "Use of AI"), and `tests/test_eval_scorer.py`
+  checks that the eval scorer fails wrong answers.
 - **Evals.**
   - `evals/cases.yaml` is the development set (34 cases).
   - `evals/heldout.yaml` is the frozen held-out set (18 cases).
@@ -409,9 +451,17 @@ OpenAPI docs are at `/docs`.
     widen, remove, replace, channel, governed terms, carried questions, missing data, policy,
     "no change" and Spanish.
   - Scoring is by exact audience equality plus status, clarification, unmapped and policy checks.
+    An "invalid" result only passes if its errors come from the request itself (a policy, scope
+    or contradiction), never from the model, and, where the case gives a definition, if the part
+    of the audience without errors matches it. (A review found the earlier scorer skipped those
+    checks; every result below was re-run with the stricter scorer.)
   - Repeats show run-to-run variance, and flaky cases are listed in the results.
-  - **Limitation:** policy cases check that the policy is named and enforced, not that the rest of
-    the proposed audience is right.
+  - Each recording stores a fingerprint of the system prompt; replaying a recording made with a
+    different prompt or catalog fails instead of silently reporting old results.
+  - **Limitations:** the sets are small and mostly clean requests. There are no hard cases yet
+    (negation such as "not high value", synonyms outside the alias lists, messy multi-sentence
+    tickets), and the policy cases without a definition check that the policy is named and
+    enforced, not the rest of the audience.
 
 ## Observability and operability
 
@@ -462,6 +512,24 @@ stateless replicas, model routing) are in [docs/DESIGN.md](docs/DESIGN.md#scalin
 
 ---
 
+## Data and privacy: what leaves the customer's boundary
+
+For a data-protection officer, in one place:
+- **Sent to the model provider (Anthropic's API):** the marketer's request after masking, the
+  catalog prompt (field names, descriptions, allowed values, governed term names and phrases),
+  and for a refinement the current conditions that passed validation. Nothing else.
+- **Never sent to the model:** profile rows, counts, consent values, campaign history, the audit
+  trail. Sizing, consent and evidence are computed locally.
+- **Masked before anything is sent or stored:** emails, phone numbers, IBANs, Spanish, Italian
+  and UK national IDs, line ids. Names, free-text addresses and Andean national IDs are not
+  covered (regex masker; a production deployment adds the customer's own ID formats).
+- **Stored locally:** the masked request, the model's proposal and the approval record (SQLite),
+  and JSON logs with the masked text. Nothing customer-level leaves the deployment.
+- **For an EU or regulated customer:** the provider sits behind one interface, so the
+  model can run under a zero-data-retention agreement or an in-region hosted deployment
+  (for example through the customer's cloud provider) by configuration. Retention of the
+  provider's API logs is then the contract's terms, not this code's.
+
 ## How this maps to Adobe Experience Platform
 
 AEP already ships the product version of this workflow. The
@@ -498,10 +566,17 @@ How each piece would be delivered on the platform rather than rebuilt:
 | Approve | Create the audience (AEP keeps its own audit log; this one adds the business provenance) |
 | Catalog and policies read from YAML | Read from AEP: schemas and governance policies via the platform APIs, or the read-only tools in the [CX Coworker Gateway](https://experienceleague.adobe.com/en/docs/experience-cloud-ai/experience-cloud-ai/mcp/overview) MCP endpoint (beta) |
 | Synthetic campaign history, contact pressure, lift vs holdout | Journey Optimizer's message send and feedback datasets as the history; lift computed in Customer Journey Analytics or Query Service over the same events |
+| Holdout recorded at approval | Journey Optimizer's journey-level holdout ([Limited Availability](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/orchestrate-journeys/create-journey/journey-properties)), deterministic, with lift in CJA. Use it rather than this split; keep the approval record of what was planned |
+| Contact pressure warning | Journey Optimizer's [capping rule sets](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/conflict-prioritization/capping-rules/rule-sets) enforce frequency caps at send time. This warning shows the same pressure earlier, while the audience is being defined |
+| Approval with a goal and an approver | Journey Optimizer [approval policies](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/test/approve/approval-policies) with named reviewers and SSO identities. This record adds the business provenance (definitions, evidence, holdout plan) that an approval request doesn't carry |
+| Export CSV of contacted / held-out lines | Not needed on AEP: the approved definition becomes an audience, and activation or a journey reads it directly |
 | Clarification and policy step | A customer-built agent or tool alongside Audience Agent; Agent Orchestrator is documented as extensible to customer and partner agents. The MCP server here is that shape: drafting tools for agents, approval kept with a person |
 
-Not modelled here: identity. One row per line means no identity graph, no merge policies, and no
-person-level consent across a household's lines. Real-time (streaming or edge) qualification is
+Not modelled here: identity. Here a profile is a mobile line. On AEP the profile is usually the
+person, stitched by the identity graph across their lines, accounts and email addresses, so a
+telco has to choose the grain per use case: line for usage-based campaigns (top-ups, data
+upsell), person or account for consent, contact pressure and household offers. Merge policies
+make that choice explicit, and consent is per person and channel, not per line. Real-time (streaming or edge) qualification is
 also out of scope; this is batch.
 
 ## Standards

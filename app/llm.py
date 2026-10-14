@@ -297,6 +297,12 @@ def fixture_key(messages: list[dict[str, Any]]) -> str:
     return hashlib.sha256((PROMPT_VERSION + json.dumps(messages, sort_keys=True)).encode()).hexdigest()[:16]
 
 
+def prompt_sha(system: str) -> str:
+    """Fingerprint of the system prompt (rules + catalog). Stored with each recording, so a replay made
+    after the prompt or the catalog changed fails instead of silently reporting old results."""
+    return hashlib.sha256(system.encode()).hexdigest()[:16]
+
+
 class ReplayProvider:
     """Serves recorded proposals for one model + effort. Unknown requests raise ProviderUnavailable,
     like an outage would."""
@@ -323,6 +329,8 @@ class ReplayProvider:
         fixture = self._fixtures.get(fixture_key(messages))
         if fixture is None:
             raise NotRecorded("offline mode: no recorded model response for this request")
+        if fixture.get("system_sha") not in (None, prompt_sha(system)):
+            raise NotRecorded("stale recording: the system prompt or catalog changed after it was recorded")
         usage = fixture.get("usage", {})
         return LLMResult(
             proposal=fixture["proposal"],
@@ -357,6 +365,7 @@ class RecordingProvider:
             "model": result.model,
             "effort": effort,
             "prompt_version": PROMPT_VERSION,
+            "system_sha": prompt_sha(system),
             "request": messages[-1]["content"],
             "proposal": result.proposal,
             "latency_ms": round(result.latency_ms, 1),

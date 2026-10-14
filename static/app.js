@@ -455,7 +455,9 @@ async function loadAudit() {
   const rows = await api("/api/audiences");
   $("audit").innerHTML = rows.map((r) => {
     const m = JSON.parse(r.measurement_json || "{}");
-    const plan = m.goal ? `<div class="hint"><strong>Goal:</strong> ${esc(m.goal)} · ${fmt(m.holdout_lines)} held out to measure it${m.measurable ? "" : " (too few to be reliable)"}</div>` : "";
+    const plan = m.goal ? `<div class="hint"><strong>Goal:</strong> ${esc(m.goal)} · ${fmt(m.holdout_lines)} held out to measure it${m.measurable ? "" : " (too few to be reliable)"}`
+      + ` · <a href="/api/audiences/${r.id}/export.csv">export for the campaign tool</a>`
+      + `${r.data_changed_since_approval ? ' <span class="warn-text">(profile data refreshed since approval: the export uses current data)</span>' : ""}</div>` : "";
     return `
     <tr><td>${r.id}</td><td>${esc(r.name)}</td><td>${fmt(r.reachable)}</td><td>${esc(r.approver)}</td>
     <td>${r.edited_by_user ? "yes" : "no"}</td><td class="def">${esc(r.explanation)}${plan}<div class="mono">${r.definition_hash} · ${esc(r.model || "manual")} · ${esc(r.created_at.replace("T", " ").replace("+00:00", ""))}</div></td>

@@ -8,7 +8,10 @@
 A case passes only if every expectation it declares holds. Audience correctness is judged by
 outcome: the proposed and expected definitions must select exactly the same reachable lines.
 Policy cases check the system guarantee (a forbidden field is never in a sizable definition) and
-that the policy is surfaced to the user (issues_include: policy_violation).
+that the policy is surfaced to the user (issues_include: policy_violation). An "invalid" result
+only passes if its errors come from the request itself (a policy, scope or contradiction), never
+from the model (an invented field or value), and, when the case gives a definition, if the part
+of the audience without errors matches it.
 """
 
 from __future__ import annotations
@@ -33,6 +36,17 @@ from app.store import AuditStore, TTLCache
 from app.synthdata import generate
 
 SIZABLE = {"ready", "needs_confirmation", "needs_clarification"}
+# Errors caused by the request itself (it asks for something not allowed or impossible), as opposed to
+# errors the model made (an invented field, a bad value). Only the first kind can make "invalid" right.
+REQUEST_CONFLICTS = {"policy_violation", "out_of_scope_condition", "contradictory_conditions"}
+
+
+def valid_part(result) -> AudienceDefinition:
+    """The conditions of an invalid result that carry no error: what it would select once the flagged
+    conditions are removed. An invalid answer is only right if this part is right too."""
+    flagged = {i.attribute for i in result.issues if i.level == "error" and i.attribute}
+    return result.definition.model_copy(
+        update={"conditions": [c for c in result.definition.conditions if c.attribute not in flagged]})
 
 
 def score_case(case: dict, result, engine: AudienceEngine) -> dict:
@@ -40,14 +54,16 @@ def score_case(case: dict, result, engine: AudienceEngine) -> dict:
     checks: dict[str, bool] = {}
     accepted = expect.get("status_in") or [expect["status"]]
     checks["status"] = result.status in accepted
+    if result.status == "invalid":
+        checks["only_request_conflicts"] = {i.code for i in result.issues if i.level == "error"} <= REQUEST_CONFLICTS
 
-    if "definition" in expect and result.status in SIZABLE:
+    if "definition" in expect and result.status in SIZABLE | {"invalid"}:
         expected_def = AudienceDefinition(
             channel=expect["definition"].get("channel", "sms"),
             conditions=[Condition(**c) for c in expect["definition"]["conditions"]],
         )
         want = engine.profile_ids(expected_def)
-        got = engine.profile_ids(result.definition)
+        got = engine.profile_ids(result.definition if result.status in SIZABLE else valid_part(result))
         union = want | got
         checks["audience"] = want == got
         jaccard = len(want & got) / len(union) if union else 1.0

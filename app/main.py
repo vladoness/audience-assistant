@@ -7,6 +7,7 @@
     POST /api/approve     server-side re-check + re-size, then an audit record with provenance
     GET  /api/interpretations/{id}  a recorded interpretation, re-checked, for review (e.g. drafted over MCP)
     GET  /api/audiences   approved audiences + whether a governance change affects them (blast radius)
+    GET  /api/audiences/{id}/export.csv  every reachable line with its group, for the campaign tool
     GET  /api/insights    unmapped-request demand, open-term choices, edit rates (field-to-product signals)
     GET  /api/catalog     attributes, terms and policies for the editor
     GET  /api/metrics     counters and latency percentiles
@@ -26,7 +27,7 @@ from dataclasses import dataclass
 
 import duckdb
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.audience import AudienceEngine
@@ -283,6 +284,10 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             "governance_json": json.dumps(snapshot(final, s.catalog)),
             "governance_versions": json.dumps(s.catalog.versions),
             "measurement_json": json.dumps(measurement),
+            # Who called, as far as the server can tell. Without SSO the approver name is self-declared; this
+            # at least records where the approval came from (an agent calling the API directly shows up here).
+            "client_json": json.dumps({"host": request.client.host if request.client else None,
+                                       "user_agent": request.headers.get("user-agent", "")[:200]}),
         })
         s.metrics.incr("audiences_approved")
         if audience_id is None:
@@ -309,8 +314,33 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             except ValueError as exc:
                 row["governance_changes"] = changes + [f"no longer valid under the current catalog ({exc})"]
                 row["reachable_now"] = row["reachable_under_current_rules"] = None
+            approved_snapshot = json.loads(row["measurement_json"]).get("data_snapshot")
+            row["data_changed_since_approval"] = approved_snapshot is not None and approved_snapshot != s.engine.snapshot
             rows.append(row)
         return rows
+
+    @app.get("/api/audiences/{audience_id}/export.csv")
+    def export(audience_id: int, request: Request) -> Response:
+        """The approved audience for the campaign tool: every reachable line with its group (contacted or
+        held out). Headers say whether this is still exactly the approved membership."""
+        s = svc(request)
+        row = s.store.get_audience(audience_id)
+        if row is None:
+            raise HTTPException(404, detail="Unknown audience.")
+        definition = AudienceDefinition(**json.loads(row["definition_json"]))
+        m = json.loads(row["measurement_json"])
+        salt, share = m["split"]["salt"], m["holdout_share"]
+        matches = m.get("members_sha") == s.engine.member_digests(definition, salt, share)
+        lines = ["profile_id,group", *(f"{pid},{group}" for pid, group in s.engine.members(definition, salt, share))]
+        s.metrics.incr("audience_exports")
+        log.info("audience_exported", extra={"audience_id": audience_id, "lines": len(lines) - 1,
+                                             "membership_matches_approval": matches})
+        return Response("\n".join(lines) + "\n", media_type="text/csv", headers={
+            "Content-Disposition": f'attachment; filename="audience-{audience_id}.csv"',
+            "X-Membership-Matches-Approval": "true" if matches else "false",
+            "X-Approved-Data-Snapshot": str(m.get("data_snapshot", "")),
+            "X-Current-Data-Snapshot": s.engine.snapshot,
+        })
 
     @app.get("/api/insights")
     def insights(request: Request) -> dict:
@@ -403,6 +433,8 @@ def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, sal
                                         "or treat the outcome as anecdotal.",
         "split": {"method": "md5_number_lower(salt || ':' || profile_id) % 10000 < share x 10000", "salt": salt},
         "parameters": f"measurement v{ps.version}" if ps else None,
+        "data_snapshot": s.engine.snapshot,
+        "members_sha": s.engine.member_digests(definition, salt, share),
     }
 
 

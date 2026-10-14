@@ -1,0 +1,45 @@
+# Assumptions behind docs/BUSINESS-CASE.md. Every number here is an assumption for the fictional
+# customer (see docs/CUSTOMER-CONTEXT.md), not a measurement; the pilot is what measures them.
+# Run `make business-case` to recompute; `--set key=value` changes one assumption in the base case.
+
+scenarios:
+  low:
+    time_sensitive_share: 0.15        # share of campaigns whose value depends on launching on time
+    value_lost_to_delay: 0.10         # share of a time-sensitive campaign's value lost to today's 1-3 day wait
+    incremental_response_rate: 0.005  # extra responders vs a holdout group, per reachable line
+    margin_per_response_usd: 5        # extra gross margin per responder (one top-up, bundle or upgrade)
+    extra_campaigns_per_month: 0      # campaigns or tests marketers add when audiences take minutes
+    expected_penalties_avoided_usd: 5000   # per year: likelihood x size of a consent breach (risk, not cash)
+    analyst_hours_per_ticket: 1.0
+    rework_hours_per_disputed_ticket: 0.0
+    analyst_cost_per_month_usd: 2000  # fully loaded, local market
+  base:
+    time_sensitive_share: 0.25
+    value_lost_to_delay: 0.25
+    incremental_response_rate: 0.01
+    margin_per_response_usd: 5
+    extra_campaigns_per_month: 4
+    expected_penalties_avoided_usd: 15000
+    analyst_hours_per_ticket: 1.5
+    rework_hours_per_disputed_ticket: 1.0
+    analyst_cost_per_month_usd: 2500
+  high:
+    time_sensitive_share: 0.35
+    value_lost_to_delay: 0.40
+    incremental_response_rate: 0.01
+    margin_per_response_usd: 10
+    extra_campaigns_per_month: 8
+    expected_penalties_avoided_usd: 30000
+    analyst_hours_per_ticket: 2.0
+    rework_hours_per_disputed_ticket: 1.5
+    analyst_cost_per_month_usd: 3500
+
+fixed:
+  campaigns_per_month: 40
+  reachable_lines_per_campaign: 40000
+  disputed_ticket_share: 0.333        # "about a third go back and forth on definitions"
+  analyst_hours_per_month_fte: 160
+
+costs:
+  delivery_one_off_usd: 50000         # ~8 FDE weeks: connect the profile store, definition + policy workshops, shadow pilot
+  running_per_year_usd: 4000          # hosting ~1,800; model calls < 5; data owners settling definitions ~2,000

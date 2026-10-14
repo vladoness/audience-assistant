@@ -42,6 +42,11 @@ North", "make it email"), sees the reachable size and approves. Then they do it 
 
 ## The value, in the customer's terms
 
+In money, the base case is about **$185k a year** of benefit for about $50k of delivery, a payback
+of about three months. Extra campaign margin carries it; the analyst time on its own would take
+about five years to pay back. Assumptions, scenarios and what moves the answer are in
+[BUSINESS-CASE.md](BUSINESS-CASE.md).
+
 - **Speed to market.** Campaigns launch the day the idea comes up, not three days later. For
   time-sensitive offers (roaming before holidays, top-up reminders before month-end) that is the
   difference between running the campaign and not.

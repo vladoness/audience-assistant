@@ -1,4 +1,4 @@
-.PHONY: setup data run mcp test lint eval eval-heldout eval-refine eval-replay record bench
+.PHONY: setup data run mcp test lint eval eval-heldout eval-refine eval-replay record business-case bench
 
 setup:          ## install dependencies into .venv
 	uv sync
@@ -33,6 +33,9 @@ eval-replay:    ## reproduce run 1 of every eval set offline from recorded fixtu
 	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low)
 	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases heldout
 	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases refine
+
+business-case:  ## low / base / high business case from docs/business_case.yaml (ARGS="--set key=value" to change one)
+	uv run python -m scripts.business_case $(ARGS)
 
 bench:          ## sizing latency at 200k / 1M / 5M lines
 	uv run python -m scripts.bench --rows 200000 1000000 5000000

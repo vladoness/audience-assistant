@@ -10,6 +10,8 @@ answer is done by deterministic code: which fields exist, what governed terms me
 policies apply, consent, counting, and the summary the user approves.
 
 - **Customer context and value:** [docs/CUSTOMER-CONTEXT.md](docs/CUSTOMER-CONTEXT.md)
+- **Business case** (base case about $185k a year, payback about three months; `make business-case`):
+  [docs/BUSINESS-CASE.md](docs/BUSINESS-CASE.md)
 - **Design note and diagram:** [docs/DESIGN.md](docs/DESIGN.md)
 
 | An open business term asks instead of guessing | A data-usage policy is named, per channel |
@@ -31,7 +33,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 94 tests, no network or API key needed
+make test         # 97 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 make mcp          # the same assistant as an MCP server for AI agents (see "Use it from an AI agent")
 ```
@@ -342,7 +344,7 @@ OpenAPI docs are at `/docs`.
 
 ## Testing and reliability
 
-- **`make test`: 94 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 97 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;

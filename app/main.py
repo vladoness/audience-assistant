@@ -8,6 +8,9 @@
     GET  /api/interpretations/{id}  a recorded interpretation, re-checked, for review (e.g. drafted over MCP)
     GET  /api/audiences   approved audiences + whether a governance change affects them (blast radius)
     GET  /api/audiences/{id}/export.csv  every reachable line with its group, for the campaign tool
+    POST /api/audiences/{id}/outcome     the campaign tool reports responders; lift is measured and learned from
+    POST /api/audiences/{id}/simulate-outcome  demo only (synthetic history): the same path with generated responses
+    GET  /api/learning[/{type}]          the loop in numbers, the learning curve per type, expected vs measured
     GET  /api/insights    unmapped-request demand, open-term choices, edit rates (field-to-product signals)
     GET  /api/catalog     attributes, terms and policies for the editor
     GET  /api/metrics     counters and latency percentiles
@@ -22,6 +25,7 @@ import logging
 import os
 import time
 import uuid
+from datetime import date
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
@@ -39,13 +43,13 @@ from app.limits import DailyBudget, RateLimiter
 from app.lint import LintReport, lint
 from app.llm import AnthropicProvider, Pricing, Provider, ProviderUnavailable, RecordingProvider, ReplayProvider
 from app.models import (
-    ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, InterpretRequest, InterpretResult, RefineRequest,
-    SizeResult,
+    ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, InterpretRequest, InterpretResult, OutcomeRequest,
+    RefineRequest, SizeResult,
 )
 from app.observability import Metrics, configure_logging, request_id_var
 from app.settings import ROOT, Settings
 from app.store import AuditStore, TTLCache, definition_hash
-from app.history import CampaignHistory
+from app.history import CampaignHistory, counts_lift, verdict
 from app.synthdata import add_history, generate
 
 log = logging.getLogger("app")
@@ -232,7 +236,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
     @app.get("/api/history/evidence/{campaign_type}")
     def evidence(campaign_type: str, request: Request) -> dict:
         h = svc(request).history
-        found = h.evidence(campaign_type) if h is not None else None
+        found = h.evidence(campaign_type, svc(request).store.outcomes()) if h is not None else None
         if found is None:
             raise HTTPException(404, detail=f"No campaign history for type {campaign_type!r}.")
         return found
@@ -303,7 +307,16 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
     def audiences(request: Request) -> list[dict]:
         s = svc(request)
         rows = []
+        outcomes = {o["audience_id"]: o for o in s.store.outcomes()}
         for row in s.store.list_audiences():
+            o = outcomes.get(row["id"])
+            if o is not None:
+                measured = counts_lift(o["contacted"], o["held_out"], o["contacted_responders"], o["held_out_responders"])
+                expected = json.loads(row["measurement_json"]).get("evidence_at_approval")
+                row["outcome"] = {"source": o["source"], "sent_at": o["sent_at"], "measured": measured.as_dict(),
+                                  "expected": expected, "verdict": verdict(expected, measured)}
+            else:
+                row["outcome"] = None
             definition = AudienceDefinition(**json.loads(row["definition_json"]))
             changes = impact(json.loads(row["governance_json"]), s.catalog)
             row["governance_changes"] = changes
@@ -318,6 +331,63 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             row["data_changed_since_approval"] = approved_snapshot is not None and approved_snapshot != s.engine.snapshot
             rows.append(row)
         return rows
+
+    @app.post("/api/audiences/{audience_id}/outcome")
+    def outcome(audience_id: int, body: OutcomeRequest, request: Request) -> dict:
+        """Close the loop: the campaign tool reports who responded; the lift is measured against the
+        holdout recorded at approval and joins the evidence for the next decision."""
+        s = svc(request)
+        return record_outcome(s, audience_id, body.responders, source="campaign_tool",
+                              sent_at=body.sent_at or date.today().isoformat())
+
+    @app.post("/api/audiences/{audience_id}/simulate-outcome")
+    def simulate_outcome(audience_id: int, request: Request) -> dict:
+        """DEMO ONLY, with the synthetic history: generate the responses a send would have produced,
+        from the same known effects, and record them through exactly the same path as a real report."""
+        s = svc(request)
+        if s.history is None or not s.history.synthetic:
+            raise HTTPException(409, detail="Simulated outcomes are only available with the synthetic demo history.")
+        row = s.store.get_audience(audience_id)
+        if row is None:
+            raise HTTPException(404, detail="Unknown audience.")
+        m = json.loads(row["measurement_json"])
+        if not m.get("campaign_type"):
+            raise HTTPException(422, detail="This audience has no campaign type, so there is nothing to simulate against.")
+        definition = AudienceDefinition(**json.loads(row["definition_json"]))
+        members = s.engine.members(definition, m["split"]["salt"], m["holdout_share"])
+        responders = s.history.simulate_responders(members, m["campaign_type"], seed=f"outcome:{audience_id}")
+        return record_outcome(s, audience_id, responders, source="simulated", sent_at=date.today().isoformat())
+
+    @app.get("/api/learning")
+    def learning_summary(request: Request) -> dict:
+        """The loop in numbers: how many decisions were defined, approved, measured, and what was learned."""
+        s = svc(request)
+        own = s.store.outcomes()
+        types = []
+        for t in s.history.types() if s.history is not None else []:
+            now = s.history.evidence(t["id"], own)
+            before = s.history.evidence(t["id"])
+            types.append({"id": t["id"], "label": t["label"], "campaigns": now["campaigns"],
+                          "measured_here": now["measured_here"], "estimate_now": now["pooled"],
+                          "estimate_from_history_only": before["pooled"]})
+        scorecard = []
+        for o in own:
+            m = json.loads(o["measurement_json"])
+            measured = counts_lift(o["contacted"], o["held_out"], o["contacted_responders"], o["held_out_responders"])
+            scorecard.append({"audience_id": o["audience_id"], "name": o["name"], "campaign_type": o["campaign_type"],
+                              "source": o["source"], "sent_at": o["sent_at"],
+                              "expected": m.get("evidence_at_approval"), "measured": measured.as_dict(),
+                              "verdict": verdict(m.get("evidence_at_approval"), measured)})
+        return {"synthetic": bool(s.history and s.history.synthetic), "loop": s.store.counts(),
+                "types": types, "scorecard": scorecard}
+
+    @app.get("/api/learning/{campaign_type}")
+    def learning_curve(campaign_type: str, request: Request) -> dict:
+        s = svc(request)
+        found = s.history.learning(campaign_type, s.store.outcomes()) if s.history is not None else None
+        if found is None:
+            raise HTTPException(404, detail=f"No campaign history for type {campaign_type!r}.")
+        return found
 
     @app.get("/api/audiences/{audience_id}/export.csv")
     def export(audience_id: int, request: Request) -> Response:
@@ -404,6 +474,43 @@ EXAMPLES = [
 REFINE_EXAMPLES = ["also include the Highlands", "only postpaid", "make it SMS instead"]
 
 
+def record_outcome(s: Services, audience_id: int, responders: list[str], source: str, sent_at: str) -> dict:
+    """Count responders in the approved contacted and held-out groups, measure the lift, store it, and
+    compare it with what the evidence said at approval. One outcome per audience."""
+    row = s.store.get_audience(audience_id)
+    if row is None:
+        raise HTTPException(404, detail="Unknown audience.")
+    m = json.loads(row["measurement_json"])
+    if "split" not in m:
+        raise HTTPException(422, detail="This audience was approved without a holdout, so its lift can't be measured.")
+    definition = AudienceDefinition(**json.loads(row["definition_json"]))
+    salt, share = m["split"]["salt"], m["holdout_share"]
+    groups = dict(s.engine.members(definition, salt, share))
+    responded = set(responders)
+    contacted = sum(1 for g in groups.values() if g == "contacted")
+    held_out = len(groups) - contacted
+    contacted_r = sum(1 for p in responded if groups.get(p) == "contacted")
+    held_out_r = sum(1 for p in responded if groups.get(p) == "held_out")
+    stored = s.store.record_outcome_once({
+        "audience_id": audience_id, "source": source, "campaign_type": m.get("campaign_type"), "sent_at": sent_at,
+        "contacted": contacted, "contacted_responders": contacted_r, "held_out": held_out,
+        "held_out_responders": held_out_r, "unknown_responders": len(responded) - contacted_r - held_out_r,
+        "membership_matches": int(m.get("members_sha") == s.engine.member_digests(definition, salt, share)),
+    })
+    if not stored:
+        raise HTTPException(409, detail="An outcome is already recorded for this audience.")
+    measured = counts_lift(contacted, held_out, contacted_r, held_out_r)
+    result = {"audience_id": audience_id, "source": source, "campaign_type": m.get("campaign_type"),
+              "measured": measured.as_dict(), "expected": m.get("evidence_at_approval"),
+              "verdict": verdict(m.get("evidence_at_approval"), measured),
+              "unknown_responders": len(responded) - contacted_r - held_out_r,
+              "membership_matches_approval": m.get("members_sha") == s.engine.member_digests(definition, salt, share)}
+    s.metrics.incr(f"outcomes_{source}")
+    log.info("outcome_recorded", extra={k: result[k] for k in ("audience_id", "source", "campaign_type", "verdict")}
+             | {"lift_points": result["measured"]["lift_points"]})
+    return result
+
+
 def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, salt: str,
                      campaign_type: str | None = None) -> dict:
     """How this decision will be judged later: the campaign goal, a governed share of the audience held out
@@ -414,7 +521,7 @@ def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, sal
     window = int(ps.values["window_days"]) if ps else 0
     target, holdout = s.engine.split(definition, salt, share)
     measurable = ps is not None and holdout >= int(ps.values["min_holdout_lines"])
-    past = s.history.evidence(campaign_type) if s.history is not None and campaign_type else None
+    past = s.history.evidence(campaign_type, s.store.outcomes()) if s.history is not None and campaign_type else None
     pressure = s.history.contact_pressure(definition) if s.history is not None else None
     return {
         "goal": goal,

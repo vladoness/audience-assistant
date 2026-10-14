@@ -126,7 +126,9 @@ Capture the baseline before it starts:
   approval (10% by default, `measurement` parameter set), so the measurement is built in rather
   than bolted on. The demo's synthetic campaign history shows the shape of the answer: measured
   lift per campaign type, from about +0.2 points (app adoption) to about +1.6 (top-up reminders).
-  The pilot replaces those with the customer's own campaigns.
+  The pilot replaces those with the customer's own campaigns: each pilot campaign's responses go
+  to the outcome endpoint, its measured lift joins the evidence, and the learning curve shows
+  when the estimate is tight enough to replace this document's response assumption.
 - **Campaigns and tests per month,** pilot marketers against the others.
 - **Launch delay** for time-sensitive campaigns, request to send.
 - **Policy and consent blocks caught** (already counted in Insights), as risk evidence.

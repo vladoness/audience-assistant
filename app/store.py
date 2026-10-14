@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -60,6 +60,19 @@ CREATE TABLE IF NOT EXISTS audiences (
     client_json TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS audiences_one_per_request ON audiences(request_id);
+CREATE TABLE IF NOT EXISTS outcomes (
+    audience_id INTEGER PRIMARY KEY REFERENCES audiences(id),
+    recorded_at TEXT NOT NULL,
+    source TEXT NOT NULL,
+    campaign_type TEXT,
+    sent_at TEXT NOT NULL,
+    contacted INTEGER NOT NULL,
+    contacted_responders INTEGER NOT NULL,
+    held_out INTEGER NOT NULL,
+    held_out_responders INTEGER NOT NULL,
+    unknown_responders INTEGER NOT NULL,
+    membership_matches INTEGER NOT NULL
+);
 """
 
 
@@ -87,7 +100,7 @@ class AuditStore:
         current = self._db.execute("PRAGMA user_version").fetchone()[0]
         if current < SCHEMA_VERSION:
             existing = {r[0] for r in self._db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            for table in ("interpretations", "audiences"):
+            for table in ("interpretations", "audiences", "outcomes"):
                 if table in existing:
                     self._db.execute(f"ALTER TABLE {table} RENAME TO {table}_v{current}_{int(time.time())}")
         self._db.executescript(_SCHEMA)
@@ -139,6 +152,40 @@ class AuditStore:
             return self.record_approval(row)
         except sqlite3.IntegrityError:
             return None
+
+    def record_outcome_once(self, row: dict[str, Any]) -> bool:
+        """Store the measured outcome of an approved audience's campaign; False if one is already recorded."""
+        try:
+            with self._lock, self._db:
+                self._db.execute(
+                    """INSERT INTO outcomes VALUES (:audience_id, :recorded_at, :source, :campaign_type, :sent_at,
+                       :contacted, :contacted_responders, :held_out, :held_out_responders, :unknown_responders,
+                       :membership_matches)""",
+                    {"recorded_at": _now(), **row},
+                )
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def outcomes(self, campaign_type: str | None = None) -> list[dict[str, Any]]:
+        """Recorded outcomes with the approval they belong to (name, goal, what was expected)."""
+        with self._lock:
+            rows = self._db.execute(
+                """SELECT o.*, a.name, a.measurement_json FROM outcomes o JOIN audiences a ON a.id = o.audience_id
+                   WHERE ? IS NULL OR o.campaign_type = ? ORDER BY o.sent_at, o.audience_id""",
+                (campaign_type, campaign_type),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def counts(self) -> dict[str, int]:
+        """How far decisions have travelled round the loop."""
+        with self._lock:
+            interpreted = self._db.execute("SELECT count(*) FROM interpretations WHERE parent_request_id IS NULL").fetchone()[0]
+            approved = self._db.execute("SELECT count(*) FROM audiences").fetchone()[0]
+            typed = self._db.execute(
+                "SELECT count(*) FROM audiences WHERE json_extract(measurement_json, '$.campaign_type') IS NOT NULL").fetchone()[0]
+            measured = self._db.execute("SELECT count(*) FROM outcomes").fetchone()[0]
+        return {"interpreted": interpreted, "approved": approved, "approved_with_type": typed, "measured": measured}
 
     def get_audience(self, audience_id: int) -> dict[str, Any] | None:
         with self._lock:

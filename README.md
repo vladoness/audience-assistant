@@ -40,7 +40,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 130 tests, no network or API key needed
+make test         # 135 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 make mcp          # the same assistant as an MCP server for AI agents (see "Use it from an AI agent")
 ```
@@ -78,6 +78,7 @@ the benchmark, and the customer and design notes. Read `app/interpret.py`, `app/
 | Change it in words (refinement) | "Adobe's Audience Agent is conversational; is yours?" | `app/refine.py`, design decision 16 |
 | Options with consequences, goal and holdout at approval | "Does it support a decision, and how will anyone know it was right?" | design decision 19 |
 | Past campaigns as evidence (synthetic history) | "What should the marketer know before approving?" | `app/history.py`, decision 20 |
+| The learning loop (outcomes, learning curve, expected against measured) | "Does it actually learn from campaigns, and does the loop close?" | `record_outcome` in `app/main.py`, decision 21 |
 | MCP server for AI agents | "How would this plug into an agent ecosystem without giving agents authority?" | `app/mcp_server.py`, decision 18 |
 | Business case calculator | "What is it worth, and which assumption decides that?" | `docs/BUSINESS-CASE.md` |
 
@@ -132,6 +133,34 @@ tests. None of them is needed to judge the core slice.
      measure: response of the contacted group minus the holdout, over 14 days.
 
    Each interpretation can be approved once.
+
+---
+
+## The learning loop: every measured campaign informs the next decision
+
+<img src="docs/screenshots/8-learning-loop.png" alt="Learning loop" width="720">
+
+The loop closes in the app, not only on a slide:
+1. **Define:** the request becomes a governed definition.
+2. **Decide:** approval records the goal, the campaign type, a 10% holdout, and the evidence the
+   approver saw: the pooled lift of past campaigns of that type.
+3. **Send and measure:** the campaign tool reports which lines responded
+   (`POST /api/audiences/{id}/outcome`, a list of profile ids). The server counts them against
+   the exact contacted and held-out groups recorded at approval, checks the membership digest,
+   and measures the lift with its 95% interval. One outcome per audience; responders outside
+   the audience are counted, not attributed.
+4. **Learn:** the measured campaign joins the evidence for its type, so the next approval of
+   that type sees it. The chart shows each campaign's lift and the running estimate after it;
+   its band narrowing is the learning.
+5. **Check the decision:** the scorecard compares each approval's expectation with what was
+   measured. A difference is only claimed when the two intervals don't overlap, because one
+   campaign is much noisier than the pooled history.
+
+**In the demo, the send is simulated, and says so.** There is no campaign tool, so "Simulate the
+send" generates the responses from the same known effects as the synthetic history and posts
+them through exactly the same code path as a real report. It only works with the synthetic
+history. Each approval gets its own random holdout split, so measured results vary between runs,
+as real ones would.
 
 ---
 
@@ -339,6 +368,8 @@ variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 | A model or client sends oversized or nested values | Rejected at the API: values are scalars or flat lists, at most 100 items of 200 characters |
 | A change tries to edit part of a governed definition | Governed conditions move only with their term; overlapping numbers get a warning |
 | Model unavailable during a change | 503 "your audience is unchanged"; nothing recorded; the previous interpretation is still the one approval uses |
+| An outcome report that doesn't match the audience | Responders are counted only inside the approved contacted and held-out groups; others are reported as unknown; a membership digest says whether the groups are still the approved ones; a second report for the same audience is refused |
+| One campaign measures far from the evidence | Shown as "in line" unless its interval and the expectation's don't overlap; one noisy campaign doesn't overturn the pooled history |
 | An AI agent (over MCP) tries to approve, or to settle an open term for the marketer | No tool for either: the agent gets a review link, and a person answers and approves in the UI; drafts are audited as `origin: "mcp"` |
 | Personal data pasted into the request | Masked before the model and the logs; count recorded; length capped before masking |
 | Duplicated rows in the profile feed | Engine refuses to start: every count would be inflated |
@@ -381,6 +412,12 @@ Endpoints:
 - `POST /api/check`, `POST /api/size`, `POST /api/approve`.
 - `GET /api/history` and `GET /api/history/evidence/{campaign_type}`: campaign types with past
   campaigns, and their measured lift (read-only).
+- `POST /api/audiences/{id}/outcome`: the campaign tool reports responders; the lift is measured
+  against the approved holdout and joins the evidence. `POST /api/audiences/{id}/simulate-outcome`
+  does the same with generated responses, demo only.
+- `GET /api/learning` (the loop in numbers and the expected-against-measured scorecard) and
+  `GET /api/learning/{campaign_type}` (the learning curve).
+- `GET /api/audiences/{id}/export.csv`: every reachable line with its group, for the campaign tool.
 - `GET /api/interpretations/{id}`: a recorded interpretation, re-checked against today's rules,
   for review (the target of the MCP review links, `/?review=<id>`).
 - `GET /api/audiences`, `GET /api/insights`, `GET /api/catalog`, `GET /api/metrics`.
@@ -415,7 +452,7 @@ OpenAPI docs are at `/docs`.
 
 ## Testing and reliability
 
-- **`make test`: 130 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 135 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;
@@ -428,6 +465,9 @@ OpenAPI docs are at `/docs`.
     conditions move only with their term, open questions and unmapped parts carry forward and
     are counted once, an outage changes nothing, and an edit made before a change still counts
     as an edit at approval;
+  - the learning loop (`tests/test_learning.py`): reported responders are counted against the
+    approved groups, a measured campaign joins the evidence the next approval sees, the learning
+    curve narrows, and a difference is only claimed when intervals don't overlap;
   - campaign history (`tests/test_history.py`): measured lift recovers the known true effect of
     each campaign type within three standard errors, no past contact lacked consent, contact
     pressure matches a direct count, and the evidence shown is the evidence recorded at approval;
@@ -570,6 +610,7 @@ How each piece would be delivered on the platform rather than rebuilt:
 | Contact pressure warning | Journey Optimizer's [capping rule sets](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/conflict-prioritization/capping-rules/rule-sets) enforce frequency caps at send time. This warning shows the same pressure earlier, while the audience is being defined |
 | Approval with a goal and an approver | Journey Optimizer [approval policies](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/test/approve/approval-policies) with named reviewers and SSO identities. This record adds the business provenance (definitions, evidence, holdout plan) that an approval request doesn't carry |
 | Export CSV of contacted / held-out lines | Not needed on AEP: the approved definition becomes an audience, and activation or a journey reads it directly |
+| Outcome report and learning curve | Journey Optimizer records sends, holdout exclusions and conversions as experience events; CJA computes the lift. The learning step stays the same: each measured journey joins the evidence for its type |
 | Clarification and policy step | A customer-built agent or tool alongside Audience Agent; Agent Orchestrator is documented as extensible to customer and partner agents. The MCP server here is that shape: drafting tools for agents, approval kept with a person |
 
 Not modelled here: identity. Here a profile is a mobile line. On AEP the profile is usually the

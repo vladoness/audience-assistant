@@ -115,6 +115,28 @@
       </table>
     </section>
 
+    <section class="card" id="learning-card">
+      <div class="row between" style="margin-top:0">
+        <div class="step" style="margin:0">Learning loop: every measured campaign informs the next decision</div>
+        <span id="learning-synthetic"></span>
+      </div>
+      <div id="loop" class="loop"></div>
+      <div class="row">
+        <label class="inline">Campaign type <select id="learning-type"></select></label>
+        <span class="hint" id="learning-reading" style="margin:0"></span>
+      </div>
+      <svg id="learning-chart" class="chart" viewBox="0 0 900 300" role="img"
+        aria-label="Lift of each past campaign against its holdout, and the running estimate"></svg>
+      <p class="hint legend"><span class="dot synthetic"></span> past campaign, with its 95% interval
+        <span class="dot here"></span> approved here and measured
+        <span class="swatch"></span> running estimate and its 95% band: the band narrowing is the learning</p>
+      <h3 style="margin-top:14px">Expected at approval against measured</h3>
+      <table class="audit">
+        <thead><tr><th>#</th><th>Audience</th><th>Type</th><th>Expected (evidence at approval)</th><th>Measured</th><th>Verdict</th></tr></thead>
+        <tbody id="scorecard"></tbody>
+      </table>
+    </section>
+
     <section class="card" id="insights-card">
       <div class="row between" style="margin-top:0">
         <div class="step" style="margin:0">Signals for the data &amp; governance team</div>

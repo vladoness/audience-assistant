@@ -157,6 +157,13 @@ class RefineRequest(BaseModel):
     definition: AudienceDefinition  # what is on screen now, including the marketer's edits
 
 
+class OutcomeRequest(BaseModel):
+    """What the campaign tool reports after the send: which lines responded within the window."""
+
+    responders: list[Annotated[str, StringConstraints(max_length=64)]] = Field(max_length=2_000_000)
+    sent_at: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
 class CheckRequest(BaseModel):
     definition: AudienceDefinition
     pending_terms: list[str] = Field(default_factory=list)

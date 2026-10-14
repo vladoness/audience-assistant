@@ -309,6 +309,37 @@ Optimizer's message datasets in AEP, with lift computed in Customer Journey Anal
 Service. Each approval's own holdout then adds to that history, and the business case's response
 assumption becomes a measured number.
 
+**21. The learning loop is closed in code: outcomes are measured against the approved holdout and
+become evidence for the next decision.**
+Decisions 19 and 20 recorded how each decision would be judged and showed past evidence. This
+connects them. `POST /api/audiences/{id}/outcome` takes the campaign tool's list of responders,
+and `record_outcome` does four deterministic things:
+1. It recomputes the approved contacted and held-out groups from the stored definition, salt and
+   share, and checks them against the membership digest stored at approval.
+2. It counts responders inside each group; ids outside the audience are reported, never
+   attributed.
+3. It measures the lift with the same code as the history, and stores one outcome per audience.
+4. It compares the result with the evidence recorded at approval.
+
+The measured campaign then joins the evidence for its type: `CampaignHistory.evidence` pools the
+history with outcomes measured here, so the next approval of that type records a different,
+better-informed expectation. The UI shows it as a learning curve: each campaign's lift with its
+interval, and the running estimate with its band, which narrows as evidence accumulates.
+
+*The verdict rule.* A single campaign is much noisier than a pooled history of a dozen. Comparing
+its point estimate with the pooled interval would call most campaigns "worse than expected" by
+chance; my first version did exactly that. So a difference is only claimed when the campaign's
+95% interval and the expectation's don't overlap, and otherwise it is "in line".
+
+*Simulated sends.* With no campaign tool in the demo, a labelled button generates responses from
+the same known effects as the synthetic history and posts them through the same `record_outcome`
+path. It refuses to run without the synthetic history, so it can't fabricate outcomes in a real
+deployment.
+
+*Not done.* The loop learns per campaign type, not per segment, and it doesn't change any rule or
+threshold by itself. What the evidence should change (stop a campaign type that doesn't work,
+retarget one that does) stays a person's decision, made with the evidence on screen.
+
 ## Where the time goes (and why that shapes the design)
 
 | Stage | Typical | Notes |

@@ -72,9 +72,11 @@ async function init() {
   $("approve-btn").onclick = approve;
   $("refresh-insights").onclick = loadInsights;
   $("campaign-type").onchange = loadEvidence;
+  $("learning-type").onchange = () => loadLearning();
   loadAudit();
   loadInsights();
   loadHistoryTypes();
+  loadLearning();
   const review = new URLSearchParams(location.search).get("review");
   if (review) loadForReview(review);
 }
@@ -91,6 +93,7 @@ async function loadHistoryTypes() {
     $("campaign-type").appendChild(o);
   });
   $("campaign-type-row").hidden = false;
+  loadAudit();
 }
 
 async function loadEvidence() {
@@ -440,6 +443,7 @@ async function approve() {
       definition: state.definition, acknowledged_unmapped: state.acknowledged,
     });
     const m = r.measurement;
+    loadLearning();
     $("approve-msg").innerHTML = `Approved as audience #${r.id} · definition ${esc(r.definition_hash)}.<br>`
       + `<strong>${fmt(m.target_lines)}</strong> lines get the campaign and <strong>${fmt(m.holdout_lines)}</strong> `
       + `(${Math.round(m.holdout_share * 100)}%) are held out. How we'll know: ${esc(m.success_measure)}`
@@ -457,12 +461,104 @@ async function loadAudit() {
     const m = JSON.parse(r.measurement_json || "{}");
     const plan = m.goal ? `<div class="hint"><strong>Goal:</strong> ${esc(m.goal)} · ${fmt(m.holdout_lines)} held out to measure it${m.measurable ? "" : " (too few to be reliable)"}`
       + ` · <a href="/api/audiences/${r.id}/export.csv">export for the campaign tool</a>`
-      + `${r.data_changed_since_approval ? ' <span class="warn-text">(profile data refreshed since approval: the export uses current data)</span>' : ""}</div>` : "";
+      + `${r.data_changed_since_approval ? ' <span class="warn-text">(profile data refreshed since approval: the export uses current data)</span>' : ""}</div>`
+      + outcomeLine(r, m) : "";
     return `
     <tr><td>${r.id}</td><td>${esc(r.name)}</td><td>${fmt(r.reachable)}</td><td>${esc(r.approver)}</td>
     <td>${r.edited_by_user ? "yes" : "no"}</td><td class="def">${esc(r.explanation)}${plan}<div class="mono">${r.definition_hash} · ${esc(r.model || "manual")} · ${esc(r.created_at.replace("T", " ").replace("+00:00", ""))}</div></td>
     <td>${governanceCell(r)}</td></tr>`;
   }).join("") || '<tr><td colspan="7" class="hint">Nothing approved yet.</td></tr>';
+  document.querySelectorAll(".simulate-btn").forEach((b) => (b.onclick = () => simulateOutcome(b.dataset.id, b)));
+}
+
+const signed = (v) => `${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
+
+function outcomeLine(r, m) {
+  if (r.outcome) {
+    const o = r.outcome.measured;
+    const cls = r.outcome.verdict.startsWith("in line") ? "verdict-ok" : "verdict-diff";
+    return `<div class="hint"><strong>Measured</strong> (${esc(r.outcome.source === "simulated" ? "simulated send" : "campaign tool")}): `
+      + `${signed(o.lift_points)} pts (95% ${signed(o.lift_95_low)} to ${signed(o.lift_95_high)})`
+      + `${r.outcome.expected ? ` against ${signed(r.outcome.expected.lift_points)} expected` : ""}: <span class="${cls}">${esc(r.outcome.verdict)}</span></div>`;
+  }
+  if (!m.campaign_type) return "";
+  return `<div class="hint">Not measured yet. The campaign tool posts responses to <span class="mono">/api/audiences/${r.id}/outcome</span>. `
+    + (state.historySynthetic ? `<button class="small simulate-btn" data-id="${r.id}">Simulate the send (demo)</button>` : "") + "</div>";
+}
+
+async function simulateOutcome(id, btn) {
+  btn.disabled = true; btn.textContent = "Measuring…";
+  try {
+    await api(`/api/audiences/${id}/simulate-outcome`, {});
+  } catch (e) {
+    btn.textContent = `Failed: ${e.data?.detail || e.message}`;
+    return;
+  }
+  await Promise.all([loadAudit(), loadLearning()]);
+  if ($("campaign-type").value) loadEvidence();
+}
+
+async function loadLearning() {
+  const s = await api("/api/learning");
+  if (!s.types.length) { $("learning-card").hidden = true; return; }
+  $("learning-synthetic").innerHTML = s.synthetic ? SYNTHETIC : "";
+  const sel = $("learning-type");
+  if (!sel.options.length) {
+    s.types.forEach((t) => { const o = document.createElement("option"); o.value = t.id; o.textContent = t.label; sel.appendChild(o); });
+    const measured = s.types.find((t) => t.measured_here);
+    sel.value = measured ? measured.id : "data_upsell";
+  }
+  const t = s.types.find((x) => x.id === sel.value) || s.types[0];
+  const width = (e) => (e.lift_95_high - e.lift_95_low) / 2;
+  const L = s.loop;
+  $("loop").innerHTML = [
+    `<div class="stage"><strong>Define</strong><span class="n">${fmt(L.interpreted)}</span> ${L.interpreted === 1 ? "request" : "requests"} turned into governed definitions</div>`,
+    `<div class="stage"><strong>Decide</strong><span class="n">${fmt(L.approved)}</span> approved, each with a goal and a holdout (${fmt(L.approved_with_type)} with a campaign type)</div>`,
+    `<div class="stage"><strong>Send and measure</strong><span class="n">${fmt(L.measured)}</span> ${L.measured === 1 ? "outcome" : "outcomes"} measured against ${L.measured === 1 ? "its" : "their"} holdout</div>`,
+    `<div class="stage learn"><strong>Learn</strong>${esc(t.label)}: <span class="n">${signed(t.estimate_now.lift_points)}</span> pts ± ${width(t.estimate_now).toFixed(2)} from ${t.campaigns} campaigns${t.measured_here ? `, ${t.measured_here} of them approved here (history alone: ${signed(t.estimate_from_history_only.lift_points)} ± ${width(t.estimate_from_history_only).toFixed(2)})` : ""}</div>`,
+    `<div class="stage"><strong>Next decision</strong>the next ${esc(t.label.toLowerCase())} approval sees this evidence</div>`,
+  ].join('<span class="arrow">→</span>');
+  $("learning-reading").textContent = `Each dot is one campaign's lift against its holdout; the line is the estimate after it.`;
+  $("scorecard").innerHTML = s.scorecard.map((c) => `<tr><td>${c.audience_id}</td><td>${esc(c.name)}</td><td>${esc((s.types.find((x) => x.id === c.campaign_type) || {}).label || c.campaign_type)}</td>`
+    + `<td>${c.expected ? `${signed(c.expected.lift_points)} pts (95% ${signed(c.expected.lift_95_low)} to ${signed(c.expected.lift_95_high)}), ${c.expected.campaigns} campaigns` : "none recorded"}</td>`
+    + `<td>${signed(c.measured.lift_points)} pts (95% ${signed(c.measured.lift_95_low)} to ${signed(c.measured.lift_95_high)})<div class="hint">${fmt(c.measured.contacted)} contacted, ${fmt(c.measured.held_out)} held out · ${esc(c.source === "simulated" ? "simulated send" : "campaign tool")}</div></td>`
+    + `<td class="${c.verdict.startsWith("in line") ? "verdict-ok" : "verdict-diff"}">${esc(c.verdict)}</td></tr>`).join("")
+    || '<tr><td colspan="6" class="hint">No outcomes yet. Approve an audience with a campaign type, then measure its send.</td></tr>';
+  drawCurve((await api(`/api/learning/${encodeURIComponent(sel.value)}`)).timeline);
+}
+
+function drawCurve(points) {
+  const W = 900, H = 300, L = 62, R = 96, T = 16, B = 40;
+  const values = points.flatMap((p) => [p.lift_95_low, p.lift_95_high, p.estimate_low, p.estimate_high]).concat([0]);
+  let lo = Math.min(...values), hi = Math.max(...values);
+  const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const x = (i) => L + (W - L - R) * (points.length === 1 ? 0.5 : i / (points.length - 1));
+  const y = (v) => T + (H - T - B) * (hi - v) / (hi - lo);
+  const band = points.map((p, i) => `${x(i)},${y(p.estimate_high)}`)
+    .concat(points.map((p, i) => [i, p]).reverse().map(([i, p]) => `${x(i)},${y(p.estimate_low)}`)).join(" ");
+  const line = points.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.estimate_after)}`).join(" ");
+  const step = (hi - lo) > 4 ? 1 : 0.5;
+  let ticks = "";
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+    ticks += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#eef0f3"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#5d6677">${signed(v).replace(".00", "")}</text>`;
+  }
+  const dots = points.map((p, i) => {
+    const here = p.source !== "synthetic history";
+    const c = here ? "#c2410c" : "#9aa3b2";
+    return `<line x1="${x(i)}" x2="${x(i)}" y1="${y(p.lift_95_low)}" y2="${y(p.lift_95_high)}" stroke="${c}" stroke-width="${here ? 2.5 : 1.5}"/>`
+      + `<circle cx="${x(i)}" cy="${y(p.lift_points)}" r="${here ? 6 : 4}" fill="${c}"><title>${esc(p.name)}: ${signed(p.lift_points)} pts (95% ${signed(p.lift_95_low)} to ${signed(p.lift_95_high)}); estimate after: ${signed(p.estimate_after)}</title></circle>`
+      + (here ? `<text x="${x(i) + 9}" y="${y(p.lift_points) + 4}" text-anchor="start" font-size="11" fill="#c2410c">#${p.audience_id}</text>` : "");
+  }).join("");
+  const first = points[0], last = points[points.length - 1];
+  $("learning-chart").innerHTML = ticks
+    + `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="#5d6677" stroke-dasharray="4 4"/>`
+    + `<text x="${L + 6}" y="${y(0) - 5}" font-size="11" fill="#5d6677">no effect</text>`
+    + `<polygon points="${band}" fill="#e3f1f0" opacity="0.9"/>`
+    + `<path d="${line}" fill="none" stroke="#0f6e6e" stroke-width="2.5"/>`
+    + dots
+    + `<text x="${L}" y="${H - 12}" font-size="11" fill="#5d6677">${esc(first.sent_at)}</text>`
+    + `<text x="${W - R}" y="${H - 12}" text-anchor="end" font-size="11" fill="#5d6677">${esc(last.sent_at)}</text>`
+    + `<text x="14" y="${T + (H - T - B) / 2}" font-size="11" fill="#5d6677" transform="rotate(-90 14 ${T + (H - T - B) / 2})" text-anchor="middle">lift vs holdout (points)</text>`;
 }
 
 function governanceCell(r) {

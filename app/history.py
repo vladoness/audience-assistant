@@ -9,6 +9,11 @@ The answers are evidence, never a recommendation or a forecast. In this prototyp
 synthetic (generated from known effects in app/synthdata.py) and every result says so; in a real
 deployment it comes from the campaign tool's send and response records.
 
+The loop closes here too: when an approved audience's outcome is recorded (POST
+/api/audiences/{id}/outcome, or a labelled simulation in the demo), its measured lift joins the
+evidence for its campaign type, so the next decision of that type sees it, and the approval's own
+expectation is compared with what happened.
+
 Ontology contract (target, for an AEP rollout): send and response events from Journey Optimizer
 datasets, lift from Customer Journey Analytics or Query Service over the same events.
 """
@@ -108,8 +113,51 @@ class CampaignHistory:
             policy=f"contact_policy v{policy.version}" if policy else None,
         )
 
-    def evidence(self, campaign_type: str) -> dict[str, Any] | None:
-        """Measured lift of past campaigns of one type: each campaign, and all of them pooled."""
+    def evidence(self, campaign_type: str, own: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+        """Measured lift of past campaigns of one type: each campaign, and all of them pooled. `own` are
+        outcomes measured for audiences approved in this app; they join the evidence, so every measured
+        campaign informs the next decision."""
+        campaigns = self._campaigns(campaign_type, own)
+        if campaigns is None:
+            return None
+        pooled = pool(campaigns)
+        per_campaign = [{k: v for k, v in c.items() if k != "lift"} | c["lift"].as_dict()
+                        for c in sorted(campaigns, key=lambda c: c["sent_at"], reverse=True)]
+        clearly_positive = sum(1 for c in per_campaign if c["lift_95_low"] > 0)
+        measured_here = sum(1 for c in campaigns if c["source"] != SYNTHETIC_SOURCE)
+        label = CAMPAIGN_TYPES[campaign_type]["label"]
+        return {
+            "campaign_type": campaign_type, "label": label,
+            "synthetic": bool(self.synthetic), "as_of": str(self.as_of), "campaigns": len(campaigns),
+            "measured_here": measured_here,
+            "pooled": pooled.as_dict(),
+            "clearly_positive_campaigns": clearly_positive,
+            "per_campaign": per_campaign,
+            "reading": (f"Across {len(campaigns)} past {label.lower()} campaigns"
+                        f"{f' ({measured_here} of them approved here)' if measured_here else ''}, contacted "
+                        f"lines responded {pooled.points:+.2f} points versus their holdout (95% interval "
+                        f"{pooled.interval[0]:+.2f} to {pooled.interval[1]:+.2f}); {clearly_positive} of {len(campaigns)} "
+                        f"{'was' if clearly_positive == 1 else 'were'} clearly positive on their own. "
+                        "Evidence from past campaigns, not a forecast."),
+        }
+
+    def learning(self, campaign_type: str, own: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+        """The learning curve for one campaign type: every campaign in send order, with the pooled estimate
+        and its 95% interval as they stood after each one. The interval narrowing is the learning."""
+        campaigns = self._campaigns(campaign_type, own)
+        if campaigns is None:
+            return None
+        timeline, running = [], []
+        for c in sorted(campaigns, key=lambda c: (c["sent_at"], c["source"] != SYNTHETIC_SOURCE)):
+            running.append(c)
+            estimate = pool(running)
+            low, high = estimate.interval
+            timeline.append({k: v for k, v in c.items() if k != "lift"} | c["lift"].as_dict() | {
+                "estimate_after": round(estimate.points, 2), "estimate_low": round(low, 2), "estimate_high": round(high, 2)})
+        return {"campaign_type": campaign_type, "label": CAMPAIGN_TYPES[campaign_type]["label"],
+                "synthetic": bool(self.synthetic), "timeline": timeline}
+
+    def _campaigns(self, campaign_type: str, own: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
         if not self.available or campaign_type not in CAMPAIGN_TYPES:
             return None
         rows = self._engine.connection.cursor().execute("""
@@ -117,23 +165,57 @@ class CampaignHistory:
                    count(*) FILTER (WHERE NOT x.held_out), count(*) FILTER (WHERE x.held_out),
                    count(*) FILTER (WHERE NOT x.held_out AND x.responded), count(*) FILTER (WHERE x.held_out AND x.responded)
             FROM campaigns k JOIN campaign_contacts x USING (campaign_id)
-            WHERE k.campaign_type = ? GROUP BY 1, 2, 3 ORDER BY k.sent_at DESC""", [campaign_type]).fetchall()
+            WHERE k.campaign_type = ? GROUP BY 1, 2, 3""", [campaign_type]).fetchall()
+        campaigns = [{"campaign_id": r[0], "name": r[1], "sent_at": str(r[2]), "source": SYNTHETIC_SOURCE,
+                      "audience_id": None, "lift": counts_lift(r[3], r[4], r[5], r[6])} for r in rows]
+        for o in own or []:
+            if o["campaign_type"] == campaign_type:
+                campaigns.append({"campaign_id": None, "name": o["name"], "sent_at": o["sent_at"],
+                                  "source": f"approved here ({'simulated send' if o['source'] == 'simulated' else 'campaign tool'})",
+                                  "audience_id": o["audience_id"],
+                                  "lift": counts_lift(o["contacted"], o["held_out"], o["contacted_responders"],
+                                                      o["held_out_responders"])})
+        return campaigns
 
-        def lift(n_c: int, n_h: int, r_c: int, r_h: int) -> Lift:
-            return Lift(n_c, n_h, r_c / n_c if n_c else 0.0, r_h / n_h if n_h else 0.0)
+    def simulate_responders(self, members: list[tuple[str, str]], campaign_type: str, seed: str) -> list[str]:
+        """DEMO ONLY: who would have responded, drawn from the same known true effects that generated the
+        synthetic history (held-out lines respond at the base rate, contacted lines at base + lift)."""
+        spec = CAMPAIGN_TYPES[campaign_type]
+        rows = self._engine.connection.cursor().execute(
+            "SELECT profile_id FROM (SELECT unnest(?) AS profile_id, unnest(?) AS held_out) "
+            "WHERE (md5_number_lower(? || ':' || profile_id) % 1000000) / 1000000.0 < "
+            "CASE WHEN held_out THEN ? ELSE ? END",
+            [[p for p, _ in members], [g == "held_out" for _, g in members], seed, spec["base"], spec["base"] + spec["lift"]],
+        ).fetchall()
+        return [r[0] for r in rows]
 
-        pooled = lift(*(sum(r[i] for r in rows) for i in range(3, 7)))
-        per_campaign = [{"campaign_id": r[0], "name": r[1], "sent_at": str(r[2]), **lift(*r[3:7]).as_dict()} for r in rows]
-        clearly_positive = sum(1 for c in per_campaign if c["lift_95_low"] > 0)
-        return {
-            "campaign_type": campaign_type, "label": CAMPAIGN_TYPES[campaign_type]["label"],
-            "synthetic": bool(self.synthetic), "as_of": str(self.as_of), "campaigns": len(rows),
-            "pooled": pooled.as_dict(),
-            "clearly_positive_campaigns": clearly_positive,
-            "per_campaign": per_campaign,
-            "reading": (f"Across {len(rows)} past {CAMPAIGN_TYPES[campaign_type]['label'].lower()} campaigns, contacted "
-                        f"lines responded {pooled.points:+.2f} points versus their holdout (95% interval "
-                        f"{pooled.interval[0]:+.2f} to {pooled.interval[1]:+.2f}); {clearly_positive} of {len(rows)} "
-                        f"{'was' if clearly_positive == 1 else 'were'} clearly positive on their own. "
-                        "Evidence from past campaigns, not a forecast."),
-        }
+
+SYNTHETIC_SOURCE = "synthetic history"
+
+
+def counts_lift(contacted: int, held_out: int, contacted_responders: int, held_out_responders: int) -> Lift:
+    return Lift(contacted, held_out, contacted_responders / contacted if contacted else 0.0,
+                held_out_responders / held_out if held_out else 0.0)
+
+
+def pool(campaigns: list[dict[str, Any]]) -> Lift:
+    """All the contacted lines against all the held-out lines of these campaigns."""
+    n_c = sum(c["lift"].contacted for c in campaigns)
+    n_h = sum(c["lift"].held_out for c in campaigns)
+    r_c = sum(round(c["lift"].contacted_rate * c["lift"].contacted) for c in campaigns)
+    r_h = sum(round(c["lift"].held_out_rate * c["lift"].held_out) for c in campaigns)
+    return counts_lift(n_c, n_h, r_c, r_h)
+
+
+def verdict(expected: dict[str, Any] | None, measured: Lift) -> str:
+    """How a measured campaign compares with what the evidence said when it was approved. One campaign
+    is much noisier than the pooled history, so a difference is only claimed when the two 95% intervals
+    don't overlap; otherwise the campaign is consistent with the evidence."""
+    if not expected:
+        return "no expectation was recorded at approval"
+    low, high = measured.interval
+    if high < expected["lift_95_low"]:
+        return "below what past campaigns predicted"
+    if low > expected["lift_95_high"]:
+        return "above what past campaigns predicted"
+    return "in line with past campaigns"

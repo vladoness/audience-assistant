@@ -128,7 +128,7 @@ def build_server(s: Services) -> MCPServer:
         """What happened last time: measured lift (contacted vs held-out response, with a 95% interval)
         for past campaigns of one type, each and pooled. Evidence, not a forecast; says when the history
         is synthetic. Types: topup_reminder, data_upsell, roaming_offer, winback, app_adoption."""
-        found = s.history.evidence(campaign_type) if s.history is not None else None
+        found = s.history.evidence(campaign_type, s.store.outcomes()) if s.history is not None else None
         if found is None:
             return {"error": f"No campaign history for {campaign_type!r}.",
                     "known_types": [t["id"] for t in s.history.types()] if s.history is not None else []}

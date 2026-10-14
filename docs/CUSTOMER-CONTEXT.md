@@ -36,7 +36,7 @@ Two people make decisions here, and the tool supports both without making either
 | Decision | Whom this campaign targets, under which definition | What "active", "likely to churn" and other contested terms mean, for everyone |
 | What they see before deciding | The exact definition in plain English; for each answer to an open term, the lines it reaches and what only it adds; policy blocks with the policy named; how recently these lines were contacted; what past campaigns of this type achieved against their holdouts | How often each open term is asked about and which answer marketers chose (Insights) |
 | What they do | Answer, edit, change in words, approve with a goal | Settle the term in the glossary; affected approved audiences are flagged with their size under the new rule |
-| How we know it was right | The holdout group recorded at approval: contacted minus held-out response | Fewer questions, fewer edits, and approved audiences that measure well |
+| How we know it was right | The holdout recorded at approval: once the campaign tool reports responses, the measured lift is compared with what the evidence predicted, and the campaign joins the evidence for the next one of its type | Fewer questions, fewer edits, and approved audiences that measure well |
 
 ## What the assistant changes
 

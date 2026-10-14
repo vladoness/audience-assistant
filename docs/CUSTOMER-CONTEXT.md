@@ -66,6 +66,9 @@ Capture the baseline first: today's request-to-audience time and how often defin
 - **Clarification rate** per term, which tells the business which definitions to settle first.
 - **Edit rate**: how often marketers change the AI's proposal before approving (answering a
   clarification doesn't count). A high rate on one field is a prompt or glossary fix.
+- **Where the work starts**: if marketers already plan campaigns in an assistant, drafts arrive
+  through the MCP server and are approved in the web app; if not, the web app alone is enough and
+  the MCP route waits.
 
 **Go / no-go after the pilot:**
 - **Go** if at least 95% of audiences match the analyst's, no approved audience breaks a policy,

@@ -176,14 +176,57 @@ round trip, cost predictable, and evals simple (one input, one output, compared 
 An agent loop starts paying for itself when one call can't do the job, for example a catalog of
 thousands of fields that needs retrieval, or work that spans tools (create, activate, schedule a
 journey). In AEP that orchestration already exists, and this logic would be one tool or skill
-inside it.
+inside it (decision 18).
 
-`app/mcp_server.py` is that shape. It exposes the same pipeline as MCP tools: draft, change,
-size and explain a governed term. It deliberately has no tool to approve and none to answer an
-open business question. An agent can do the drafting inside a larger task; the decisions that
-carry accountability (which "active", whether this audience goes out) come back to a person
-through a review link, and agent drafts are audited as `origin: "mcp"`. That is the
-excessive-agency line drawn in the tool surface, not in a prompt.
+**18. The next surface is an MCP server, not a chat window or a knowledge base.**
+*The question.* With the web workflow done, what extension adds the most for this customer?
+Marketers increasingly start work in an assistant (AEP's AI Assistant, Claude, Copilot), where
+building the audience is one step of a bigger task: plan the roaming campaign, check last
+quarter's results, draft the message. So the real question is how the governed logic reaches
+those surfaces without being rebuilt for each one, and without losing its guarantees on the way.
+
+*Why MCP.*
+- **One adapter, many clients.** MCP is the open protocol that Claude, ChatGPT, Cursor, VS Code
+  and Adobe's own CX Coworker Gateway use. One server reaches all of them, and Agent Orchestrator
+  is documented as extensible to customer and partner agents. A bespoke integration per platform
+  would be N adapters to maintain.
+- **The guarantees travel with it.** The server calls the same services as the web app: same
+  model call, validation, policies, consent, budget, breaker and audit. Nothing about the model's
+  behaviour changes, so the existing evals still describe it, and it's about 150 lines.
+- **The accountability line can be drawn in the tool surface.** An agent can draft, change, size
+  and look up governed terms. There is no tool to approve, and none to settle an open business
+  term ("which 'active'?"). Those decisions come back to a person through a review link, and
+  agent drafts are audited as `origin: "mcp"`. A prompt saying "don't approve" can be talked out
+  of; a tool that doesn't exist can't be called.
+- **It makes the platform story concrete.** "This would be one tool inside Agent Orchestrator"
+  (decision 17) is now something a reviewer can run.
+
+*Rejected alternatives.*
+- **A chat window in the app.** The conversational need, iterating on an audience, is already met
+  by refinement, which shows exactly what changed. Free-form chat ("why is it smaller?") adds a
+  surface where the model's answer is prose nobody validates, while the deterministic answers
+  already exist on screen: governed tags, named policies, the What changed box.
+- **A knowledge base with retrieval (RAG).** The catalog, glossary and policies already are the
+  knowledge base: versioned, owned, and looked up by name. Retrieving business definitions by
+  similarity is the failure governance exists to prevent: "active" must resolve to the governed
+  term, not to the most similar paragraph. Retrieval earns its place only when the catalog
+  outgrows the prompt (thousands of fields), and then it retrieves *fields*, not definitions.
+- **Calling Adobe's MCP gateway from here.** It is a beta, by invitation, and needs an Adobe
+  organisation, so the code couldn't be run or tested. In an engagement that is where the catalog
+  and policies would come from instead of YAML.
+
+*What it costs.*
+- **Another surface to secure.** Today it is stdio for one local user. Shared, it needs the
+  streamable HTTP transport behind the customer's SSO, so that approval needs a person's token
+  and an agent's service identity never has the approver role.
+- **A dependency that is still moving.** The Python SDK's 2.x release renamed its server class;
+  the adapter is thin so a churn like that stays a small change.
+- **A slower happy path, on purpose.** An agent-drafted audience needs a person to open a link
+  before it is final. That is the point, but it is friction a customer will feel.
+
+*When it would be the wrong call.* If this customer's marketers don't work in any assistant, the
+server is unused surface area and the web workflow is enough. The pilot should measure that
+before anyone builds on it.
 
 ## Where the time goes (and why that shapes the design)
 

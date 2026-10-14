@@ -92,6 +92,15 @@ The same governed logic is available as an [MCP](https://modelcontextprotocol.io
 (`app/mcp_server.py`, stdio), so an agent such as Claude, Cursor, or an orchestrator like AEP's
 Agent Orchestrator can draft audiences inside a wider task ("plan the roaming campaign").
 
+**Why MCP, rather than a chat window or a knowledge base.** Marketers increasingly start work in
+an assistant, where the audience is one step of a bigger task. MCP is the open protocol those
+assistants (and Adobe's own MCP gateway) speak, so one thin adapter reaches all of them, and it
+calls the same services as the web app: the guarantees and the evals carry over unchanged.
+A chat window would add unvalidated prose where refinement already covers iterating. A
+retrieval knowledge base would look up governed definitions by similarity, which is the failure
+the glossary exists to prevent. The full reasoning, the costs and when it would be the wrong call
+are decision 18 in [docs/DESIGN.md](docs/DESIGN.md).
+
 | Tool | What it does |
 |---|---|
 | `interpret_audience` | Request → validated definition, summary, questions, parts with no data, policy issues, review link |

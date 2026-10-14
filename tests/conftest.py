@@ -24,9 +24,11 @@ class ScriptedProvider:
     def __init__(self, *responses: dict[str, Any] | Exception):
         self.responses = list(responses)
         self.calls: list[list[dict[str, Any]]] = []
+        self.schemas: list[dict[str, Any] | None] = []
 
-    def propose(self, system: str, messages: list[dict[str, Any]]) -> LLMResult:
+    def propose(self, system: str, messages: list[dict[str, Any]], schema: dict[str, Any] | None = None) -> LLMResult:
         self.calls.append(messages)
+        self.schemas.append(schema)
         if not self.responses:
             raise ProviderUnavailable("script exhausted")
         response = self.responses.pop(0)

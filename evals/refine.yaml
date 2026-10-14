@@ -1,0 +1,174 @@
+# Refinement set: a fixed starting audience (as it would be on screen) plus one plain-language change.
+# The starting state is written out, not produced by a first model call, so each case measures the
+# refinement alone. Written and reviewed by hand like the other sets; same expect keys (see cases.yaml).
+#
+# case keys:
+#   base        the audience on screen: conditions (with their source) and channel
+#   pending     open glossary terms still waiting for the marketer's answer (optional)
+#   unmapped    parts of the original request with no data behind them (optional)
+#   request     the marketer's change
+
+bases:
+  coast_high_value: &coast_high_value
+    channel: sms
+    conditions:
+      - {attribute: line_type, op: eq, value: prepaid, source: model}
+      - {attribute: region, op: eq, value: Coast, source: model}
+      - {attribute: arpu_3m, op: gte, value: 40, source: "glossary:high_value"}
+  android_data: &android_data
+    channel: sms
+    conditions:
+      - {attribute: line_type, op: eq, value: postpaid, source: model}
+      - {attribute: device_os, op: eq, value: android, source: model}
+      - {attribute: data_gb_30d, op: gt, value: 5, source: model}
+  valley_app_users: &valley_app_users
+    channel: sms
+    conditions:
+      - {attribute: app_active_30d, op: eq, value: true, source: "glossary:app_user"}
+      - {attribute: region, op: eq, value: Valley, source: model}
+
+cases:
+  - id: refine-add-region
+    category: widen
+    base: *coast_high_value
+    request: also include the Highlands
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: in, value: [Coast, Highlands]}, {attribute: arpu_3m, op: gte, value: 40}]}
+
+  - id: refine-also-unfiltered
+    category: widen
+    base: *android_data
+    request: also include the Highlands
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: device_os, op: eq, value: android}, {attribute: data_gb_30d, op: gt, value: 5}]}
+
+  - id: refine-drop-region
+    category: remove
+    base: *coast_high_value
+    request: drop the region
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: arpu_3m, op: gte, value: 40}]}
+
+  - id: refine-channel
+    category: channel
+    base: *coast_high_value
+    request: make it an email campaign
+    expect:
+      status: ready
+      definition: {channel: email, conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: Coast}, {attribute: arpu_3m, op: gte, value: 40}]}
+
+  - id: refine-threshold
+    category: replace
+    base: *android_data
+    request: make it more than 10 GB
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: device_os, op: eq, value: android}, {attribute: data_gb_30d, op: gt, value: 10}]}
+
+  - id: refine-swap-value
+    category: replace
+    base: *android_data
+    request: not Android, iPhone users instead
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: device_os, op: eq, value: ios}, {attribute: data_gb_30d, op: gt, value: 5}]}
+
+  - id: refine-multi
+    category: replace
+    base: *coast_high_value
+    request: postpaid instead of prepaid, and add the North
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: region, op: in, value: [Coast, North]}, {attribute: arpu_3m, op: gte, value: 40}]}
+
+  - id: refine-governed-override
+    category: governed
+    base: *coast_high_value
+    request: forget high value, ARPU over 60 instead
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: Coast}, {attribute: arpu_3m, op: gt, value: 60}]}
+
+  - id: refine-remove-term
+    category: governed
+    base: *coast_high_value
+    request: remove the high value requirement
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: Coast}]}
+
+  - id: refine-add-decided-term
+    category: governed
+    base: *android_data
+    request: and they should be new customers
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: device_os, op: eq, value: android}, {attribute: data_gb_30d, op: gt, value: 5}, {attribute: tenure_months, op: lt, value: 3}]}
+
+  - id: refine-add-open-term
+    category: governed
+    base: *coast_high_value
+    request: only the active ones
+    expect:
+      status: needs_clarification
+      clarify: [active]
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: Coast}, {attribute: arpu_3m, op: gte, value: 40}]}
+
+  - id: refine-pending-carried
+    category: governed
+    base:
+      channel: sms
+      conditions: [{attribute: device_os, op: eq, value: android, source: model}]
+    pending: [active]
+    request: only postpaid
+    expect:
+      status: needs_clarification
+      clarify: [active]
+      definition: {conditions: [{attribute: device_os, op: eq, value: android}, {attribute: line_type, op: eq, value: postpaid}]}
+
+  - id: refine-unmapped
+    category: unmapped
+    base: *coast_high_value
+    request: and who opened our last newsletter
+    expect:
+      status: needs_confirmation
+      unmapped_contains: [newsletter]
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: Coast}, {attribute: arpu_3m, op: gte, value: 40}]}
+
+  - id: refine-policy-email
+    category: policy
+    base: *valley_app_users
+    request: send it by email instead
+    expect:
+      status: invalid
+      issues_include: [policy_violation]
+      forbid_attributes: [app_active_30d]
+
+  - id: refine-policy-credit
+    category: policy
+    base: *coast_high_value
+    request: only customers with a low credit risk band
+    expect:
+      status: invalid
+      issues_include: [policy_violation]
+      forbid_attributes: [credit_risk_band]
+
+  - id: refine-no-change
+    category: no_change
+    base: *coast_high_value
+    request: thanks, that looks right
+    expect:
+      status: ready
+      issues_include: [no_change]
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: Coast}, {attribute: arpu_3m, op: gte, value: 40}]}
+
+  - id: refine-spanish
+    category: language
+    base: *coast_high_value
+    request: solo los que usan la app
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: Coast}, {attribute: arpu_3m, op: gte, value: 40}, {attribute: app_active_30d, op: eq, value: true}]}

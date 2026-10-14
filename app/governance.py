@@ -31,7 +31,7 @@ def verify_provenance(definition: AudienceDefinition, catalog: Catalog) -> Audie
                 expected = chosen.conditions if chosen else ()
             elif term is not None and term.status == "decided":
                 expected = term.conditions
-            if _canon(c.model_dump()) not in [_canon(e) for e in expected]:
+            if canonical(c.model_dump()) not in [canonical(e) for e in expected]:
                 c = c.model_copy(update={"source": "user"})
         out.append(c)
     return definition.model_copy(update={"conditions": out})
@@ -42,7 +42,8 @@ def reconcile_with_proposal(final: AudienceDefinition, proposed: AudienceDefinit
 
     A condition counts as the model's only if the model actually proposed it. Answering a
     clarification is not an edit; changing the channel or adding, removing or changing any other
-    condition (including a governed one the grounding check warned about) is.
+    condition (including a governed one the grounding check warned about) is. So is any condition
+    the marketer wrote, even if a later refinement carried it into the proposal.
     """
     model_keys = {_key(c) for c in proposed.conditions if c.source == "model"}
     conditions = [
@@ -53,12 +54,13 @@ def reconcile_with_proposal(final: AudienceDefinition, proposed: AudienceDefinit
     def targeting(d: AudienceDefinition) -> set[str]:
         return {_key(c) for c in d.conditions if not (c.source.startswith("glossary:") and "=" in c.source)}
 
-    edited = final.channel != proposed.channel or targeting(final) != targeting(proposed)
+    edited = (final.channel != proposed.channel or targeting(final) != targeting(proposed)
+              or any(c.source == "user" for c in conditions))
     return final.model_copy(update={"conditions": conditions}), edited
 
 
 def _key(c: Condition) -> str:
-    return json.dumps(_canon(c.model_dump()), sort_keys=True)
+    return json.dumps(canonical(c.model_dump()), sort_keys=True)
 
 
 def snapshot(definition: AudienceDefinition, catalog: Catalog) -> dict[str, Any]:
@@ -70,7 +72,7 @@ def snapshot(definition: AudienceDefinition, catalog: Catalog) -> dict[str, Any]
         term_name, _, option = c.source.removeprefix("glossary:").partition("=")
         term = catalog.terms.get(term_name)
         entry = snap.setdefault(term_name, {"conditions": []})
-        entry["conditions"].append(_canon(c.model_dump()))
+        entry["conditions"].append(canonical(c.model_dump()))
         if option:
             entry["option"] = option
         elif term is not None:
@@ -96,7 +98,7 @@ def impact(snap: dict[str, Any], catalog: Catalog) -> list[str]:
             for set_name, old in entry.get("parameters", {}).items()
             if set_name in catalog.parameter_sets and catalog.parameter_sets[set_name].version != old
         ]
-        current = sorted(json.dumps(_canon(c), sort_keys=True) for c in term.conditions)
+        current = sorted(json.dumps(canonical(c), sort_keys=True) for c in term.conditions)
         stored = sorted(json.dumps(c, sort_keys=True) for c in entry["conditions"])
         if version_changes:
             changes.append(f"{term_name}: parameters {', '.join(version_changes)}")
@@ -120,7 +122,7 @@ def reexpand(definition: AudienceDefinition, catalog: Catalog) -> AudienceDefini
     return definition.model_copy(update={"conditions": kept})
 
 
-def _canon(c: dict[str, Any]) -> dict[str, Any]:
+def canonical(c: dict[str, Any]) -> dict[str, Any]:
     def num(v: Any) -> Any:
         return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else v
 

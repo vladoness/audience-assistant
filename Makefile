@@ -1,4 +1,4 @@
-.PHONY: setup data run test lint eval eval-heldout eval-replay record bench
+.PHONY: setup data run test lint eval eval-heldout eval-refine eval-replay record bench
 
 setup:          ## install dependencies into .venv
 	uv sync
@@ -18,13 +18,18 @@ eval:           ## dev set against the live model, 3 runs (needs ANTHROPIC_API_K
 eval-heldout:   ## frozen held-out set against the live model, 3 runs
 	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases heldout --repeat 3
 
-record:         ## live dev + held-out runs that also save replay fixtures for offline mode
+eval-refine:    ## refinement set (fixed starting audience + one change) against the live model, 3 runs
+	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases refine --repeat 3
+
+record:         ## live dev, held-out and refine runs that also save replay fixtures for offline mode
 	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --record
 	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases heldout --record
+	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases refine --record
 
-eval-replay:    ## reproduce run 1 of the dev and held-out evals offline from recorded fixtures (no key)
+eval-replay:    ## reproduce run 1 of every eval set offline from recorded fixtures (no key)
 	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low)
 	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases heldout
+	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases refine
 
 bench:          ## sizing latency at 200k / 1M / 5M lines
 	uv run python -m scripts.bench --rows 200000 1000000 5000000

@@ -4,6 +4,9 @@ Pipeline (one request):
   mask PII -> cache lookup -> model proposal -> expand glossary terms -> validate
   -> (one repair attempt if invalid) -> derive status -> explain -> record + metrics
 
+A refinement ("now drop the Coast") runs the same pipeline on a delta applied to the audience on
+screen (see app/refine.py), without the cache, and records a link to the interpretation it refines.
+
 The status is derived here from the validated result, never taken from the model. The model
 can say "done"; only the validator can make a proposal "ready".
 """
@@ -19,21 +22,28 @@ from typing import Any
 from app.catalog import Catalog
 from app.explain import explain
 from app.limits import DailyBudget
-from app.governance import verify_provenance
+from app.governance import reconcile_with_proposal, verify_provenance
 from app.llm import (
-    MAX_OUTPUT_TOKENS, PROMPT_VERSION, BudgetExhausted, CircuitOpen, NotRecorded, LLMResult, Pricing, Provider, ProviderUnavailable, build_messages, build_system_prompt,
+    MAX_OUTPUT_TOKENS, PROMPT_VERSION, REFINE_SCHEMA, REFINE_VERSION, BudgetExhausted, CircuitOpen, NotRecorded, LLMResult,
+    Pricing, Provider, ProviderUnavailable, build_messages, build_refine_messages, build_system_prompt,
 )
 from app.models import (
     AudienceDefinition, CheckResult, Clarification, ClarificationOption, Condition, InterpretResult, Issue, Telemetry,
 )
 from app.observability import Metrics
 from app.pii import mask_pii
+from app.refine import answered_terms, describe_changes, model_state, plan_refinement
 from app.store import AuditStore, TTLCache
 from app.validate import parse_condition, validate_definition
 
 log = logging.getLogger(__name__)
 
 _NOT_REPAIRABLE = {"policy_violation"}
+_REFINE_PROMPT_VERSION = f"{PROMPT_VERSION}+{REFINE_VERSION}"
+
+
+class RefineRejected(ValueError):
+    """The change text can't be used (empty or too long). Nothing is recorded or changed."""
 
 
 class Interpreter:
@@ -108,6 +118,72 @@ class Interpreter:
             self.cache.put(cache_key, proposal)
         return self._finish(request_id, masked, proposal, result, started)
 
+    def refine(self, parent: dict[str, Any], current: AudienceDefinition, change_text: str,
+               request_id: str | None = None) -> InterpretResult:
+        """Apply a plain-language change to the audience on screen.
+
+        `parent` is the audit row of the interpretation being refined. The definition on screen is
+        re-verified (governed labels, model provenance) before the model sees it. If the model is
+        unavailable, ProviderUnavailable propagates and nothing is recorded: the screen and the
+        parent interpretation stay valid.
+        """
+        started = time.perf_counter()
+        request_id = request_id if request_id and request_id != "-" else uuid.uuid4().hex[:12]
+        text = change_text.strip()
+        if len(text) > self.max_request_chars:
+            raise RefineRejected(f"Changes are limited to {self.max_request_chars} characters.")
+        masked, pii_count = mask_pii(text)
+        if not masked:
+            raise RefineRejected("Describe the change you want.")
+        tel = Telemetry(provider=self.provider.name, model=self.provider.model, prompt_version=_REFINE_PROMPT_VERSION,
+                        pii_masked=pii_count)
+
+        parent_proposed = AudienceDefinition(**json.loads(parent["definition_json"]))
+        current, _ = validate_definition(current, self.catalog)
+        current, _ = reconcile_with_proposal(verify_provenance(current, self.catalog), parent_proposed)
+        answered = answered_terms(current)
+        pending = [t for t in json.loads(parent["clarifications_json"]) if t not in answered]
+        carried_unmapped = json.loads(parent["unmapped_json"])
+        state = model_state(current, pending)
+
+        try:
+            delta = self._call_model(build_refine_messages(state, masked), tel, schema=REFINE_SCHEMA)
+        except ProviderUnavailable as exc:
+            log.warning("refine_unavailable", extra={"reason": str(exc), "code": exc.code,
+                                                     "parent_request_id": parent["request_id"]})
+            self.metrics.incr(f"refine_{exc.code}")
+            raise
+
+        result = self._evaluate_refinement(request_id, current, delta, pending, carried_unmapped, tel, masked)
+        new_attrs = {str(c.get("attribute")) for c in delta.get("add_conditions") or [] if isinstance(c, dict)}
+        repairable = [i for i in result.issues if i.level == "error" and i.code not in _NOT_REPAIRABLE
+                      and (i.attribute in new_attrs or i.code in {"unknown_term", "malformed_condition", "unknown_operator"})]
+        if repairable:
+            try:
+                delta = self._call_model(build_refine_messages(
+                    state, masked, repair={"proposal": delta, "errors": [i.message for i in repairable]}),
+                    tel, schema=REFINE_SCHEMA)
+                tel.repaired = True
+                self.metrics.incr("repair_attempt")
+                result = self._evaluate_refinement(request_id, current, delta, pending, carried_unmapped, tel, masked)
+            except ProviderUnavailable as exc:
+                log.warning("llm_repair_unavailable", extra={"reason": str(exc)})
+
+        result.parent_request_id = parent["request_id"]
+        result.changes = describe_changes(current, result.definition, self.catalog)
+        self.metrics.incr("refinements")
+        return self._finish(request_id, masked, delta, result, started, parent_request_id=parent["request_id"],
+                            prompt_version=_REFINE_PROMPT_VERSION)
+
+    def _evaluate_refinement(self, request_id: str, current: AudienceDefinition, delta: dict[str, Any],
+                             pending: list[str], carried_unmapped: list[str], tel: Telemetry,
+                             change_text: str) -> InterpretResult:
+        plan = plan_refinement(current, delta, pending, carried_unmapped)
+        result = self._evaluate(request_id, plan.proposal, tel, change_text, kept=plan.kept,
+                                carried_pending=plan.pending_terms)
+        result.issues = plan.issues + result.issues
+        return result
+
     def check(self, definition: AudienceDefinition, pending_terms: list[str], resolutions: dict[str, str]) -> CheckResult:
         """Deterministic re-evaluation after the marketer edits conditions or answers a clarification."""
         conditions = list(definition.conditions)
@@ -133,13 +209,14 @@ class Interpreter:
         return CheckResult(status=status, definition=validated, clarifications=clarifications, issues=issues,
                            explanation=explain(validated, self.catalog))
 
-    def _call_model(self, messages: list[dict[str, Any]], tel: Telemetry) -> dict[str, Any]:
+    def _call_model(self, messages: list[dict[str, Any]], tel: Telemetry,
+                    schema: dict[str, Any] | None = None) -> dict[str, Any]:
         if self.budget is not None and not self.budget.available():
             raise BudgetExhausted(f"today's model budget of ${self.budget.limit_usd:.2f} is used up")
         if self.circuit_open:
             raise CircuitOpen("several recent model calls failed; pausing the assistant briefly")
         try:
-            result: LLMResult = self.provider.propose(self.system_prompt, messages)
+            result: LLMResult = self.provider.propose(self.system_prompt, messages, schema)
         except NotRecorded:
             raise
         except ProviderUnavailable:
@@ -184,10 +261,15 @@ class Interpreter:
         })
         return result.proposal
 
-    def _evaluate(self, request_id: str, proposal: dict[str, Any], tel: Telemetry, request_text: str) -> InterpretResult:
+    def _evaluate(self, request_id: str, proposal: dict[str, Any], tel: Telemetry, request_text: str,
+                  kept: list[Condition] | None = None, carried_pending: list[str] | None = None) -> InterpretResult:
+        """`kept` and `carried_pending` are for refinements: conditions already on screen (with their
+        sources) and open terms still waiting for an answer."""
         issues: list[Issue] = []
-        conditions: list[Condition] = []
-        clarifications: list[Clarification] = []
+        conditions: list[Condition] = list(kept or [])
+        clarifications: list[Clarification] = [
+            self._clarification(self.catalog.terms[t]) for t in carried_pending or [] if t in self.catalog.terms
+        ]
 
         raw_conditions = proposal.get("conditions") or []
         if not isinstance(raw_conditions, list):
@@ -258,7 +340,8 @@ class Interpreter:
                                explanation=explain(definition, self.catalog), telemetry=tel)
 
     def _finish(self, request_id: str, masked: str, proposal: dict[str, Any] | None,
-                result: InterpretResult, started: float) -> InterpretResult:
+                result: InterpretResult, started: float, parent_request_id: str | None = None,
+                prompt_version: str = PROMPT_VERSION) -> InterpretResult:
         result.telemetry.total_ms = round((time.perf_counter() - started) * 1000, 1)
         self.metrics.incr(f"interpret_{result.status}")
         self.metrics.observe("interpret_ms", result.telemetry.total_ms)
@@ -273,11 +356,13 @@ class Interpreter:
             "issues_json": json.dumps([{"code": i.code, "attribute": i.attribute, "message": i.message}
                                        for i in result.issues]),
             "model": result.telemetry.model,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": prompt_version,
             "governance_versions": json.dumps(self.catalog.versions),
             "telemetry_json": result.telemetry.model_dump_json(),
+            "parent_request_id": parent_request_id,
         })
         log.info("interpretation", extra={
+            "parent_request_id": parent_request_id,
             "status": result.status, "conditions": len(result.definition.conditions),
             "clarifications": [c.term for c in result.clarifications], "unmapped": len(result.unmapped_phrases),
             "issue_codes": [i.code for i in result.issues], "cache_hit": result.telemetry.cache_hit,

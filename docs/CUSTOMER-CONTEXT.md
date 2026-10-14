@@ -30,8 +30,8 @@ Today each audience is a ticket to the data team:
 ## What the assistant changes
 
 The marketer types the request, sees the exact definition in plain English, answers a question
-only when a business term is genuinely ambiguous, sees the reachable size and approves. Then they
-do it again, in minutes.
+only when a business term is genuinely ambiguous, adjusts it in words if needed ("also the
+North", "make it email"), sees the reachable size and approves. Then they do it again, in minutes.
 
 | | Today | With the assistant |
 |---|---|---|

@@ -22,6 +22,8 @@ flowchart LR
     E --> UI[UI: summary, conditions,\nclarify / confirm]
     UI -- edit or answer --> K[/api/check\ndeterministic/]
     K --> UI
+    UI -- change in words --> R[/api/refine\nLLM returns a delta\nserver applies it, then validates/]
+    R --> UI
     UI --> Z[/api/size\nparameterized SQL\n+ consent filter/]
     Z --> A[/api/approve\nre-check, re-size,\naudit record/]
 ```
@@ -127,9 +129,9 @@ trail. `/api/insights` aggregates them into:
 That is the field-to-product loop, built from data the system already records.
 
 **14. Model use is bounded.**
-Requests are capped at 500 characters, outputs at 1,024 tokens, and repairs at one. The one
-endpoint that calls the model has a per-client token-bucket rate limit (HTTP 429 with
-Retry-After). A daily model budget switches the assistant off when spent; the deterministic
+Requests are capped at 500 characters, outputs at 1,024 tokens, and repairs at one. The two
+endpoints that call the model (interpret and refine) share a per-client token-bucket rate limit
+(HTTP 429 with Retry-After). A daily model budget switches the assistant off when spent; the deterministic
 editor keeps working. These are the OWASP LLM10 (unbounded consumption) mitigations sized for a
 single-team tool.
 
@@ -145,6 +147,36 @@ On every check and approval:
 The request id is generated once per HTTP request and used in the response header, every log
 line and the audit row, so a support question ("this audience is wrong") goes from the UI to the
 logs to the stored proposal in one lookup.
+
+**16. A refinement is a change applied by the server, not a regenerated definition.**
+Marketers iterate: "also the North", "drop the region", "make it email". For a refinement the
+model gets the audience on screen (changeable conditions, governed terms by name, open
+questions, channel) and returns only a delta: conditions to add, attributes or terms to drop, a
+channel. `app/refine.py` applies it:
+- a new condition replaces the changeable conditions on its attribute;
+- governed conditions move only with their term, so a change can't half-edit a governed definition;
+- open questions and unmapped parts carry forward.
+
+*Rejected: asking for the whole definition again.* It reuses the first schema, but a model that
+forgets to repeat one condition silently changes the audience, and the marketer's edits and
+governed labels would have to be re-derived from text. With a delta, anything the model doesn't
+name stays exactly as it was, with its source. A "What changed" box lists every addition and
+removal in plain English. Each refinement is its own audit record, linked to the one it refined,
+and goes through the same validation, status rules and approval checks. The refinement
+instructions live in the user message, so the system prompt and every recording of the first
+step stay valid.
+
+**17. One model call per step, not an agent loop.**
+Adobe's Audience Agent plans multi-step work across agents. This prototype deliberately makes
+one structured call per user step (interpret or refine), plus at most one repair. The catalog and
+glossary fit in a cached prompt, so there is no field-discovery tool to call. Sizing is
+deterministic and takes milliseconds, so the model doesn't need to "check its work" against the
+data. The marketer is the loop: every step ends at a screen they read. That keeps latency at one
+round trip, cost predictable, and evals simple (one input, one output, compared by audience).
+An agent loop starts paying for itself when one call can't do the job, for example a catalog of
+thousands of fields that needs retrieval, or work that spans tools (create, activate, schedule a
+journey). In AEP that orchestration already exists, and this logic would be one tool or skill
+inside it.
 
 ## Where the time goes (and why that shapes the design)
 
@@ -172,7 +204,11 @@ passes the eval bar, and the repair cap.
   of the model call.
 - **Model routing:** try the small model first, escalate to the larger model only when
   validation fails (instead of repairing with the same model). The eval harness gives the data
-  to decide whether that is worth it.
+  to decide whether that is worth it. Refinements are the obvious candidate, since applying a
+  small change to a known audience is an easier task than reading a request from scratch. But on
+  the refinement set Haiku passed 16 of 17 cases, not 17: it reads "also include the Highlands",
+  on an audience with no region filter, as "only the Highlands", in every run. Routing waits
+  until that case passes.
 
 ## Standards I mapped it against
 
@@ -187,7 +223,7 @@ passes the eval bar, and the repair cap.
     budget, circuit breaker.
 - **Microsoft HAX guidelines:**
   - G2: measured accuracy shown next to the assistant;
-  - G9: every condition editable;
+  - G9: every condition editable, in the editor or by a plain-language change;
   - G10: ask about open terms, surface unmapped parts;
   - G11: a source badge on every condition;
   - G18: approved audiences flagged when rules change.

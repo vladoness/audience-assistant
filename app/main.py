@@ -1,6 +1,7 @@
 """HTTP API and static UI.
 
-    POST /api/interpret   plain-English request -> validated proposal (the only endpoint that calls the model)
+    POST /api/interpret   plain-English request -> validated proposal (calls the model)
+    POST /api/refine      plain-English change to the audience on screen -> validated proposal (calls the model)
     POST /api/check       re-validate after edits or clarification answers (deterministic)
     POST /api/size        audience size, consent exclusions, breakdowns, guardrail warnings
     POST /api/approve     server-side re-check + re-size, then an audit record with provenance
@@ -30,12 +31,13 @@ from app.audience import AudienceEngine
 from app.catalog import Catalog, load_catalog
 from app.governance import impact, reconcile_with_proposal, reexpand, snapshot
 from app.insights import build_insights
-from app.interpret import Interpreter
+from app.interpret import Interpreter, RefineRejected
 from app.limits import DailyBudget, RateLimiter
 from app.lint import LintReport, lint
-from app.llm import AnthropicProvider, Pricing, Provider, RecordingProvider, ReplayProvider
+from app.llm import AnthropicProvider, Pricing, Provider, ProviderUnavailable, RecordingProvider, ReplayProvider
 from app.models import (
-    ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, InterpretRequest, InterpretResult, SizeResult,
+    ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, InterpretRequest, InterpretResult, RefineRequest,
+    SizeResult,
 )
 from app.observability import Metrics, configure_logging, request_id_var
 from app.settings import ROOT, Settings
@@ -71,9 +73,9 @@ def build_provider(settings: Settings) -> Provider:
 
 
 def load_eval_summary(model: str, effort: str | None) -> dict | None:
-    """Measured accuracy for the active model + effort, from the committed eval results (dev and held-out)."""
+    """Measured accuracy for the active model + effort, from the committed eval results (dev, held-out, refine)."""
     out = {}
-    for case_set in ("dev", "heldout"):
+    for case_set in ("dev", "heldout", "refine"):
         path = ROOT / "evals" / "results" / f"{model}@{effort or 'default'}.{case_set}.json"
         if path.exists():
             summary = json.loads(path.read_text())["summary"]
@@ -159,15 +161,33 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
     def svc(request: Request) -> Services:
         return request.app.state.services
 
-    @app.post("/api/interpret", response_model=InterpretResult)
-    def interpret(body: InterpretRequest, request: Request) -> InterpretResult:
-        s = svc(request)
+    def rate_limit(s: Services, request: Request) -> None:
         allowed, retry_after = s.limiter.allow(request.client.host if request.client else "unknown")
         if not allowed:
             s.metrics.incr("rate_limited")
             raise HTTPException(429, detail="Too many requests to the assistant; try again shortly.",
                                 headers={"Retry-After": str(max(1, round(retry_after)))})
+
+    @app.post("/api/interpret", response_model=InterpretResult)
+    def interpret(body: InterpretRequest, request: Request) -> InterpretResult:
+        s = svc(request)
+        rate_limit(s, request)
         return s.interpreter.interpret(body.request, request_id=request_id_var.get())
+
+    @app.post("/api/refine", response_model=InterpretResult)
+    def refine(body: RefineRequest, request: Request) -> InterpretResult:
+        s = svc(request)
+        rate_limit(s, request)
+        parent = s.store.get_interpretation(body.request_id)
+        if parent is None:
+            raise HTTPException(404, detail="Unknown request_id: interpret the request first.")
+        try:
+            return s.interpreter.refine(parent, body.definition, body.instruction, request_id=request_id_var.get())
+        except RefineRejected as exc:
+            raise HTTPException(422, detail=str(exc)) from None
+        except ProviderUnavailable as exc:
+            raise HTTPException(503, detail=f"The assistant is unavailable ({exc}). Your audience is unchanged; "
+                                            "edit it below.") from None
 
     @app.post("/api/check", response_model=CheckResult)
     def check(body: CheckRequest, request: Request) -> CheckResult:
@@ -276,6 +296,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
                           "marketing_actions": list(p.marketing_actions)} for p in c.policies],
             "channels": list(c.channels),
             "examples": EXAMPLES,
+            "refine_examples": REFINE_EXAMPLES,
         }
 
     @app.get("/api/metrics")
@@ -319,6 +340,7 @@ EXAMPLES = [
     "New customers on premium plans who called the call centre twice",
     "Postpaid customers with a high credit risk band",
 ]
+REFINE_EXAMPLES = ["also include the Highlands", "only postpaid", "make it SMS instead"]
 
 
 def run() -> None:

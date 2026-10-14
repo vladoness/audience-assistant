@@ -44,7 +44,7 @@ async function init() {
   pill.classList.toggle("live", health.provider === "anthropic");
   pill.title = `${health.governance_lint} · governance ${Object.entries(health.governance).map(([k, v]) => `${k} ${v}`).join(", ")}`;
   if (health.eval) {
-    const sets = [health.eval.dev, health.eval.heldout].filter(Boolean);
+    const sets = [health.eval.dev, health.eval.heldout, health.eval.refine].filter(Boolean);
     const cases = sets.reduce((n, e) => n + e.cases, 0);
     const pct = Math.round(100 * sets.reduce((n, e) => n + e.pass_rate * e.cases, 0) / cases);
     $("accuracy-hint").textContent = `Measured on our ${cases} test cases (also used to choose this model): ${pct}% fully right. The assistant can misread a request, so always check the summary before approving.`;
@@ -58,6 +58,14 @@ async function init() {
   });
   $("interpret-btn").onclick = interpret;
   $("request").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) interpret(); });
+  (catalog.refine_examples || []).forEach((text) => {
+    const chip = document.createElement("button");
+    chip.className = "chip"; chip.textContent = text;
+    chip.onclick = () => { $("refine-input").value = text; refine(); };
+    $("refine-examples").appendChild(chip);
+  });
+  $("refine-btn").onclick = refine;
+  $("refine-input").addEventListener("keydown", (e) => { if (e.key === "Enter") refine(); });
   $("add-condition").onclick = addCondition;
   $("channel").onchange = () => { state.definition.channel = $("channel").value; recheck(); };
   ["aud-name", "approver"].forEach((id) => $(id).addEventListener("input", updateApprove));
@@ -73,6 +81,7 @@ async function interpret() {
   const btn = $("interpret-btn");
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Interpreting…';
   $("interpret-error").hidden = true;
+  $("refine-error").hidden = true;
   try {
     const r = await api("/api/interpret", { request: text });
     state.requestId = r.request_id;
@@ -80,6 +89,7 @@ async function interpret() {
     state.acknowledged = false;
     state.pendingTerms = r.clarifications.map((c) => c.term);
     applyResult(r);
+    renderChanges(null);
     renderTelemetry(r.telemetry, r.request_id);
     renderAssumptions(r.assumptions);
     $("approve-msg").textContent = "";
@@ -92,11 +102,50 @@ async function interpret() {
   }
 }
 
+async function refine() {
+  const text = $("refine-input").value.trim();
+  if (!text || !state.requestId) return;
+  const btn = $("refine-btn");
+  btn.disabled = true; btn.innerHTML = '<span class="spinner dark"></span>Applying…';
+  $("refine-error").hidden = true;
+  try {
+    const r = await api("/api/refine", { request_id: state.requestId, instruction: text, definition: state.definition });
+    const before = new Set(state.unmapped);
+    state.requestId = r.request_id;
+    state.unmapped = r.unmapped_phrases;
+    state.acknowledged = state.acknowledged && r.unmapped_phrases.every((p) => before.has(p));
+    applyResult(r);
+    renderChanges(r.changes);
+    renderTelemetry(r.telemetry, r.request_id);
+    renderAssumptions(r.assumptions);
+    $("refine-input").value = "";
+    $("approve-msg").textContent = "";
+  } catch (e) {
+    const detail = typeof e.data?.detail === "string" ? e.data.detail : e.message;
+    $("refine-error").textContent = `Change not applied: ${detail}`;
+    $("refine-error").hidden = false;
+  } finally {
+    btn.disabled = !state.requestId; btn.textContent = "Apply change";
+  }
+}
+
+function renderChanges(changes) {
+  const box = $("changes");
+  const lines = changes ? [
+    ...changes.added.map((t) => `<li class="added">+ ${esc(t)}</li>`),
+    ...changes.removed.map((t) => `<li class="removed">− <s>${esc(t)}</s></li>`),
+    ...(changes.channel ? [`<li>Channel: ${esc(changes.channel)}</li>`] : []),
+  ] : [];
+  box.classList.toggle("hidden", !changes);
+  box.innerHTML = lines.length ? `<strong>What changed</strong><ul>${lines.join("")}</ul>` : "<strong>Nothing changed.</strong>";
+}
+
 function applyResult(r) {
   state.status = r.status;
   state.definition = r.definition;
   state.pendingTerms = r.clarifications.map((c) => c.term);
   $("result").classList.remove("hidden");
+  $("refine-btn").disabled = !state.requestId;
   $("channel").value = r.definition.channel;
   renderBanner();
   renderClarifications(r.clarifications);
@@ -254,6 +303,7 @@ async function resolve(term, optionId) {
 async function recheck(resolutions = {}) {
   const r = await api("/api/check", { definition: state.definition, pending_terms: state.pendingTerms, resolutions });
   applyResult({ ...r, unmapped_phrases: state.unmapped });
+  renderChanges(null);
 }
 
 async function size() {
@@ -361,6 +411,7 @@ async function loadInsights() {
     || '<li class="hint">Nothing yet.</li>';
   const e = ins.edits;
   $("ins-edits").innerHTML = `<li>Approved audiences edited before approval<span class="n">${e.edited}/${e.approved}</span></li>`
+    + `<li>Changes asked for in plain language<span class="n">${ins.refinements}</span></li>`
     + e.by_field.map((f) => `<li>${esc(f.label)}<span class="n">${f.count}×</span></li>`).join("");
 }
 

@@ -1,0 +1,2235 @@
+{
+  "summary": {
+    "model": "claude-sonnet-5-5",
+    "cases": 17,
+    "runs": 3,
+    "pass_rate": 1.0,
+    "pass_rate_per_run": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "status_accuracy": 1.0,
+    "audience_exact_match": 1.0,
+    "repair_rate": 0.0,
+    "latency_p50_ms": 2094.0,
+    "latency_p95_ms": 2492.0,
+    "latency_max_ms": 3855.0,
+    "avg_tokens_in": 3715.0,
+    "avg_tokens_out": 126.0,
+    "cost_per_1k_requests_usd": 2.68,
+    "by_category": {
+      "channel": "3/3",
+      "governed": "15/15",
+      "language": "3/3",
+      "no_change": "3/3",
+      "policy": "6/6",
+      "remove": "3/3",
+      "replace": "9/9",
+      "unmapped": "3/3",
+      "widen": "6/6"
+    },
+    "flaky_cases": [],
+    "failures": [],
+    "effort": "low",
+    "case_set": "refine"
+  },
+  "cases": [
+    {
+      "id": "refine-add-region",
+      "category": "widen",
+      "request": "also include the Highlands",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "region",
+          "op": "in",
+          "value": [
+            "Coast",
+            "Highlands"
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2370.7,
+      "tokens_in": 3711,
+      "tokens_out": 145,
+      "cost_usd": 0.002862,
+      "run": 1
+    },
+    {
+      "id": "refine-also-unfiltered",
+      "category": "widen",
+      "request": "also include the Highlands",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2093.6,
+      "tokens_in": 3736,
+      "tokens_out": 112,
+      "cost_usd": 0.002582,
+      "run": 1
+    },
+    {
+      "id": "refine-drop-region",
+      "category": "remove",
+      "request": "drop the region",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1570.7,
+      "tokens_in": 3708,
+      "tokens_out": 86,
+      "cost_usd": 0.002266,
+      "run": 1
+    },
+    {
+      "id": "refine-channel",
+      "category": "channel",
+      "request": "make it an email campaign",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1730.4,
+      "tokens_in": 3711,
+      "tokens_out": 81,
+      "cost_usd": 0.002222,
+      "run": 1
+    },
+    {
+      "id": "refine-threshold",
+      "category": "replace",
+      "request": "make it more than 10 GB",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 10.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2154.3,
+      "tokens_in": 3738,
+      "tokens_out": 151,
+      "cost_usd": 0.002976,
+      "run": 1
+    },
+    {
+      "id": "refine-swap-value",
+      "category": "replace",
+      "request": "not Android, iPhone users instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "ios",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2136.6,
+      "tokens_in": 3740,
+      "tokens_out": 135,
+      "cost_usd": 0.00282,
+      "run": 1
+    },
+    {
+      "id": "refine-multi",
+      "category": "replace",
+      "request": "postpaid instead of prepaid, and add the North",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "in",
+          "value": [
+            "Coast",
+            "North"
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2394.6,
+      "tokens_in": 3720,
+      "tokens_out": 165,
+      "cost_usd": 0.00308,
+      "run": 1
+    },
+    {
+      "id": "refine-governed-override",
+      "category": "governed",
+      "request": "forget high value, ARPU over 60 instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gt",
+          "value": 60.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1959.6,
+      "tokens_in": 3719,
+      "tokens_out": 158,
+      "cost_usd": 0.003008,
+      "run": 1
+    },
+    {
+      "id": "refine-remove-term",
+      "category": "governed",
+      "request": "remove the high value requirement",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1917.8,
+      "tokens_in": 3712,
+      "tokens_out": 88,
+      "cost_usd": 0.002294,
+      "run": 1
+    },
+    {
+      "id": "refine-add-decided-term",
+      "category": "governed",
+      "request": "and they should be new customers",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        },
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 3,
+          "source": "glossary:new_customer"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1941.8,
+      "tokens_in": 3736,
+      "tokens_out": 89,
+      "cost_usd": 0.002352,
+      "run": 1
+    },
+    {
+      "id": "refine-add-open-term",
+      "category": "governed",
+      "request": "only the active ones",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2138.0,
+      "tokens_in": 3709,
+      "tokens_out": 121,
+      "cost_usd": 0.002618,
+      "run": 1
+    },
+    {
+      "id": "refine-pending-carried",
+      "category": "governed",
+      "request": "only postpaid",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2217.3,
+      "tokens_in": 3678,
+      "tokens_out": 143,
+      "cost_usd": 0.002776,
+      "run": 1
+    },
+    {
+      "id": "refine-unmapped",
+      "category": "unmapped",
+      "request": "and who opened our last newsletter",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "who opened our last newsletter"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2206.6,
+      "tokens_in": 3714,
+      "tokens_out": 123,
+      "cost_usd": 0.002648,
+      "run": 1
+    },
+    {
+      "id": "refine-policy-email",
+      "category": "policy",
+      "request": "send it by email instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Valley",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2121.2,
+      "tokens_in": 3681,
+      "tokens_out": 124,
+      "cost_usd": 0.002592,
+      "run": 1
+    },
+    {
+      "id": "refine-policy-credit",
+      "category": "policy",
+      "request": "only customers with a low credit risk band",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "credit_risk_band",
+          "op": "eq",
+          "value": "low",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2600.3,
+      "tokens_in": 3715,
+      "tokens_out": 170,
+      "cost_usd": 0.00312,
+      "run": 1
+    },
+    {
+      "id": "refine-no-change",
+      "category": "no_change",
+      "request": "thanks, that looks right",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "issues": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "no_change"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1966.2,
+      "tokens_in": 3712,
+      "tokens_out": 84,
+      "cost_usd": 0.002254,
+      "run": 1
+    },
+    {
+      "id": "refine-spanish",
+      "category": "language",
+      "request": "solo los que usan la app",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2492.3,
+      "tokens_in": 3712,
+      "tokens_out": 176,
+      "cost_usd": 0.003174,
+      "run": 1
+    },
+    {
+      "id": "refine-add-region",
+      "category": "widen",
+      "request": "also include the Highlands",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "region",
+          "op": "in",
+          "value": [
+            "Coast",
+            "Highlands"
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2345.5,
+      "tokens_in": 3711,
+      "tokens_out": 145,
+      "cost_usd": 0.002862,
+      "run": 2
+    },
+    {
+      "id": "refine-also-unfiltered",
+      "category": "widen",
+      "request": "also include the Highlands",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2046.1,
+      "tokens_in": 3736,
+      "tokens_out": 112,
+      "cost_usd": 0.002582,
+      "run": 2
+    },
+    {
+      "id": "refine-drop-region",
+      "category": "remove",
+      "request": "drop the region",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1356.3,
+      "tokens_in": 3708,
+      "tokens_out": 86,
+      "cost_usd": 0.002266,
+      "run": 2
+    },
+    {
+      "id": "refine-channel",
+      "category": "channel",
+      "request": "make it an email campaign",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1700.6,
+      "tokens_in": 3711,
+      "tokens_out": 81,
+      "cost_usd": 0.002222,
+      "run": 2
+    },
+    {
+      "id": "refine-threshold",
+      "category": "replace",
+      "request": "make it more than 10 GB",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 10.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1653.8,
+      "tokens_in": 3738,
+      "tokens_out": 153,
+      "cost_usd": 0.002996,
+      "run": 2
+    },
+    {
+      "id": "refine-swap-value",
+      "category": "replace",
+      "request": "not Android, iPhone users instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "ios",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2491.9,
+      "tokens_in": 3740,
+      "tokens_out": 132,
+      "cost_usd": 0.00279,
+      "run": 2
+    },
+    {
+      "id": "refine-multi",
+      "category": "replace",
+      "request": "postpaid instead of prepaid, and add the North",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "in",
+          "value": [
+            "Coast",
+            "North"
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2465.9,
+      "tokens_in": 3720,
+      "tokens_out": 202,
+      "cost_usd": 0.00345,
+      "run": 2
+    },
+    {
+      "id": "refine-governed-override",
+      "category": "governed",
+      "request": "forget high value, ARPU over 60 instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gt",
+          "value": 60.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1718.4,
+      "tokens_in": 3719,
+      "tokens_out": 160,
+      "cost_usd": 0.003028,
+      "run": 2
+    },
+    {
+      "id": "refine-remove-term",
+      "category": "governed",
+      "request": "remove the high value requirement",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2007.3,
+      "tokens_in": 3712,
+      "tokens_out": 88,
+      "cost_usd": 0.002294,
+      "run": 2
+    },
+    {
+      "id": "refine-add-decided-term",
+      "category": "governed",
+      "request": "and they should be new customers",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        },
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 3,
+          "source": "glossary:new_customer"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1851.1,
+      "tokens_in": 3736,
+      "tokens_out": 89,
+      "cost_usd": 0.002352,
+      "run": 2
+    },
+    {
+      "id": "refine-add-open-term",
+      "category": "governed",
+      "request": "only the active ones",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2066.0,
+      "tokens_in": 3709,
+      "tokens_out": 113,
+      "cost_usd": 0.002538,
+      "run": 2
+    },
+    {
+      "id": "refine-pending-carried",
+      "category": "governed",
+      "request": "only postpaid",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2337.9,
+      "tokens_in": 3678,
+      "tokens_out": 145,
+      "cost_usd": 0.002796,
+      "run": 2
+    },
+    {
+      "id": "refine-unmapped",
+      "category": "unmapped",
+      "request": "and who opened our last newsletter",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "who opened our last newsletter"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2166.4,
+      "tokens_in": 3714,
+      "tokens_out": 124,
+      "cost_usd": 0.002658,
+      "run": 2
+    },
+    {
+      "id": "refine-policy-email",
+      "category": "policy",
+      "request": "send it by email instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Valley",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2227.1,
+      "tokens_in": 3681,
+      "tokens_out": 122,
+      "cost_usd": 0.002572,
+      "run": 2
+    },
+    {
+      "id": "refine-policy-credit",
+      "category": "policy",
+      "request": "only customers with a low credit risk band",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "credit_risk_band",
+          "op": "eq",
+          "value": "low",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2398.7,
+      "tokens_in": 3715,
+      "tokens_out": 148,
+      "cost_usd": 0.0029,
+      "run": 2
+    },
+    {
+      "id": "refine-no-change",
+      "category": "no_change",
+      "request": "thanks, that looks right",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "issues": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "no_change"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1912.2,
+      "tokens_in": 3712,
+      "tokens_out": 84,
+      "cost_usd": 0.002254,
+      "run": 2
+    },
+    {
+      "id": "refine-spanish",
+      "category": "language",
+      "request": "solo los que usan la app",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2290.3,
+      "tokens_in": 3712,
+      "tokens_out": 161,
+      "cost_usd": 0.003024,
+      "run": 2
+    },
+    {
+      "id": "refine-add-region",
+      "category": "widen",
+      "request": "also include the Highlands",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "region",
+          "op": "in",
+          "value": [
+            "Coast",
+            "Highlands"
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1751.7,
+      "tokens_in": 3711,
+      "tokens_out": 143,
+      "cost_usd": 0.002842,
+      "run": 3
+    },
+    {
+      "id": "refine-also-unfiltered",
+      "category": "widen",
+      "request": "also include the Highlands",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2080.2,
+      "tokens_in": 3736,
+      "tokens_out": 112,
+      "cost_usd": 0.002582,
+      "run": 3
+    },
+    {
+      "id": "refine-drop-region",
+      "category": "remove",
+      "request": "drop the region",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1468.2,
+      "tokens_in": 3708,
+      "tokens_out": 86,
+      "cost_usd": 0.002266,
+      "run": 3
+    },
+    {
+      "id": "refine-channel",
+      "category": "channel",
+      "request": "make it an email campaign",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 3854.8,
+      "tokens_in": 3711,
+      "tokens_out": 81,
+      "cost_usd": 0.002222,
+      "run": 3
+    },
+    {
+      "id": "refine-threshold",
+      "category": "replace",
+      "request": "make it more than 10 GB",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 10.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1708.6,
+      "tokens_in": 3738,
+      "tokens_out": 148,
+      "cost_usd": 0.002946,
+      "run": 3
+    },
+    {
+      "id": "refine-swap-value",
+      "category": "replace",
+      "request": "not Android, iPhone users instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "ios",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2224.6,
+      "tokens_in": 3740,
+      "tokens_out": 144,
+      "cost_usd": 0.00291,
+      "run": 3
+    },
+    {
+      "id": "refine-multi",
+      "category": "replace",
+      "request": "postpaid instead of prepaid, and add the North",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "in",
+          "value": [
+            "Coast",
+            "North"
+          ],
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2257.5,
+      "tokens_in": 3720,
+      "tokens_out": 161,
+      "cost_usd": 0.00304,
+      "run": 3
+    },
+    {
+      "id": "refine-governed-override",
+      "category": "governed",
+      "request": "forget high value, ARPU over 60 instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gt",
+          "value": 60.0,
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1915.4,
+      "tokens_in": 3719,
+      "tokens_out": 166,
+      "cost_usd": 0.003088,
+      "run": 3
+    },
+    {
+      "id": "refine-remove-term",
+      "category": "governed",
+      "request": "remove the high value requirement",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1875.4,
+      "tokens_in": 3712,
+      "tokens_out": 88,
+      "cost_usd": 0.002294,
+      "run": 3
+    },
+    {
+      "id": "refine-add-decided-term",
+      "category": "governed",
+      "request": "and they should be new customers",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        },
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "data_gb_30d",
+          "op": "gt",
+          "value": 5.0,
+          "source": "model"
+        },
+        {
+          "attribute": "tenure_months",
+          "op": "lt",
+          "value": 3,
+          "source": "glossary:new_customer"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1934.9,
+      "tokens_in": 3736,
+      "tokens_out": 89,
+      "cost_usd": 0.002352,
+      "run": 3
+    },
+    {
+      "id": "refine-add-open-term",
+      "category": "governed",
+      "request": "only the active ones",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2016.6,
+      "tokens_in": 3709,
+      "tokens_out": 115,
+      "cost_usd": 0.002558,
+      "run": 3
+    },
+    {
+      "id": "refine-pending-carried",
+      "category": "governed",
+      "request": "only postpaid",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "clarify": true
+      },
+      "status": "needs_clarification",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "device_os",
+          "op": "eq",
+          "value": "android",
+          "source": "model"
+        },
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "postpaid",
+          "source": "model"
+        }
+      ],
+      "clarifications": [
+        "active"
+      ],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2201.3,
+      "tokens_in": 3678,
+      "tokens_out": 145,
+      "cost_usd": 0.002796,
+      "run": 3
+    },
+    {
+      "id": "refine-unmapped",
+      "category": "unmapped",
+      "request": "and who opened our last newsletter",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "unmapped": true
+      },
+      "status": "needs_confirmation",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [
+        "opened our last newsletter"
+      ],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2249.6,
+      "tokens_in": 3714,
+      "tokens_out": 121,
+      "cost_usd": 0.002628,
+      "run": 3
+    },
+    {
+      "id": "refine-policy-email",
+      "category": "policy",
+      "request": "send it by email instead",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Valley",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 1638.7,
+      "tokens_in": 3681,
+      "tokens_out": 119,
+      "cost_usd": 0.002542,
+      "run": 3
+    },
+    {
+      "id": "refine-policy-credit",
+      "category": "policy",
+      "request": "only customers with a low credit risk band",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "policy_enforced": true,
+        "issues": true
+      },
+      "status": "invalid",
+      "jaccard": null,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "credit_risk_band",
+          "op": "eq",
+          "value": "low",
+          "source": "model"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "policy_violation"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2294.2,
+      "tokens_in": 3715,
+      "tokens_out": 175,
+      "cost_usd": 0.00317,
+      "run": 3
+    },
+    {
+      "id": "refine-no-change",
+      "category": "no_change",
+      "request": "thanks, that looks right",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true,
+        "issues": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [
+        "no_change"
+      ],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2065.8,
+      "tokens_in": 3712,
+      "tokens_out": 84,
+      "cost_usd": 0.002254,
+      "run": 3
+    },
+    {
+      "id": "refine-spanish",
+      "category": "language",
+      "request": "solo los que usan la app",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "audience": true
+      },
+      "status": "ready",
+      "jaccard": 1.0,
+      "conditions": [
+        {
+          "attribute": "line_type",
+          "op": "eq",
+          "value": "prepaid",
+          "source": "model"
+        },
+        {
+          "attribute": "region",
+          "op": "eq",
+          "value": "Coast",
+          "source": "model"
+        },
+        {
+          "attribute": "arpu_3m",
+          "op": "gte",
+          "value": 40.0,
+          "source": "glossary:high_value"
+        },
+        {
+          "attribute": "app_active_30d",
+          "op": "eq",
+          "value": true,
+          "source": "glossary:app_user"
+        }
+      ],
+      "clarifications": [],
+      "unmapped": [],
+      "issues": [],
+      "llm_calls": 1,
+      "repaired": false,
+      "llm_ms": 2233.8,
+      "tokens_in": 3712,
+      "tokens_out": 139,
+      "cost_usd": 0.002804,
+      "run": 3
+    }
+  ]
+}

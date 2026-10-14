@@ -43,6 +43,15 @@
         <div class="summary-label" id="summary-label">This audience is exactly:</div>
         <p id="summary"></p>
       </div>
+      <div id="changes" class="changes-box hidden"></div>
+
+      <div class="row refine-row">
+        <input id="refine-input" maxlength="500"
+          placeholder="Change it in your own words: “also the Highlands”, “drop the region”, “make it email”">
+        <button id="refine-btn" class="ghost">Apply change</button>
+      </div>
+      <div id="refine-examples" class="chips refine-chips"></div>
+      <p class="error-text" id="refine-error" hidden></p>
 
       <table class="conditions">
         <thead><tr><th>Field</th><th>Rule</th><th>Value</th><th>Source</th><th></th></tr></thead>

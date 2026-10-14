@@ -3,7 +3,8 @@
 What marketers asked for that the data can't express is counted, not discarded. That is the
 backlog for the data team (which fields to add) and for governance (which open terms to settle
 first, and which way people already lean). Edits marketers make to the AI's proposals show
-where the prompt or the catalog descriptions need work.
+where the prompt or the catalog descriptions need work; refinements show how often the first
+answer wasn't the audience they meant.
 """
 
 from __future__ import annotations
@@ -31,12 +32,16 @@ def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
             if issue["code"] == "policy_violation":
                 policy = re.search(r"policy (\S+)", issue["message"])
                 blocked[(issue["attribute"], policy.group(1) if policy else "?")] += 1
+        carried_unmapped = set(json.loads(s["parent_unmapped_json"] or "[]"))
+        carried_terms = set(json.loads(s["parent_clarifications_json"] or "[]"))
         for phrase in json.loads(s["unmapped_json"]):
+            if phrase in carried_unmapped:
+                continue
             key = _normalize(phrase)
             demand[key] += 1
             example.setdefault(key, s["request_text"])
             last_seen.setdefault(key, s["created_at"])
-        asked.update(json.loads(s["clarifications_json"]))
+        asked.update(t for t in json.loads(s["clarifications_json"]) if t not in carried_terms)
 
     chosen: dict[str, Counter[str]] = defaultdict(Counter)
     edited_fields: Counter[str] = Counter()
@@ -55,7 +60,8 @@ def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
 
     edited = sum(1 for a in audiences if a["edited_by_user"])
     return {
-        "requests": len(signals),
+        "requests": sum(1 for s in signals if not s["parent_request_id"]),
+        "refinements": sum(1 for s in signals if s["parent_request_id"]),
         "outcomes": dict(Counter(s["status"] for s in signals)),
         "unmapped_demand": [
             {"phrase": phrase, "count": n, "last_seen": last_seen[phrase], "example": example[phrase]}

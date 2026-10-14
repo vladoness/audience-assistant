@@ -65,6 +65,13 @@ button.remove { border: none; color: var(--muted); padding: 4px 8px; }
 .unmapped-box q { font-weight: 600; }
 
 .summary-box { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 6px 0 14px; }
+.changes-box { background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; font-size: 13px; }
+.changes-box ul { margin: 4px 0 0; padding-left: 0; list-style: none; }
+.changes-box .added { color: var(--ok); }
+.changes-box .removed { color: var(--err); }
+.refine-row { margin: 0 0 6px; }
+.refine-chips { margin: 0 0 14px; }
+.spinner.dark { border-color: rgba(15, 110, 110, .25); border-top-color: var(--accent); }
 .summary-label { font-size: 12px; color: var(--muted); }
 #summary { font-size: 16px; line-height: 1.5; margin: 4px 0 0; }
 

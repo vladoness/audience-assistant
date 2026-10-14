@@ -1,7 +1,8 @@
 """Persistence: the audit trail (SQLite) and the interpretation cache (in memory).
 
 Every interpretation is recorded with the masked request, the raw model proposal, the model
-and prompt version, and the versions of every governance file. An approval references that
+and prompt version, and the versions of every governance file. A refinement is its own record,
+linked to the interpretation it refined (parent_request_id). An approval references that
 record and adds a governance snapshot: which governed terms it used, under which decision and
 parameter versions. That is what lets the system tell, later, which approved audiences a
 glossary or parameter change affects.
@@ -19,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -35,7 +36,8 @@ CREATE TABLE IF NOT EXISTS interpretations (
     model TEXT,
     prompt_version TEXT,
     governance_versions TEXT NOT NULL,
-    telemetry_json TEXT NOT NULL
+    telemetry_json TEXT NOT NULL,
+    parent_request_id TEXT REFERENCES interpretations(request_id)
 );
 CREATE TABLE IF NOT EXISTS audiences (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,8 +96,8 @@ class AuditStore:
             self._db.execute(
                 """INSERT INTO interpretations VALUES (:request_id, :created_at, :request_text, :status, :proposal_json,
                    :definition_json, :unmapped_json, :clarifications_json, :issues_json, :model, :prompt_version,
-                   :governance_versions, :telemetry_json)""",
-                {"created_at": _now(), **row},
+                   :governance_versions, :telemetry_json, :parent_request_id)""",
+                {"created_at": _now(), "parent_request_id": None, **row},
             )
 
     def get_interpretation(self, request_id: str) -> dict[str, Any] | None:
@@ -146,11 +148,15 @@ class AuditStore:
         return [dict(r) for r in rows]
 
     def interpretation_signals(self, limit: int = 5000) -> list[dict[str, Any]]:
-        """Recent interpretation outcomes, for the insights view."""
+        """Recent interpretation outcomes, for the insights view. A refinement carries its parent's open
+        terms and unmapped phrases forward, so the parent's lists come along to count only what is new."""
         with self._lock:
             rows = self._db.execute(
-                """SELECT created_at, request_text, status, unmapped_json, clarifications_json, issues_json
-                   FROM interpretations ORDER BY created_at DESC LIMIT ?""",
+                """SELECT i.created_at, i.request_text, i.status, i.unmapped_json, i.clarifications_json, i.issues_json,
+                          i.parent_request_id, p.unmapped_json AS parent_unmapped_json,
+                          p.clarifications_json AS parent_clarifications_json
+                   FROM interpretations i LEFT JOIN interpretations p ON p.request_id = i.parent_request_id
+                   ORDER BY i.created_at DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]

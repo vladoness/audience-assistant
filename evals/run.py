@@ -2,6 +2,7 @@
 
     uv run python -m evals.run --provider anthropic --model claude-haiku-5-5 --effort low --repeat 3 --record
     uv run python -m evals.run --provider anthropic --model claude-haiku-5-5 --cases heldout
+    uv run python -m evals.run --provider anthropic --model claude-haiku-5-5 --cases refine   # changes to an audience
     uv run python -m evals.run --provider replay --model claude-haiku-5-5     # reproduce run 1 offline
 
 A case passes only if every expectation it declares holds. Audience correctness is judged by
@@ -24,8 +25,8 @@ import yaml
 from app.audience import AudienceEngine
 from app.catalog import load_catalog
 from app.interpret import Interpreter
-from app.llm import AnthropicProvider, Pricing, RecordingProvider, ReplayProvider
-from app.models import AudienceDefinition, Condition
+from app.llm import AnthropicProvider, Pricing, ProviderUnavailable, RecordingProvider, ReplayProvider
+from app.models import AudienceDefinition, Condition, InterpretResult, Issue, Telemetry
 from app.observability import Metrics, percentile
 from app.settings import ROOT, Settings
 from app.store import AuditStore, TTLCache
@@ -86,6 +87,20 @@ def score_case(case: dict, result, engine: AudienceEngine) -> dict:
     }
 
 
+def run_refine_case(interpreter: Interpreter, case: dict):
+    """A refinement case starts from a written-out audience, so it measures the refinement alone."""
+    base = AudienceDefinition(**case["base"])
+    parent = {"request_id": f"base-{case['id']}", "definition_json": base.model_dump_json(),
+              "clarifications_json": json.dumps(case.get("pending", [])),
+              "unmapped_json": json.dumps(case.get("unmapped", []))}
+    try:
+        return interpreter.refine(parent, base, case["request"])
+    except ProviderUnavailable as exc:
+        return InterpretResult(request_id="-", status="ai_unavailable", definition=base,
+                               issues=[Issue(level="warning", code=exc.code, message=str(exc))],
+                               telemetry=Telemetry(provider=interpreter.provider.name))
+
+
 def summarize(model: str, rows: list[dict], runs: int) -> dict:
     """Aggregate over every (case, run). With runs > 1, flaky cases are those that passed in some runs only."""
     by_cat: dict[str, list[bool]] = defaultdict(list)
@@ -124,7 +139,7 @@ def main() -> None:
     parser.add_argument("--model", default="claude-sonnet-5-5")
     parser.add_argument("--effort", default="low", help="low | medium | high | xhigh | max | default")
     parser.add_argument("--record", action="store_true", help="save run-1 live responses as replay fixtures")
-    parser.add_argument("--cases", default="dev", choices=["dev", "heldout"])
+    parser.add_argument("--cases", default="dev", choices=["dev", "heldout", "refine"])
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--only", help="run a single case id")
     args = parser.parse_args()
@@ -139,7 +154,7 @@ def main() -> None:
     live = AnthropicProvider(settings.anthropic_api_key, args.model, settings.llm_timeout_s,
                              settings.llm_max_retries, effort=effort) if args.provider == "anthropic" else None
     pricing = Pricing.load(settings.config_dir / "models.yaml")
-    case_file = "cases.yaml" if args.cases == "dev" else "heldout.yaml"
+    case_file = {"dev": "cases.yaml", "heldout": "heldout.yaml", "refine": "refine.yaml"}[args.cases]
     cases = yaml.safe_load((ROOT / "evals" / case_file).read_text())["cases"]
     if args.only:
         cases = [c for c in cases if c["id"] == args.only]
@@ -154,7 +169,7 @@ def main() -> None:
         interpreter = Interpreter(catalog, provider, AuditStore(tmp / "audit.sqlite"), TTLCache(0, 0), Metrics(), pricing,
                                   breaker_threshold=10_000)
         for case in cases:
-            result = interpreter.interpret(case["request"])
+            result = run_refine_case(interpreter, case) if args.cases == "refine" else interpreter.interpret(case["request"])
             row = score_case(case, result, engine) | {"run": run}
             rows.append(row)
             mark = "PASS" if row["passed"] else "FAIL"

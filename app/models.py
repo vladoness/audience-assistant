@@ -71,6 +71,14 @@ class Telemetry(BaseModel):
     cost_usd: float = 0.0
 
 
+class Changes(BaseModel):
+    """What a refinement changed, in plain English, so the marketer sees exactly what moved."""
+
+    added: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    channel: str | None = None
+
+
 class InterpretResult(BaseModel):
     request_id: str
     status: Status
@@ -81,6 +89,8 @@ class InterpretResult(BaseModel):
     issues: list[Issue] = Field(default_factory=list)
     explanation: Explanation | None = None
     telemetry: Telemetry
+    parent_request_id: str | None = None  # set when this result refines an earlier interpretation
+    changes: Changes | None = None
 
 
 class SizeResult(BaseModel):
@@ -97,6 +107,12 @@ class SizeResult(BaseModel):
 
 class InterpretRequest(BaseModel):
     request: str = Field(max_length=2000)
+
+
+class RefineRequest(BaseModel):
+    request_id: str  # the interpretation being refined
+    instruction: str = Field(max_length=2000)
+    definition: AudienceDefinition  # what is on screen now, including the marketer's edits
 
 
 class CheckRequest(BaseModel):

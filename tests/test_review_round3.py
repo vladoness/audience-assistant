@@ -57,6 +57,17 @@ def test_an_open_term_the_model_did_not_name_is_still_asked(make_client):
     assert "unflagged_open_term" in {i["code"] for i in r["issues"]}
 
 
+@pytest.mark.parametrize("request_text", ["Prepaid customers who are not active", "Prepaid lines no longer active",
+                                          "Prepaid customers who are not high value"])
+def test_a_negated_governed_phrase_never_forces_the_opposite_audience(make_client, request_text):
+    silent = proposal(conditions=[{"attribute": "line_type", "op": "eq", "value": "prepaid"},
+                                  {"attribute": "usage_events_30d", "op": "eq", "value": 0}])
+    client = make_client(ScriptedProvider(silent))
+    r = client.post("/api/interpret", json={"request": request_text}).json()
+    assert r["status"] == "ready" and not r["clarifications"]
+    assert "negated_governed_term" in {i["code"] for i in r["issues"]}
+
+
 def test_whole_words_only(make_client):
     client = make_client(ScriptedProvider(proposal(conditions=[{"attribute": "usage_events_30d", "op": "eq", "value": 0}])))
     r = client.post("/api/interpret", json={"request": "Inactive lines"}).json()
@@ -84,11 +95,11 @@ def test_the_export_is_the_approved_membership(make_client, settings):
     client = make_client(ScriptedProvider(PREPAID))
     r = client.post("/api/interpret", json={"request": "prepaid customers"}).json()
     approved = approve(client, r).json()
-    export = client.get(f"/api/audiences/{approved['id']}/export.csv")
+    export = client.get(f"/api/audiences/{approved['id']}/export.csv?group=all")
     rows = export.text.strip().splitlines()[1:]
     groups = [line.split(",")[1] for line in rows]
     m = approved["measurement"]
-    assert export.headers["x-membership-matches-approval"] == "true"
+    assert export.headers["x-current-data-matches-approval"] == "true"
     assert (groups.count("contacted"), groups.count("held_out")) == (m["target_lines"], m["holdout_lines"])
     assert m["data_snapshot"] == export.headers["x-current-data-snapshot"]
     assert client.get("/api/audiences/999/export.csv").status_code == 404

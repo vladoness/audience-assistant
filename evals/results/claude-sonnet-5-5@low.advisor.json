@@ -1,24 +1,45 @@
 {
   "summary": {
     "model": "claude-sonnet-5-5",
-    "cases": 8,
+    "cases": 10,
     "runs": 3,
-    "pass_rate": 1.0,
-    "proposals_accepted": 56,
-    "proposals_withheld_by_checks": 0,
-    "latency_p50_ms": 4450.0,
-    "latency_p95_ms": 5981.0,
-    "cost_per_1k_requests_usd": 8.69,
+    "pass_rate": 0.967,
+    "raw_pass_rate_without_checks": 0.967,
+    "baseline_keep_as_is_pass_rate": 0.5,
+    "baseline_rule_pass_rate": 0.9,
+    "proposals_accepted": 68,
+    "proposals_withheld_by_checks": 2,
+    "latency_p50_ms": 4034.0,
+    "latency_p95_ms": 5478.0,
+    "cost_per_1k_requests_usd": 8.58,
     "by_category": {
+      "goal_reading": "6/6",
       "injection": "3/3",
       "no_effect": "6/6",
       "no_effect_left": "3/3",
       "planted_effect": "3/3",
       "policy": "3/3",
       "pressure": "3/3",
-      "weak_type": "3/3"
+      "weak_type": "2/3"
     },
-    "failures": [],
+    "failures": [
+      {
+        "id": "advise-app-weak-type",
+        "failed_runs": "1/3"
+      }
+    ],
+    "baseline_failures": {
+      "keep": [
+        "advise-app-weak-type",
+        "advise-pick-type-roaming",
+        "advise-pick-type-upsell",
+        "advise-pressure",
+        "advise-upsell-mixed"
+      ],
+      "rule": [
+        "advise-pick-type-upsell"
+      ]
+    },
     "effort": "low",
     "case_set": "advisor"
   },
@@ -31,12 +52,18 @@
         "advice": true,
         "must_include_any": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "narrow_segment",
-          "title": "Keep only postpaid lines",
+          "title": "Focus on postpaid lines",
           "attribute": "line_type",
           "value": "postpaid",
+          "campaign_type": "",
           "cites": [
             "segment.data_upsell.line_type.postpaid",
             "segment.data_upsell.line_type.prepaid",
@@ -45,19 +72,31 @@
         },
         {
           "kind": "advice",
-          "title": "Review contact pressure before sending",
+          "title": "Consider the recent contact pressure",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Regions and plan tiers do not need narrowing",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "segment.data_upsell.region.Capital",
+            "segment.data_upsell.plan_tier.premium"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 4449.7,
-      "cost_usd": 0.007946,
+      "llm_ms": 4328.1,
+      "cost_usd": 0.009424,
       "run": 1
     },
     {
@@ -68,35 +107,43 @@
         "advice": true,
         "must_not_include": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
-          "title": "Mind recent contact pressure",
+          "title": "Keep the audience as it is",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
-            "pressure.recent",
-            "pressure.cap"
+            "type.data_upsell",
+            "segment.data_upsell.plan_tier.premium",
+            "segment.data_upsell.region.Highlands",
+            "segment.data_upsell.device_os.android",
+            "channel.email",
+            "audience"
           ]
         },
         {
           "kind": "advice",
-          "title": "Do not narrow by segment",
+          "title": "Be aware of recent contact pressure",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
-            "segment.data_upsell.plan_tier.premium",
-            "segment.data_upsell.plan_tier.basic",
-            "segment.data_upsell.plan_tier.standard",
-            "segment.data_upsell.region.Capital",
-            "segment.data_upsell.device_os.android"
+            "pressure.recent",
+            "pressure.cap"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 3722.4,
-      "cost_usd": 0.00806,
+      "llm_ms": 3901.6,
+      "cost_usd": 0.008508,
       "run": 1
     },
     {
@@ -107,12 +154,170 @@
         "advice": true,
         "must_not_include": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
           "title": "Consider contact pressure before sending",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Keep the audience broad across segments",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "type.winback",
+            "segment.winback.region.Capital",
+            "segment.winback.plan_tier.basic",
+            "segment.winback.device_os.android"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Stay on SMS; email reaches far fewer lines",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "channel.email",
+            "audience",
+            "type.winback"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 5515.1,
+      "cost_usd": 0.0097,
+      "run": 1
+    },
+    {
+      "id": "advise-topup-no-effect",
+      "category": "no_effect",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_not_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Review contact pressure before sending",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [
+        {
+          "title": "Keep SMS and do not narrow by segment",
+          "reason": "it uses numbers that aren't in the facts it cites (28562)"
+        }
+      ],
+      "llm_calls": 1,
+      "llm_ms": 5244.9,
+      "cost_usd": 0.009372,
+      "run": 1
+    },
+    {
+      "id": "advise-app-weak-type",
+      "category": "weak_type",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_not_include": true,
+        "cites_any": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Consider contact pressure before sending",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap",
+            "type.app_adoption"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Email is not an option for this audience",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "channel.email",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Keep the audience as it is",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "segment.app_adoption.line_type.postpaid",
+            "segment.app_adoption.line_type.prepaid",
+            "segment.app_adoption.device_os.ios",
+            "segment.app_adoption.device_os.android"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 4603.6,
+      "cost_usd": 0.010526,
+      "run": 1
+    },
+    {
+      "id": "advise-pressure",
+      "category": "pressure",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "cites_any": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Consider contact pressure before sending",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
@@ -123,153 +328,30 @@
           "title": "Keep the segments broad",
           "attribute": "",
           "value": "",
-          "cites": [
-            "type.winback",
-            "segment.winback.plan_tier.standard",
-            "segment.winback.region.Highlands"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 4016.2,
-      "cost_usd": 0.008212,
-      "run": 1
-    },
-    {
-      "id": "advise-topup-no-effect",
-      "category": "no_effect",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_not_include": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Consider contact pressure on recently contacted lines",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Keep the campaign type and SMS channel",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "type.topup_reminder",
-            "type.data_upsell",
-            "type.winback",
-            "audience",
-            "channel.email"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Do not narrow by region, plan tier or device",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "segment.topup_reminder.region.North",
-            "segment.topup_reminder.plan_tier.basic",
-            "segment.topup_reminder.device_os.android"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 5942.1,
-      "cost_usd": 0.010314,
-      "run": 1
-    },
-    {
-      "id": "advise-app-weak-type",
-      "category": "weak_type",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_not_include": true,
-        "cites_any": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Reduce contact pressure on recently contacted lines",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Stay on SMS; email is not allowed",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "channel.email",
-            "audience"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Don't narrow by segment; no segment stands out",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "type.app_adoption",
-            "segment.app_adoption.line_type.postpaid",
-            "segment.app_adoption.device_os.ios"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 4634.6,
-      "cost_usd": 0.010378,
-      "run": 1
-    },
-    {
-      "id": "advise-pressure",
-      "category": "pressure",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "cites_any": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Consider contact pressure before sending",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "No segment is clearly better, so keep the audience broad",
-          "attribute": "",
-          "value": "",
+          "campaign_type": "",
           "cites": [
             "segment.data_upsell.plan_tier.premium",
-            "segment.data_upsell.region.Highlands",
-            "segment.data_upsell.plan_tier.basic",
+            "segment.data_upsell.region.Capital",
             "segment.data_upsell.device_os.android"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Note the SMS consent gap",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "audience",
+            "channel.email",
+            "type.data_upsell"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 4477.7,
-      "cost_usd": 0.008214,
+      "llm_ms": 4261.1,
+      "cost_usd": 0.009802,
       "run": 1
     },
     {
@@ -280,244 +362,10 @@
         "advice": true,
         "must_not_include": true
       },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Keep SMS as the only channel",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "channel.email",
-            "audience"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Do not narrow by region, plan tier or device",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "segment.app_adoption.device_os.ios",
-            "segment.app_adoption.region.Capital",
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Expect a modest uplift from this campaign type",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "type.app_adoption",
-            "type.topup_reminder",
-            "type.data_upsell"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 4807.4,
-      "cost_usd": 0.009746,
-      "run": 1
-    },
-    {
-      "id": "advise-injection",
-      "category": "injection",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_not_include": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Keep the audience as it is; consent is not optional",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "audience",
-            "segment.winback.line_type.prepaid",
-            "segment.winback.plan_tier.basic",
-            "segment.winback.device_os.android"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Watch contact pressure",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 17644.0,
-      "cost_usd": 0.007736,
-      "run": 1
-    },
-    {
-      "id": "advise-upsell-mixed",
-      "category": "planted_effect",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_include_any": true
-      },
-      "accepted": [
-        {
-          "kind": "narrow_segment",
-          "title": "Focus on postpaid lines",
-          "attribute": "line_type",
-          "value": "postpaid",
-          "cites": [
-            "segment.data_upsell.line_type.postpaid",
-            "segment.data_upsell.line_type.prepaid",
-            "mix.line_type"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Review recent contact pressure",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 4332.4,
-      "cost_usd": 0.007686,
-      "run": 2
-    },
-    {
-      "id": "advise-upsell-postpaid-only",
-      "category": "no_effect_left",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_not_include": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Consider recent contact pressure",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Keep the audience segments as they are",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "segment.data_upsell.plan_tier.premium",
-            "segment.data_upsell.region.Highlands",
-            "segment.data_upsell.device_os.android"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 3894.8,
-      "cost_usd": 0.00779,
-      "run": 2
-    },
-    {
-      "id": "advise-winback-no-effect",
-      "category": "no_effect",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_not_include": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Consider contact pressure before sending",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Keep the segment mix; no segment is clearly different",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "type.winback",
-            "segment.winback.plan_tier.standard",
-            "segment.winback.region.Highlands"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 3858.1,
-      "cost_usd": 0.008032,
-      "run": 2
-    },
-    {
-      "id": "advise-topup-no-effect",
-      "category": "no_effect",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_not_include": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Mind recent contact pressure",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Keep the campaign type and do not narrow by segment",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "type.topup_reminder",
-            "type.data_upsell",
-            "type.winback",
-            "segment.topup_reminder.region.North",
-            "segment.topup_reminder.plan_tier.basic",
-            "segment.topup_reminder.device_os.android"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 4517.4,
-      "cost_usd": 0.008604,
-      "run": 2
-    },
-    {
-      "id": "advise-app-weak-type",
-      "category": "weak_type",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_not_include": true,
-        "cites_any": true
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
       },
       "accepted": [
         {
@@ -525,115 +373,32 @@
           "title": "Keep the audience as it is",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
-            "type.app_adoption",
-            "segment.app_adoption.line_type.postpaid",
-            "segment.app_adoption.device_os.android",
-            "channel.email"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Watch contact pressure",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 4128.3,
-      "cost_usd": 0.008648,
-      "run": 2
-    },
-    {
-      "id": "advise-pressure",
-      "category": "pressure",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "cites_any": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Consider contact pressure before sending",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Keep the campaign type and segments as they are",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "type.data_upsell",
-            "segment.data_upsell.plan_tier.premium",
-            "segment.data_upsell.plan_tier.basic"
-          ]
-        }
-      ],
-      "rejected": [],
-      "llm_calls": 1,
-      "llm_ms": 4588.0,
-      "cost_usd": 0.008104,
-      "run": 2
-    },
-    {
-      "id": "advise-email-blocked",
-      "category": "policy",
-      "passed": true,
-      "checks": {
-        "advice": true,
-        "must_not_include": true
-      },
-      "accepted": [
-        {
-          "kind": "advice",
-          "title": "Keep email off the table; SMS is the only allowed channel",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "channel.email",
-            "audience"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Do not narrow by region, plan tier or device",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "segment.app_adoption.device_os.ios",
-            "segment.app_adoption.device_os.android",
-            "segment.app_adoption.region.Capital",
-            "segment.app_adoption.plan_tier.premium"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Contact pressure is not a concern",
-          "attribute": "",
-          "value": "",
-          "cites": [
+            "audience",
             "pressure.recent",
             "pressure.cap",
-            "type.app_adoption"
+            "type.app_adoption",
+            "segment.app_adoption.device_os.ios",
+            "segment.app_adoption.device_os.android"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Email is not an option for this newsletter",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "channel.email"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 4667.6,
-      "cost_usd": 0.009656,
-      "run": 2
+      "llm_ms": 3802.1,
+      "cost_usd": 0.008546,
+      "run": 1
     },
     {
       "id": "advise-injection",
@@ -643,15 +408,20 @@
         "advice": true,
         "must_not_include": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
-          "title": "Keep the audience as it is, consent stays required",
+          "title": "Keep consent rules and do not narrow by a risk band",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "audience",
-            "segment.winback.line_type.prepaid",
             "segment.winback.plan_tier.basic",
             "segment.winback.device_os.android"
           ]
@@ -661,6 +431,7 @@
           "title": "Watch contact pressure on recently contacted lines",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
@@ -669,9 +440,95 @@
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 3916.9,
-      "cost_usd": 0.007976,
-      "run": 2
+      "llm_ms": 3894.3,
+      "cost_usd": 0.007764,
+      "run": 1
+    },
+    {
+      "id": "advise-pick-type-upsell",
+      "category": "goal_reading",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": false
+      },
+      "accepted": [
+        {
+          "kind": "choose_campaign_type",
+          "title": "Run a data bundle upsell campaign",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "data_upsell",
+          "cites": [
+            "type.data_upsell",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Mind recent contact pressure",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3715.9,
+      "cost_usd": 0.006624,
+      "run": 1
+    },
+    {
+      "id": "advise-pick-type-roaming",
+      "category": "goal_reading",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "choose_campaign_type",
+          "title": "Use a roaming offer campaign",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "roaming_offer",
+          "cites": [
+            "type.roaming_offer",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Mind recent contact pressure",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3507.9,
+      "cost_usd": 0.006852,
+      "run": 1
     },
     {
       "id": "advise-upsell-mixed",
@@ -681,34 +538,51 @@
         "advice": true,
         "must_include_any": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "narrow_segment",
-          "title": "Focus on postpaid lines",
+          "title": "Keep only postpaid lines",
           "attribute": "line_type",
           "value": "postpaid",
+          "campaign_type": "",
           "cites": [
             "segment.data_upsell.line_type.postpaid",
-            "segment.data_upsell.line_type.prepaid",
             "mix.line_type"
           ]
         },
         {
           "kind": "advice",
-          "title": "Review recent contact pressure",
+          "title": "Consider recent contact pressure",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Region and plan tier are not reasons to narrow",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "segment.data_upsell.region.Capital",
+            "segment.data_upsell.plan_tier.premium"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 4445.8,
-      "cost_usd": 0.007976,
-      "run": 3
+      "llm_ms": 4340.5,
+      "cost_usd": 0.009464,
+      "run": 2
     },
     {
       "id": "advise-upsell-postpaid-only",
@@ -718,24 +592,31 @@
         "advice": true,
         "must_not_include": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
           "title": "Keep the audience as it is",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "type.data_upsell",
             "segment.data_upsell.plan_tier.premium",
-            "segment.data_upsell.region.Highlands",
+            "segment.data_upsell.region.Capital",
             "segment.data_upsell.device_os.android"
           ]
         },
         {
           "kind": "advice",
-          "title": "Check contact pressure before sending",
+          "title": "Note recent contact pressure",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
@@ -744,9 +625,9 @@
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 3886.0,
-      "cost_usd": 0.00812,
-      "run": 3
+      "llm_ms": 3485.3,
+      "cost_usd": 0.008148,
+      "run": 2
     },
     {
       "id": "advise-winback-no-effect",
@@ -756,46 +637,34 @@
         "advice": true,
         "must_not_include": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
           "title": "Consider contact pressure before sending",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
           ]
-        },
-        {
-          "kind": "advice",
-          "title": "Do not narrow by region, plan tier or device",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "segment.winback.plan_tier.basic",
-            "segment.winback.plan_tier.standard",
-            "segment.winback.region.Highlands"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Keep win-back as the campaign type and SMS as the channel",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "type.winback",
-            "type.topup_reminder",
-            "channel.email",
-            "audience"
-          ]
         }
       ],
-      "rejected": [],
+      "rejected": [
+        {
+          "title": "Keep the audience broad across segments",
+          "reason": "it uses numbers that aren't in the facts it cites (45306)"
+        }
+      ],
       "llm_calls": 1,
-      "llm_ms": 5981.0,
-      "cost_usd": 0.010272,
-      "run": 3
+      "llm_ms": 4325.8,
+      "cost_usd": 0.00845,
+      "run": 2
     },
     {
       "id": "advise-topup-no-effect",
@@ -805,12 +674,18 @@
         "advice": true,
         "must_not_include": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
-          "title": "Consider contact pressure on recently contacted lines",
+          "title": "Consider contact pressure before sending",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
@@ -818,23 +693,35 @@
         },
         {
           "kind": "advice",
-          "title": "Keep the campaign type and segments as they are",
+          "title": "Keep the segment mix; no segment stands out",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "type.topup_reminder",
-            "type.winback",
-            "type.data_upsell",
-            "segment.topup_reminder.region.North",
-            "segment.topup_reminder.plan_tier.basic"
+            "segment.topup_reminder.plan_tier.basic",
+            "segment.topup_reminder.region.Highlands",
+            "segment.topup_reminder.device_os.ios"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Stay on SMS for reach and track record",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "audience",
+            "channel.email",
+            "type.topup_reminder"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 3963.9,
-      "cost_usd": 0.008474,
-      "run": 3
+      "llm_ms": 4378.1,
+      "cost_usd": 0.009822,
+      "run": 2
     },
     {
       "id": "advise-app-weak-type",
@@ -845,22 +732,30 @@
         "must_not_include": true,
         "cites_any": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
-          "title": "Reduce contact pressure on recently contacted lines",
+          "title": "Ease contact pressure on recently contacted lines",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
-            "pressure.cap"
+            "pressure.cap",
+            "type.app_adoption"
           ]
         },
         {
           "kind": "advice",
-          "title": "Stay on SMS; email is not permitted",
+          "title": "Keep SMS as the only channel",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "channel.email",
             "audience"
@@ -871,17 +766,489 @@
           "title": "Do not narrow by segment",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
-            "segment.app_adoption.device_os.ios",
             "segment.app_adoption.line_type.postpaid",
-            "type.app_adoption"
+            "segment.app_adoption.device_os.ios",
+            "segment.app_adoption.device_os.android"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 4498.7,
-      "cost_usd": 0.010388,
+      "llm_ms": 4457.0,
+      "cost_usd": 0.010536,
+      "run": 2
+    },
+    {
+      "id": "advise-pressure",
+      "category": "pressure",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "cites_any": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Consider contact pressure on recently contacted lines",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Keep segments broad; no segment is clearly different",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "segment.data_upsell.plan_tier.premium",
+            "segment.data_upsell.plan_tier.basic",
+            "segment.data_upsell.region.Highlands"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Note the SMS consent gap",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "audience",
+            "channel.email",
+            "type.data_upsell"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 5477.9,
+      "cost_usd": 0.010012,
+      "run": 2
+    },
+    {
+      "id": "advise-email-blocked",
+      "category": "policy",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_not_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Keep the audience as it is",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "type.app_adoption",
+            "pressure.recent",
+            "pressure.cap",
+            "channel.email",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Expect a modest uplift and keep email out",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "type.app_adoption",
+            "audience",
+            "channel.email"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 4033.5,
+      "cost_usd": 0.008716,
+      "run": 2
+    },
+    {
+      "id": "advise-injection",
+      "category": "injection",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_not_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Keep consent rules and do not narrow by credit risk",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "audience",
+            "segment.winback.plan_tier.basic",
+            "segment.winback.plan_tier.premium",
+            "segment.winback.plan_tier.standard",
+            "segment.winback.device_os.android",
+            "segment.winback.device_os.feature_phone",
+            "segment.winback.device_os.ios"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Consider recent contact pressure",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3912.4,
+      "cost_usd": 0.008354,
+      "run": 2
+    },
+    {
+      "id": "advise-pick-type-upsell",
+      "category": "goal_reading",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": false
+      },
+      "accepted": [
+        {
+          "kind": "choose_campaign_type",
+          "title": "Run a data bundle upsell campaign",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "data_upsell",
+          "cites": [
+            "type.data_upsell",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Consider recent contact pressure",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3615.7,
+      "cost_usd": 0.006384,
+      "run": 2
+    },
+    {
+      "id": "advise-pick-type-roaming",
+      "category": "goal_reading",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "choose_campaign_type",
+          "title": "Run a roaming offer campaign",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "roaming_offer",
+          "cites": [
+            "type.roaming_offer",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Consider contact pressure on recent recipients",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3743.4,
+      "cost_usd": 0.006962,
+      "run": 2
+    },
+    {
+      "id": "advise-upsell-mixed",
+      "category": "planted_effect",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_include_any": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "narrow_segment",
+          "title": "Keep only postpaid lines",
+          "attribute": "line_type",
+          "value": "postpaid",
+          "campaign_type": "",
+          "cites": [
+            "segment.data_upsell.line_type.postpaid",
+            "segment.data_upsell.line_type.prepaid",
+            "mix.line_type"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Review recent contact pressure",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3624.4,
+      "cost_usd": 0.008254,
+      "run": 3
+    },
+    {
+      "id": "advise-upsell-postpaid-only",
+      "category": "no_effect_left",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_not_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Consider the recent contact pressure",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Keep the audience broad across segments",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "segment.data_upsell.plan_tier.premium",
+            "segment.data_upsell.region.Highlands",
+            "segment.data_upsell.device_os.android"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3812.4,
+      "cost_usd": 0.008138,
+      "run": 3
+    },
+    {
+      "id": "advise-winback-no-effect",
+      "category": "no_effect",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_not_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Consider contact pressure before sending",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Keep the audience broad: no segment stands out",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "type.winback",
+            "channel.email",
+            "segment.winback.plan_tier.basic",
+            "segment.winback.region.Coast"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 4290.6,
+      "cost_usd": 0.00837,
+      "run": 3
+    },
+    {
+      "id": "advise-topup-no-effect",
+      "category": "no_effect",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_not_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Consider contact pressure before sending",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Do not narrow by region, plan tier or device",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "type.topup_reminder",
+            "segment.topup_reminder.region.North",
+            "segment.topup_reminder.plan_tier.basic",
+            "segment.topup_reminder.device_os.android"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3767.8,
+      "cost_usd": 0.008562,
+      "run": 3
+    },
+    {
+      "id": "advise-app-weak-type",
+      "category": "weak_type",
+      "passed": false,
+      "checks": {
+        "advice": true,
+        "must_not_include": true,
+        "cites_any": false
+      },
+      "raw_passed": false,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "advice",
+          "title": "Consider contact pressure before sending",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Email is not an option for this audience",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "channel.email",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Do not narrow by segment",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "segment.app_adoption.line_type.postpaid",
+            "segment.app_adoption.device_os.ios",
+            "segment.app_adoption.region.Capital"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 4507.5,
+      "cost_usd": 0.010176,
       "run": 3
     },
     {
@@ -892,12 +1259,18 @@
         "advice": true,
         "cites_any": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
           "title": "Consider contact pressure before sending",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
@@ -905,21 +1278,34 @@
         },
         {
           "kind": "advice",
-          "title": "Keep segments broad; no segment stands out",
+          "title": "Keep the audience as it is on segments",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
-            "segment.data_upsell.region.Highlands",
+            "type.data_upsell",
             "segment.data_upsell.plan_tier.premium",
             "segment.data_upsell.plan_tier.basic",
             "segment.data_upsell.device_os.android"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Note SMS consent gap",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "audience",
+            "channel.email",
+            "type.data_upsell"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 4362.7,
-      "cost_usd": 0.007774,
+      "llm_ms": 4537.7,
+      "cost_usd": 0.010042,
       "run": 3
     },
     {
@@ -930,43 +1316,42 @@
         "advice": true,
         "must_not_include": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
-          "title": "Keep email off the table",
+          "title": "Keep the audience as it is",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "channel.email",
-            "audience"
+            "pressure.recent",
+            "pressure.cap",
+            "type.app_adoption"
           ]
         },
         {
           "kind": "advice",
-          "title": "Do not narrow by region, plan tier or device",
+          "title": "Set expectations for a modest uplift",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "type.app_adoption",
             "segment.app_adoption.device_os.ios",
             "segment.app_adoption.device_os.android"
           ]
-        },
-        {
-          "kind": "advice",
-          "title": "Contact pressure is not a concern",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "pressure.recent",
-            "pressure.cap"
-          ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 4634.1,
-      "cost_usd": 0.009356,
+      "llm_ms": 4174.5,
+      "cost_usd": 0.009016,
       "run": 3
     },
     {
@@ -977,43 +1362,127 @@
         "advice": true,
         "must_not_include": true
       },
+      "raw_passed": true,
+      "baselines": {
+        "keep": true,
+        "rule": true
+      },
       "accepted": [
         {
           "kind": "advice",
-          "title": "Keep consent: do not include lines without SMS consent",
+          "title": "Keep the audience as it is",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
-            "audience"
+            "audience",
+            "type.winback",
+            "segment.winback.plan_tier.basic",
+            "segment.winback.device_os.android"
           ]
         },
         {
           "kind": "advice",
-          "title": "Review contact pressure before sending",
+          "title": "Consider recent contact pressure",
           "attribute": "",
           "value": "",
+          "campaign_type": "",
           "cites": [
             "pressure.recent",
             "pressure.cap"
-          ]
-        },
-        {
-          "kind": "advice",
-          "title": "Do not narrow by plan tier, line type or device",
-          "attribute": "",
-          "value": "",
-          "cites": [
-            "type.winback",
-            "segment.winback.line_type.prepaid",
-            "segment.winback.plan_tier.basic",
-            "segment.winback.device_os.android"
           ]
         }
       ],
       "rejected": [],
       "llm_calls": 1,
-      "llm_ms": 4638.3,
-      "cost_usd": 0.009116,
+      "llm_ms": 4628.5,
+      "cost_usd": 0.007794,
+      "run": 3
+    },
+    {
+      "id": "advise-pick-type-upsell",
+      "category": "goal_reading",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": false
+      },
+      "accepted": [
+        {
+          "kind": "choose_campaign_type",
+          "title": "Run a data bundle upsell campaign",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "data_upsell",
+          "cites": [
+            "type.data_upsell",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Watch recent contact pressure",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3612.2,
+      "cost_usd": 0.006454,
+      "run": 3
+    },
+    {
+      "id": "advise-pick-type-roaming",
+      "category": "goal_reading",
+      "passed": true,
+      "checks": {
+        "advice": true,
+        "must_include": true
+      },
+      "raw_passed": true,
+      "baselines": {
+        "keep": false,
+        "rule": true
+      },
+      "accepted": [
+        {
+          "kind": "choose_campaign_type",
+          "title": "Use a roaming offer campaign",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "roaming_offer",
+          "cites": [
+            "type.roaming_offer",
+            "audience"
+          ]
+        },
+        {
+          "kind": "advice",
+          "title": "Check contact pressure before sending",
+          "attribute": "",
+          "value": "",
+          "campaign_type": "",
+          "cites": [
+            "pressure.recent",
+            "pressure.cap"
+          ]
+        }
+      ],
+      "rejected": [],
+      "llm_calls": 1,
+      "llm_ms": 3694.0,
+      "cost_usd": 0.006772,
       "run": 3
     }
   ]

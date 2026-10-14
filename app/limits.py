@@ -1,6 +1,6 @@
 """Bounds on model usage (OWASP LLM10, unbounded consumption).
 
-- RateLimiter: token bucket per client for the one endpoint that calls the model.
+- RateLimiter: token bucket per client for the three endpoints that call the model (interpret, refine, advise).
 - DailyBudget: stops model calls once today's estimated spend reaches the cap; the app keeps
   working through the manual editor. Spend comes from the per-call cost estimate in telemetry.
 

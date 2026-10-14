@@ -270,10 +270,15 @@ It also asked "which 'active'?" without saying what either answer would do. Two 
   business case depends on (BUSINESS-CASE.md).
 
 *Deliberately not done* (this and decision 20).
-- **Recommending an answer, or picking the working default automatically.** The owner of the
-  definition, and the marketer for the campaign, decide; the tool shows evidence.
+- **Recommending an answer to an open term, or picking the working default automatically.** The
+  owner of the definition, and the marketer for the campaign, decide; the tool shows evidence.
 - **Showing projected revenue in the UI.** Its inputs are unsigned assumptions. They stay in the
   business case document, labelled, until the holdouts measure them.
+
+Decision 22 later added an advisor that proposes changes to the audience, with an estimate of
+extra responders. It keeps both lines above. It never answers an open term (those still go to the
+marketer as questions), and its estimate is measured past lift times the new size, labelled as
+coming from past results. It is not revenue, and it doesn't come from unsigned assumptions.
 - **Dashboards.** The consequence is shown at the moment of the choice, not in a separate view.
 
 **20. Past campaigns are evidence at the moment of decision; here they are synthetic, from a
@@ -300,7 +305,8 @@ evidence is visibly weaker.
   Synthetic numbers must never pass for measured ones.
 - **Evidence, not a forecast.** The reading says what past campaigns did. It doesn't predict this
   one, and it doesn't recommend sending or not sending. A forecast would need segment-level models,
-  and the honest version of that is a holdout on this campaign too.
+  and the honest version of that is a holdout on this campaign too. (The advisor's responder
+  estimates, decision 22, are this same evidence applied to a size, and are labelled that way.)
 - **Same consent rules.** No past contact went to a line without consent for that channel;
   a test checks it.
 
@@ -312,24 +318,48 @@ assumption becomes a measured number.
 **21. The learning loop is closed in code: outcomes are measured against the approved holdout and
 become evidence for the next decision.**
 Decisions 19 and 20 recorded how each decision would be judged and showed past evidence. This
-connects them. `POST /api/audiences/{id}/outcome` takes the campaign tool's list of responders,
-and `record_outcome` does four deterministic things:
-1. It recomputes the approved contacted and held-out groups from the stored definition, salt and
-   share, and checks them against the membership digest stored at approval.
-2. It counts responders inside each group; ids outside the audience are reported, never
-   attributed.
-3. It measures the lift with the same code as the history, and stores one outcome per audience.
-4. It compares the result with the evidence recorded at approval.
+connects them.
+1. **Approval stores the membership.** Every line with its group goes into `audience_members` in
+   the same transaction as the approval. The export reads that list, not a re-run of the
+   definition, so a data refresh can't change who gets the campaign or who is counted. A digest
+   check against today's data is shown for information. The default export holds only the lines
+   to contact; the holdout is a separate download.
+2. **A report must be plausible to be stored.** `POST /api/audiences/{id}/outcome` needs the
+   shared `OUTCOME_TOKEN`. `record_outcome` rejects a send date outside approval-to-today, a
+   report inside the measurement window, a file where most responders aren't in the audience, and
+   a response rate above the governed maximum. It counts responders inside each stored group; ids
+   outside the audience are reported, never attributed.
+3. **Stored as pending; learned from after a person confirms.** A corrected file replaces a
+   pending report. `POST .../outcome/confirm` (named, like the approver) makes it evidence, and a
+   confirmed outcome can't be overwritten. The first version kept the first report and refused
+   the rest, so a wrong or hostile first report would have become permanent evidence.
+4. **It is measured with the same code as the history,** and compared with the evidence recorded
+   at approval.
 
-The measured campaign then joins the evidence for its type: `CampaignHistory.evidence` pools the
-history with outcomes measured here, so the next approval of that type records a different,
+A confirmed campaign then joins the evidence for its type: `CampaignHistory.evidence` pools the
+history with outcomes confirmed here, so the next approval of that type records a different,
 better-informed expectation. The UI shows it as a learning curve: each campaign's lift with its
 interval, and the running estimate with its band, which narrows as evidence accumulates.
 
 *The verdict rule.* A single campaign is much noisier than a pooled history of a dozen. Comparing
 its point estimate with the pooled interval would call most campaigns "worse than expected" by
 chance; my first version did exactly that. So a difference is only claimed when the campaign's
-95% interval and the expectation's don't overlap, and otherwise it is "in line".
+95% interval and the expectation's don't overlap. Overlap alone isn't reassurance, though. A
+holdout under the governed minimum, or an interval that includes zero, is "too small to tell",
+shown in grey. Only a result clear of zero and consistent with the evidence is "in line". The
+intervals are Agresti–Caffo (one extra responder and non-responder per group), so a small group
+with no responders doesn't get a zero-width interval.
+
+*Will the result be readable?* Running the demo end to end showed the gap: a 10% holdout of
+3,700 lines can't reliably show a +0.9-point lift on a 2% base rate, and two of three simulated
+waves read "too small to tell". So before approval the marketer now sees the smallest lift the
+split would show 80% of the time, at the type's past base rate. If past campaigns of the type
+lifted less than that, they get a warning, and it is recorded with the approval. The fix
+(a wider audience or a larger holdout share) is theirs, or the parameter owner's.
+
+*Overlapping audiences.* A line held out of one campaign may be contacted by another in the same
+window, which shrinks both measured lifts. The advisor shows overlap with recent approvals, but
+nothing coordinates holdouts across campaigns. A rollout would use a shared global control group.
 
 *Simulated sends.* With no campaign tool in the demo, a labelled button generates responses from
 the same known effects as the synthetic history and posts them through the same `record_outcome`
@@ -346,7 +376,10 @@ Translating a request is not the only thing a model is good at. Reading twenty f
 goal in plain language is another. So once an audience is set, an advisor proposes up to three
 improvements. The design keeps the rule of decision 1 (the model proposes, code disposes):
 - **Facts come from code** (`advisor.fact_sheet`), numbered with ids. Aggregates only; fields a
-  policy blocks for the channel never appear, so the model can't suggest them.
+  policy blocks for the channel never appear, so the model can't suggest them. Other audiences
+  are referred to by number and date, never by the name a marketer typed, and any count below 10
+  is "fewer than 10". The facts are still business-sensitive aggregates, so the README's
+  data-protection section lists them.
 - **The model's output is structured** (`ADVICE_SCHEMA`): a kind (narrow, exclude, switch
   channel, campaign type, advice), a title, a rationale, and the fact ids it relies on.
 - **Every proposal is checked** (`advisor.check`), not trusted:
@@ -354,7 +387,13 @@ improvements. The design keeps the rule of decision 1 (the model proposes, code 
   - every number in its text must appear in those facts (rounding allowed);
   - a segment can only be narrowed or excluded if its fact says "clearly different", in the
     direction the change assumes;
-  - a channel switch must be allowed by policy.
+  - a channel switch must be allowed by policy;
+  - a campaign type is only suggested when none is chosen, on the audience's channel, with past
+    results clearly above zero. Once the marketer chose a type, the offer is decided: an early
+    version proposed top-up reminders for an app-adoption goal because their lift was higher;
+  - the summary's numbers must appear in the facts too. Free-text points and the summary are
+    checked for citations and numbers only, because code can't check what a sentence means; the
+    UI labels them as the AI's words, and MCP output lists them as model-written.
 
   The "clearly different" bar is 99.5%, not 95%. The fact sheet compares about ten segments at
   once, and at 95% one of them would look different by chance alone in about half of all audiences.
@@ -363,13 +402,28 @@ improvements. The design keeps the rule of decision 1 (the model proposes, code 
   and lowers the total; the marketer sees both.
 - **Withheld proposals are shown**, with the reason. They are evidence of what the checks are
   for, and a signal if the prompt needs work.
+- **Every advice response is recorded** (`advice` table: masked goal, facts, raw proposals,
+  what was accepted and withheld). A condition keeps the "advisor" label only if recorded advice
+  proposed exactly that condition; a client can't make its own edit look advised.
 
 *How it is evaluated.* The synthetic history has exactly one planted segment effect (data upsells
 work better on postpaid lines). That makes a known truth to score against: the advisor should
 propose narrowing where the effect exists, not where it doesn't, note weak campaign types and
-contact pressure, never propose a blocked channel or field, and not follow instructions injected
-through the goal (`evals/advisor.yaml`). Separately, the tests check that the segment analysis
-itself flags the planted effect and nothing else.
+contact pressure, never propose a blocked channel or field, not follow the instruction injected
+through one goal, and, with no campaign type chosen, suggest the type the goal describes
+(`evals/advisor.yaml`). Separately, the tests check that the segment analysis itself flags the
+planted effect and nothing else.
+
+The eval also reports what it can't otherwise show:
+- **The raw score**, as if the checks didn't exist: how often the model alone would have misled.
+- **Two baselines with no model.** One always says "keep the audience as it is". The other is
+  twenty lines of rules: narrow on every clearly-better segment, mention recent contact, and pick
+  the best-measured type on the channel.
+
+On the structured cases, the rule baseline does about as well as the model, and the README says
+so. The cases test that nothing misleading reaches the marketer more than that the model finds
+more than rules would. What the model adds is reading the goal (the two goal cases, where the
+rule picks the wrong type) and explaining in the marketer's terms, and only the first is scored.
 
 *Rejected: letting the model compute the impact itself.* It would read well and be wrong in ways
 no one would notice. The model's job is to notice and explain; arithmetic and policy are code's.

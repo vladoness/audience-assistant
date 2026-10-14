@@ -107,6 +107,13 @@ async function loadEvidence() {
     `<li>${esc(c.name)}: ${c.lift_points >= 0 ? "+" : ""}${c.lift_points} pts (95%: ${c.lift_95_low} to ${c.lift_95_high}), ${fmt(c.contacted)} contacted, ${fmt(c.held_out)} held out</li>`).join("");
   box.innerHTML = `<strong>What happened last time</strong>${e.synthetic ? SYNTHETIC : ""}<p style="margin:6px 0 0">${esc(e.reading)}</p><ul>${recent}</ul>`;
   box.classList.remove("hidden");
+  if (!state.definition) return;
+  const p = await api("/api/measurement-preview", { definition: state.definition, campaign_type: type }).catch(() => null);
+  if (p && p.available && p.detectable_lift_points != null) {
+    box.innerHTML += `<p class="${p.power_note ? "warn-text" : "hint"}" style="margin:6px 0 0"><strong>Will this campaign's result be readable?</strong> `
+      + (p.power_note ? esc(p.power_note)
+        : `With about ${fmt(p.holdout_lines)} lines held out, a lift of ${p.detectable_lift_points.toFixed(2)} points or more would show clearly; past campaigns lifted ${signed(p.past_lift_points)}.`) + "</p>";
+  }
 }
 
 function renderPressure(p) {
@@ -133,13 +140,15 @@ async function advise() {
         choose_campaign_type: "Use this campaign type" }[p.kind];
       return `<div class="proposal"><div class="kind">${esc(KIND_LABELS[p.kind] || p.kind)}</div><strong>${esc(p.title)}</strong>`
         + `<p style="margin:4px 0">${esc(p.rationale)}</p>`
-        + (p.consequence?.note ? `<div class="consequence-line">${esc(p.consequence.note)}</div>` : "")
+        + (p.consequence?.note ? `<div class="consequence-line">Computed: ${esc(p.consequence.note)}</div>` : "")
         + `<details><summary class="hint">Based on ${p.cited_facts.length} fact${p.cited_facts.length > 1 ? "s" : ""}</summary><ul class="cited">${p.cited_facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>`
         + (action ? `<button class="small apply-advice" data-i="${i}">${esc(action)}</button>` : "") + "</div>";
     }).join("");
     const withheld = r.rejected.length ? `<div class="withheld">Withheld by the checks: ${r.rejected.map((x) => `“${esc(x.title)}” (${esc(x.reason)})`).join("; ")}</div>` : "";
     const t = r.telemetry;
-    box.innerHTML = `<strong>Advisor</strong>${r.synthetic_history ? SYNTHETIC : ""}<p style="margin:6px 0 0">${esc(r.summary)}</p>${proposals}${withheld}`
+    box.innerHTML = `<strong>Advisor</strong>${r.synthetic_history ? SYNTHETIC : ""}`
+      + `<div class="hint">The AI's words, from the facts the system computed. Code checked its citations and numbers, not its wording; the sizes and responder estimates under each proposal are computed by code.</div>`
+      + `${r.summary ? `<p style="margin:6px 0 0">${esc(r.summary)}</p>` : ""}${proposals}${withheld}`
       + `<details><summary class="hint">What the advisor saw: ${r.facts.length} facts computed by the system · ${esc(t.model || "")} · ${(t.llm_ms / 1000).toFixed(1)} s · $${t.cost_usd.toFixed(4)}</summary><ul class="cited">${r.facts.map((f) => `<li><span class="mono">${esc(f.id)}</span> ${esc(f.text)}</li>`).join("")}</ul></details>`;
     box.classList.remove("hidden");
     box.querySelectorAll(".apply-advice").forEach((b) => (b.onclick = () => applyAdvice(state.advice[Number(b.dataset.i)])));
@@ -470,8 +479,9 @@ function renderTelemetry(t, requestId) {
   if (t.llm_calls) parts.push(`${t.llm_calls} AI call${t.llm_calls > 1 ? "s" : ""}`, `${fmt(t.input_tokens + t.cache_read_tokens + t.cache_write_tokens)} in / ${fmt(t.output_tokens)} out tokens`, `$${t.cost_usd.toFixed(4)}`);
   if (t.cache_hit) parts.push("cached answer");
   if (t.repaired) parts.push("self-corrected once");
-  if (t.pii_masked) parts.push(`${t.pii_masked} personal detail(s) masked`);
   $("telemetry").textContent = parts.join(" · ");
+  $("pii-note").textContent = t.pii_masked
+    ? `${t.pii_masked} personal detail${t.pii_masked > 1 ? "s were" : " was"} removed from your request before the AI saw it.` : "";
 }
 
 function updateApprove() {
@@ -493,7 +503,8 @@ async function approve() {
     $("approve-msg").innerHTML = `Approved as audience #${r.id} · definition ${esc(r.definition_hash)}.<br>`
       + `<strong>${fmt(m.target_lines)}</strong> lines get the campaign and <strong>${fmt(m.holdout_lines)}</strong> `
       + `(${Math.round(m.holdout_share * 100)}%) are held out. How we'll know: ${esc(m.success_measure)}`
-      + (m.measurable ? "" : `<br><span class="warn-text">${esc(m.note)}</span>`);
+      + (m.measurable ? "" : `<br><span class="warn-text">${esc(m.note)}</span>`)
+      + (m.power_note ? `<br><span class="warn-text">${esc(m.power_note)}</span>` : "");
     loadAudit();
     loadInsights();
   } catch (e) {
@@ -506,8 +517,8 @@ async function loadAudit() {
   $("audit").innerHTML = rows.map((r) => {
     const m = JSON.parse(r.measurement_json || "{}");
     const plan = m.goal ? `<div class="hint"><strong>Goal:</strong> ${esc(m.goal)} · ${fmt(m.holdout_lines)} held out to measure it${m.measurable ? "" : " (too few to be reliable)"}`
-      + ` · <a href="/api/audiences/${r.id}/export.csv">export for the campaign tool</a>`
-      + `${r.data_changed_since_approval ? ' <span class="warn-text">(profile data refreshed since approval: the export uses current data)</span>' : ""}</div>`
+      + ` · export for the campaign tool: <a href="/api/audiences/${r.id}/export.csv">lines to contact</a>, <a href="/api/audiences/${r.id}/export.csv?group=held_out">holdout (don't send)</a>`
+      + `${r.data_changed_since_approval ? ' <span class="hint">(profile data refreshed since approval; the export is still the approved list)</span>' : ""}</div>`
       + outcomeLine(r, m) : "";
     return `
     <tr><td>${r.id}</td><td>${esc(r.name)}</td><td>${fmt(r.reachable)}</td><td>${esc(r.approver)}</td>
@@ -515,6 +526,13 @@ async function loadAudit() {
     <td>${governanceCell(r)}</td></tr>`;
   }).join("") || '<tr><td colspan="7" class="hint">Nothing approved yet.</td></tr>';
   document.querySelectorAll(".simulate-btn").forEach((b) => (b.onclick = () => simulateOutcome(b.dataset.id, b)));
+  document.querySelectorAll(".confirm-btn").forEach((b) => (b.onclick = () => confirmOutcome(b.dataset.id, b)));
+}
+
+function verdictClass(v) {
+  if (v.startsWith("in line")) return "verdict-ok";
+  if (v.startsWith("too small") || v.startsWith("no expectation")) return "verdict-neutral";
+  return "verdict-diff";
 }
 
 const signed = (v) => `${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
@@ -522,13 +540,16 @@ const signed = (v) => `${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
 function outcomeLine(r, m) {
   if (r.outcome) {
     const o = r.outcome.measured;
-    const cls = r.outcome.verdict.startsWith("in line") ? "verdict-ok" : "verdict-diff";
-    return `<div class="hint"><strong>Measured</strong> (${esc(r.outcome.source === "simulated" ? "simulated send" : "campaign tool")}): `
+    const pending = r.outcome.status === "pending";
+    return `<div class="hint"><strong>${pending ? "Reported" : "Measured"}</strong> (${esc(r.outcome.source === "simulated" ? "simulated send" : "campaign tool")}): `
       + `${signed(o.lift_points)} pts (95% ${signed(o.lift_95_low)} to ${signed(o.lift_95_high)})`
-      + `${r.outcome.expected ? ` against ${signed(r.outcome.expected.lift_points)} expected` : ""}: <span class="${cls}">${esc(r.outcome.verdict)}</span></div>`;
+      + `${r.outcome.expected ? ` against ${signed(r.outcome.expected.lift_points)} expected` : ""}: <span class="${verdictClass(r.outcome.verdict)}">${esc(r.outcome.verdict)}</span>`
+      + (pending ? `<br>Not learned from until someone checks it: ${fmt(o.contacted)} contacted, ${fmt(o.held_out)} held out, ${fmt(r.outcome.unknown_responders)} responders not in this audience. `
+        + `<button class="small confirm-btn" data-id="${r.id}">Confirm outcome</button>`
+        : ` · confirmed by ${esc(r.outcome.confirmed_by)}`) + "</div>";
   }
   if (!m.campaign_type) return "";
-  return `<div class="hint">Not measured yet. The campaign tool posts responses to <span class="mono">/api/audiences/${r.id}/outcome</span>. `
+  return `<div class="hint">Not measured yet. After the ${m.window_days}-day window the campaign tool posts responses to <span class="mono">/api/audiences/${r.id}/outcome</span>. `
     + (state.historySynthetic ? `<button class="small simulate-btn" data-id="${r.id}">Simulate the send (demo)</button>` : "") + "</div>";
 }
 
@@ -536,6 +557,20 @@ async function simulateOutcome(id, btn) {
   btn.disabled = true; btn.textContent = "Measuring…";
   try {
     await api(`/api/audiences/${id}/simulate-outcome`, {});
+  } catch (e) {
+    btn.textContent = `Failed: ${e.data?.detail || e.message}`;
+    return;
+  }
+  await Promise.all([loadAudit(), loadLearning()]);
+  if ($("campaign-type").value) loadEvidence();
+}
+
+async function confirmOutcome(id, btn) {
+  const by = window.prompt("Your name, to confirm you checked these numbers:", $("approver").value || "");
+  if (!by || !by.trim()) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/audiences/${id}/outcome/confirm`, { confirmed_by: by.trim() });
   } catch (e) {
     btn.textContent = `Failed: ${e.data?.detail || e.message}`;
     return;
@@ -560,7 +595,7 @@ async function loadLearning() {
   $("loop").innerHTML = [
     `<div class="stage"><strong>Define</strong><span class="n">${fmt(L.interpreted)}</span> ${L.interpreted === 1 ? "request" : "requests"} turned into governed definitions</div>`,
     `<div class="stage"><strong>Decide</strong><span class="n">${fmt(L.approved)}</span> approved, each with a goal and a holdout (${fmt(L.approved_with_type)} with a campaign type)</div>`,
-    `<div class="stage"><strong>Send and measure</strong><span class="n">${fmt(L.measured)}</span> ${L.measured === 1 ? "outcome" : "outcomes"} measured against ${L.measured === 1 ? "its" : "their"} holdout</div>`,
+    `<div class="stage"><strong>Send and measure</strong><span class="n">${fmt(L.measured)}</span> ${L.measured === 1 ? "outcome" : "outcomes"} measured against ${L.measured === 1 ? "its" : "their"} holdout and confirmed${L.pending_confirmation ? ` (${fmt(L.pending_confirmation)} waiting for a check)` : ""}</div>`,
     `<div class="stage learn"><strong>Learn</strong>${esc(t.label)}: <span class="n">${signed(t.estimate_now.lift_points)}</span> pts ± ${width(t.estimate_now).toFixed(2)} from ${t.campaigns} campaigns${t.measured_here ? `, ${t.measured_here} of them approved here (history alone: ${signed(t.estimate_from_history_only.lift_points)} ± ${width(t.estimate_from_history_only).toFixed(2)})` : ""}</div>`,
     `<div class="stage"><strong>Next decision</strong>the next ${esc(t.label.toLowerCase())} approval sees this evidence</div>`,
   ].join('<span class="arrow">→</span>');
@@ -568,7 +603,7 @@ async function loadLearning() {
   $("scorecard").innerHTML = s.scorecard.map((c) => `<tr><td>${c.audience_id}</td><td>${esc(c.name)}</td><td>${esc((s.types.find((x) => x.id === c.campaign_type) || {}).label || c.campaign_type)}</td>`
     + `<td>${c.expected ? `${signed(c.expected.lift_points)} pts (95% ${signed(c.expected.lift_95_low)} to ${signed(c.expected.lift_95_high)}), ${c.expected.campaigns} campaigns` : "none recorded"}</td>`
     + `<td>${signed(c.measured.lift_points)} pts (95% ${signed(c.measured.lift_95_low)} to ${signed(c.measured.lift_95_high)})<div class="hint">${fmt(c.measured.contacted)} contacted, ${fmt(c.measured.held_out)} held out · ${esc(c.source === "simulated" ? "simulated send" : "campaign tool")}</div></td>`
-    + `<td class="${c.verdict.startsWith("in line") ? "verdict-ok" : "verdict-diff"}">${esc(c.verdict)}</td></tr>`).join("")
+    + `<td class="${verdictClass(c.verdict)}">${esc(c.verdict)}${c.status === "pending" ? '<div class="hint">pending: not learned from until confirmed</div>' : ""}</td></tr>`).join("")
     || '<tr><td colspan="6" class="hint">No outcomes yet. Approve an audience with a campaign type, then measure its send.</td></tr>';
   drawCurve((await api(`/api/learning/${encodeURIComponent(sel.value)}`)).timeline);
 }

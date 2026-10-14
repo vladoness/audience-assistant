@@ -6,7 +6,9 @@ linked to the interpretation it refined (parent_request_id). An approval referen
 record and adds a governance snapshot: which governed terms it used, under which decision and
 parameter versions. That is what lets the system tell, later, which approved audiences a
 glossary or parameter change affects. It also records how the decision will be judged: the
-campaign goal and the holdout group that measures it.
+campaign goal and the holdout group that measures it, and the exact member list, so the export and
+the outcome count never depend on a later data refresh. Outcomes are pending until a person
+confirms them; every advice response is kept with the facts it was given.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -60,6 +62,12 @@ CREATE TABLE IF NOT EXISTS audiences (
     client_json TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS audiences_one_per_request ON audiences(request_id);
+CREATE TABLE IF NOT EXISTS audience_members (
+    audience_id INTEGER NOT NULL REFERENCES audiences(id),
+    profile_id TEXT NOT NULL,
+    grp TEXT NOT NULL CHECK (grp IN ('contacted', 'held_out')),
+    PRIMARY KEY (audience_id, profile_id)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS outcomes (
     audience_id INTEGER PRIMARY KEY REFERENCES audiences(id),
     recorded_at TEXT NOT NULL,
@@ -71,9 +79,29 @@ CREATE TABLE IF NOT EXISTS outcomes (
     held_out INTEGER NOT NULL,
     held_out_responders INTEGER NOT NULL,
     unknown_responders INTEGER NOT NULL,
-    membership_matches INTEGER NOT NULL
+    membership_matches INTEGER NOT NULL,
+    reporter_json TEXT NOT NULL,
+    reports INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed')),
+    confirmed_by TEXT,
+    confirmed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS advice (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    campaign_type TEXT,
+    goal_masked TEXT NOT NULL,
+    facts_json TEXT NOT NULL,
+    raw_json TEXT NOT NULL,
+    accepted_json TEXT NOT NULL,
+    rejected_json TEXT NOT NULL,
+    model TEXT,
+    prompt_version TEXT
 );
 """
+
+_OUTCOME_COLUMNS = ("source", "campaign_type", "sent_at", "contacted", "contacted_responders", "held_out",
+                    "held_out_responders", "unknown_responders", "membership_matches", "reporter_json")
 
 
 def definition_hash(definition: dict[str, Any]) -> str:
@@ -100,7 +128,7 @@ class AuditStore:
         current = self._db.execute("PRAGMA user_version").fetchone()[0]
         if current < SCHEMA_VERSION:
             existing = {r[0] for r in self._db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            for table in ("interpretations", "audiences", "outcomes"):
+            for table in ("interpretations", "audiences", "audience_members", "outcomes", "advice"):
                 if table in existing:
                     self._db.execute(f"ALTER TABLE {table} RENAME TO {table}_v{current}_{int(time.time())}")
         self._db.executescript(_SCHEMA)
@@ -133,7 +161,9 @@ class AuditStore:
             self._db.execute("ROLLBACK")
             return True
 
-    def record_approval(self, row: dict[str, Any]) -> int:
+    def record_approval(self, row: dict[str, Any], members: list[tuple[str, str]] = ()) -> int:
+        """The approval and its exact membership (every line with its group), in one transaction: the export
+        and the outcome count read these rows, so neither changes when the profile data is refreshed."""
         with self._lock, self._db:
             cur = self._db.execute(
                 """INSERT INTO audiences (created_at, name, approver, request_id, definition_json, definition_hash,
@@ -144,36 +174,76 @@ class AuditStore:
                    :governance_json, :governance_versions, :measurement_json, :client_json)""",
                 {"created_at": _now(), "client_json": "{}", **row},
             )
+            self._db.executemany("INSERT INTO audience_members VALUES (?, ?, ?)",
+                                 ((cur.lastrowid, pid, grp) for pid, grp in members))
             return cur.lastrowid
 
-    def record_approval_once(self, row: dict[str, Any]) -> int | None:
+    def record_approval_once(self, row: dict[str, Any], members: list[tuple[str, str]] = ()) -> int | None:
         """Insert an approval; None if this interpretation was approved concurrently."""
         try:
-            return self.record_approval(row)
+            return self.record_approval(row, members)
         except sqlite3.IntegrityError:
             return None
 
-    def record_outcome_once(self, row: dict[str, Any]) -> bool:
-        """Store the measured outcome of an approved audience's campaign; False if one is already recorded."""
-        try:
-            with self._lock, self._db:
-                self._db.execute(
-                    """INSERT INTO outcomes VALUES (:audience_id, :recorded_at, :source, :campaign_type, :sent_at,
-                       :contacted, :contacted_responders, :held_out, :held_out_responders, :unknown_responders,
-                       :membership_matches)""",
-                    {"recorded_at": _now(), **row},
-                )
-            return True
-        except sqlite3.IntegrityError:
-            return False
+    def members(self, audience_id: int, group: str | None = None) -> list[tuple[str, str]]:
+        """The membership recorded at approval, optionally one group only."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT profile_id, grp FROM audience_members WHERE audience_id = ? AND (? IS NULL OR grp = ?) "
+                "ORDER BY profile_id", (audience_id, group, group)).fetchall()
+        return [(r[0], r[1]) for r in rows]
 
-    def outcomes(self, campaign_type: str | None = None) -> list[dict[str, Any]]:
-        """Recorded outcomes with the approval they belong to (name, goal, what was expected)."""
+    def report_outcome(self, row: dict[str, Any]) -> bool:
+        """Store a reported outcome as pending. A new report replaces a pending one (a corrected file);
+        False if the outcome was already confirmed, which nothing here can overwrite."""
+        with self._lock, self._db:
+            cur = self._db.execute(
+                f"""INSERT INTO outcomes (audience_id, recorded_at, {', '.join(_OUTCOME_COLUMNS)})
+                    VALUES (:audience_id, :recorded_at, {', '.join(':' + c for c in _OUTCOME_COLUMNS)})
+                    ON CONFLICT (audience_id) DO UPDATE SET recorded_at = excluded.recorded_at,
+                    {', '.join(f'{c} = excluded.{c}' for c in _OUTCOME_COLUMNS)}, reports = outcomes.reports + 1
+                    WHERE outcomes.status = 'pending'""",
+                {"recorded_at": _now(), **row},
+            )
+            return cur.rowcount == 1
+
+    def confirm_outcome(self, audience_id: int, confirmed_by: str) -> bool:
+        """A person checked the reported numbers; only now does the outcome join the evidence."""
+        with self._lock, self._db:
+            cur = self._db.execute(
+                "UPDATE outcomes SET status = 'confirmed', confirmed_by = ?, confirmed_at = ? "
+                "WHERE audience_id = ? AND status = 'pending'", (confirmed_by, _now(), audience_id))
+            return cur.rowcount == 1
+
+    def record_advice(self, row: dict[str, Any]) -> int:
+        """What the advisor was shown, what it proposed, and what the checks let through or withheld."""
+        with self._lock, self._db:
+            cur = self._db.execute(
+                """INSERT INTO advice (created_at, campaign_type, goal_masked, facts_json, raw_json, accepted_json,
+                   rejected_json, model, prompt_version) VALUES (:created_at, :campaign_type, :goal_masked, :facts_json,
+                   :raw_json, :accepted_json, :rejected_json, :model, :prompt_version)""",
+                {"created_at": _now(), **row})
+            return cur.lastrowid
+
+    def advised_conditions(self, limit: int = 500) -> list[dict[str, Any]]:
+        """Conditions that recent accepted advice actually proposed: the only ones that may keep the
+        "advisor" label when a client sends them back."""
+        with self._lock:
+            rows = self._db.execute("SELECT accepted_json FROM advice ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [c for r in rows for p in json.loads(r[0])
+                for c in (p.get("consequence", {}).get("definition") or {}).get("conditions", [])
+                if c.get("source") == "advisor"]
+
+    def outcomes(self, campaign_type: str | None = None, include_pending: bool = False,
+                 audience_id: int | None = None) -> list[dict[str, Any]]:
+        """Outcomes with the approval they belong to (name, goal, what was expected). Evidence uses confirmed
+        outcomes only; the scorecard also shows the pending ones."""
         with self._lock:
             rows = self._db.execute(
                 """SELECT o.*, a.name, a.measurement_json FROM outcomes o JOIN audiences a ON a.id = o.audience_id
-                   WHERE ? IS NULL OR o.campaign_type = ? ORDER BY o.sent_at, o.audience_id""",
-                (campaign_type, campaign_type),
+                   WHERE (? IS NULL OR o.campaign_type = ?) AND (? OR o.status = 'confirmed')
+                   AND (? IS NULL OR o.audience_id = ?) ORDER BY o.sent_at, o.audience_id""",
+                (campaign_type, campaign_type, include_pending, audience_id, audience_id),
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -184,8 +254,10 @@ class AuditStore:
             approved = self._db.execute("SELECT count(*) FROM audiences").fetchone()[0]
             typed = self._db.execute(
                 "SELECT count(*) FROM audiences WHERE json_extract(measurement_json, '$.campaign_type') IS NOT NULL").fetchone()[0]
-            measured = self._db.execute("SELECT count(*) FROM outcomes").fetchone()[0]
-        return {"interpreted": interpreted, "approved": approved, "approved_with_type": typed, "measured": measured}
+            measured = self._db.execute("SELECT count(*) FROM outcomes WHERE status = 'confirmed'").fetchone()[0]
+            pending = self._db.execute("SELECT count(*) FROM outcomes WHERE status = 'pending'").fetchone()[0]
+        return {"interpreted": interpreted, "approved": approved, "approved_with_type": typed, "measured": measured,
+                "pending_confirmation": pending}
 
     def get_audience(self, audience_id: int) -> dict[str, Any] | None:
         with self._lock:

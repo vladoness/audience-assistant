@@ -77,3 +77,18 @@ cases:
     campaign_type: winback
     expect:
       must_not_include: [{attribute: credit_risk_band}, {kind: narrow_segment}, {kind: exclude_segment}]
+
+  # No campaign type chosen: the goal is the only signal, which a rule can't read.
+  - id: advise-pick-type-upsell
+    category: goal_reading
+    definition: {channel: sms, conditions: [{attribute: data_gb_30d, op: gt, value: 15}, {attribute: line_type, op: eq, value: postpaid}]}
+    goal: Sell bigger data bundles to customers who keep running out
+    expect:
+      must_include: [{kind: choose_campaign_type, campaign_type: data_upsell}]
+
+  - id: advise-pick-type-roaming
+    category: goal_reading
+    definition: {channel: email, conditions: [{attribute: roaming_30d, op: eq, value: true}]}
+    goal: Offer travel data packs to customers who travel abroad
+    expect:
+      must_include: [{kind: choose_campaign_type, campaign_type: roaming_offer}]

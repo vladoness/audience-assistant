@@ -145,7 +145,8 @@ class Interpreter:
 
         parent_proposed = AudienceDefinition(**json.loads(parent["definition_json"]))
         current, _ = validate_definition(current, self.catalog)
-        current, _ = reconcile_with_proposal(verify_provenance(current, self.catalog), parent_proposed)
+        current, _ = reconcile_with_proposal(verify_provenance(current, self.catalog, self.store.advised_conditions()),
+                                              parent_proposed)
         answered = answered_terms(current)
         pending = [t for t in json.loads(parent["clarifications_json"]) if t not in answered]
         carried_unmapped = json.loads(parent["unmapped_json"])
@@ -223,7 +224,7 @@ class Interpreter:
                 conditions += [Condition(**c, source=f"glossary:{term.name}={option.id}") for c in option.conditions]
 
         validated, problems = validate_definition(definition.model_copy(update={"conditions": conditions}), self.catalog)
-        validated = verify_provenance(validated, self.catalog)
+        validated = verify_provenance(validated, self.catalog, self.store.advised_conditions())
         issues += problems
         clarifications = [self._clarification(t) for t in still_pending]
         self._quantify(validated, clarifications, issues)
@@ -386,6 +387,14 @@ class Interpreter:
                 continue
             if term.status == "decided" and {_condition_key(c) for c in term.conditions} <= model_keys:
                 continue  # the model wrote exactly the governed definition: same audience, nothing to flag
+            if _negated(request_text, phrase):
+                # "not active": the options describe who IS active, so asking would select the opposite audience.
+                meaning = ("it has competing definitions" if term.status != "decided"
+                           else f"governed: {term.rule.rstrip('.')}")
+                issues.append(Issue(level="warning", code="negated_governed_term", message=(
+                    f'Your request says "not {phrase}" ({meaning}). Check that the conditions below exclude it '
+                    "the way you mean.")))
+                continue
             if term.status != "decided":
                 clarifications.append(self._clarification(term))
                 issues.append(Issue(level="warning", code="unflagged_open_term", message=(
@@ -472,6 +481,15 @@ def _mentions(request_text: str, term) -> bool:
 
 def _condition_key(c: dict[str, Any]) -> str:
     return json.dumps(canonical(c), sort_keys=True)
+
+
+_NEGATORS = r"(?:not|no|non|never|without|excluding|except|isn't|aren't|isnt|arent|no longer|sin|excepto)"
+
+
+def _negated(request_text: str, phrase: str) -> bool:
+    """Is the phrase negated within the two words before it ("not active", "no longer really active")?"""
+    pattern = rf"(?<!\w){_NEGATORS}(?:\W+\w+){{0,2}}?\W+{re.escape(phrase.lower())}(?!\w)"
+    return re.search(pattern, request_text.lower()) is not None
 
 
 def _phrase_in(request_text: str, term) -> str | None:

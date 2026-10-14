@@ -36,6 +36,7 @@ class Settings:
     rate_limit_per_min: int = 20
     public_url: str = "http://127.0.0.1:8000"  # where people open review links for agent-drafted audiences
     daily_budget_usd: float = 5.0
+    outcome_token: str = ""  # shared secret the campaign tool sends to report outcomes; empty = reporting off
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -59,4 +60,5 @@ class Settings:
             rate_limit_per_min=int(os.getenv("RATE_LIMIT_PER_MIN", cls.rate_limit_per_min)),
             public_url=os.getenv("PUBLIC_URL", cls.public_url).rstrip("/"),
             daily_budget_usd=float(os.getenv("DAILY_BUDGET_USD", cls.daily_budget_usd)),
+            outcome_token=os.getenv("OUTCOME_TOKEN", ""),
         )

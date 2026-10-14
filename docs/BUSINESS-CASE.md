@@ -119,7 +119,8 @@ why the productivity argument shouldn't lead.
 ## What the pilot measures
 
 The pilot in [CUSTOMER-CONTEXT.md](CUSTOMER-CONTEXT.md) adds the money measures to the quality ones.
-Capture the baseline before it starts:
+They come from its live phase (weeks 3–8): the two-week shadow phase sends nothing, so it can only
+measure quality and speed. Capture the baseline before it starts:
 
 - **Value per campaign:** a holdout group on every pilot campaign, so the extra margin is measured,
   not assumed. This replaces the biggest assumption. The app already records one at every
@@ -127,8 +128,10 @@ Capture the baseline before it starts:
   than bolted on. The demo's synthetic campaign history shows the shape of the answer: measured
   lift per campaign type, from about +0.2 points (app adoption) to about +1.6 (top-up reminders).
   The pilot replaces those with the customer's own campaigns: each pilot campaign's responses go
-  to the outcome endpoint, its measured lift joins the evidence, and the learning curve shows
-  when the estimate is tight enough to replace this document's response assumption.
+  to the outcome endpoint, a person confirms them, the measured lift joins the evidence, and the
+  learning curve shows when the estimate is tight enough to replace this document's response
+  assumption. Six weeks of live sends is a handful of campaigns per type, so expect "too small to
+  tell" for some types; the go decision needs one type clearly above zero, not all of them.
 - **Campaigns and tests per month,** pilot marketers against the others.
 - **Launch delay** for time-sensitive campaigns, request to send.
 - **Policy and consent blocks caught** (already counted in Insights), as risk evidence.

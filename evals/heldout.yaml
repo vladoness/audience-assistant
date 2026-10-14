@@ -1,5 +1,7 @@
 # Held-out set: written after the dev set and the prompt were final, frozen, and never used to
 # change the prompt. Same expectation keys as cases.yaml. Report it separately from the dev set.
+# One change since freezing (15 Oct, after a review): the two policy cases gained an expected
+# audience for what remains after the refusal. That makes the scoring stricter; the prompt is unchanged.
 
 cases:
   - id: h-simple-01
@@ -97,6 +99,7 @@ cases:
       status: invalid
       issues_include: [policy_violation]
       forbid_attributes: [credit_risk_band]
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}]}
 
   - id: h-policy-02
     category: policy
@@ -105,6 +108,7 @@ cases:
       status: invalid
       issues_include: [policy_violation]
       forbid_attributes: [app_active_30d]
+      definition: {channel: email, conditions: []}
 
   - id: h-out-of-scope-01
     category: out_of_scope

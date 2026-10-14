@@ -74,12 +74,53 @@ def test_proposals_are_checked_against_the_facts_before_anyone_sees_them(make_cl
     assert "credit" not in facts.lower(), "no policy-blocked fields in the facts"
 
 
-def test_an_applied_proposal_stays_labelled_and_counts_as_an_edit(make_client, big_store):
-    client = make_client(ScriptedProvider(), data_path=big_store)
-    applied = UPSELL | {"conditions": UPSELL["conditions"] + [
-        {"attribute": "line_type", "op": "eq", "value": "postpaid", "source": "advisor"}]}
+def test_only_a_condition_the_advisor_actually_proposed_keeps_the_advisor_label(make_client, big_store):
+    narrow = {"summary": "", "proposals": [proposal("narrow_segment", "Keep only postpaid lines", "Postpaid did better.",
+                                                    ["segment.data_upsell.line_type.postpaid"], "line_type", "postpaid")]}
+    client = make_client(ScriptedProvider(narrow), data_path=big_store)
+    forged = UPSELL | {"conditions": UPSELL["conditions"] + [
+        {"attribute": "region", "op": "eq", "value": "Coast", "source": "advisor"}]}
+    assert client.post("/api/check", json={"definition": forged}).json()["definition"]["conditions"][-1]["source"] == "user"
+    advice = client.post("/api/advise", json={"definition": UPSELL, "goal": "Upsell", "campaign_type": "data_upsell"}).json()
+    applied = advice["proposals"][0]["consequence"]["definition"]
     checked = client.post("/api/check", json={"definition": applied}).json()
     assert checked["definition"]["conditions"][-1]["source"] == "advisor"
+    assert advice["advice_id"] and "summary" in advice["model_written"]
+
+
+def test_a_summary_with_numbers_the_facts_do_not_have_is_withheld(make_client, big_store):
+    scripted = {"summary": "This campaign will add 4,000 customers.", "proposals": []}
+    client = make_client(ScriptedProvider(scripted), data_path=big_store)
+    r = client.post("/api/advise", json={"definition": UPSELL, "campaign_type": "data_upsell"}).json()
+    assert r["summary"] == "" and r["rejected"][0]["kind"] == "summary"
+
+
+def test_a_campaign_type_switch_is_only_proposed_when_none_is_chosen_and_the_type_works_on_this_channel(make_client, big_store):
+    switch = lambda t: {"summary": "", "proposals": [proposal("choose_campaign_type", f"Run {t}", "Past results.",
+                                                              [f"type.{t}"], campaign_type=t)]}
+    client = make_client(ScriptedProvider(switch("topup_reminder"), switch("topup_reminder"), switch("roaming_offer")),
+                         data_path=big_store)
+    chosen = client.post("/api/advise", json={"definition": UPSELL, "campaign_type": "app_adoption"}).json()
+    assert "different offer" in chosen["rejected"][0]["reason"]
+    open_choice = client.post("/api/advise", json={"definition": UPSELL}).json()
+    assert [p["campaign_type"] for p in open_choice["proposals"]] == ["topup_reminder"]
+    other_channel = client.post("/api/advise", json={"definition": UPSELL}).json()
+    assert "sent by EMAIL" in other_channel["rejected"][0]["reason"]
+
+
+def test_facts_name_no_audience_and_no_small_group(make_client, big_store):
+    from app.advisor import _count
+    from tests.conftest import proposal as interpretation
+    assert _count(3) == "fewer than 10" and _count(0) == "0" and _count(12_345) == "12,345"
+    client = make_client(ScriptedProvider(interpretation(conditions=UPSELL["conditions"]), {"summary": "", "proposals": []}),
+                         data_path=big_store)
+    r = client.post("/api/interpret", json={"request": "android users with over 10 GB"}).json()
+    approved = client.post("/api/approve", json={"request_id": r["request_id"], "name": "Maria's VIP list",
+                                                 "approver": "Ana", "goal": "Upsell", "definition": r["definition"]}).json()
+    advice = client.post("/api/advise", json={"definition": UPSELL, "campaign_type": "data_upsell"}).json()
+    overlap = [f["text"] for f in advice["facts"] if f["id"].startswith("overlap.")]
+    assert overlap and f"#{approved['id']}" in overlap[0]
+    assert "Maria" not in " ".join(f["text"] for f in advice["facts"])
 
 
 def test_blocked_channels_and_unsupported_switches_are_withheld(make_client, big_store):

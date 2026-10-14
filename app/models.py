@@ -170,6 +170,17 @@ class OutcomeRequest(BaseModel):
     sent_at: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
+class MeasurementPreviewRequest(BaseModel):
+    definition: AudienceDefinition
+    campaign_type: str
+
+
+class ConfirmOutcomeRequest(BaseModel):
+    """A person confirms a reported outcome after checking it; self-declared without SSO, like the approver."""
+
+    confirmed_by: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
 class CheckRequest(BaseModel):
     definition: AudienceDefinition
     pending_terms: list[str] = Field(default_factory=list)

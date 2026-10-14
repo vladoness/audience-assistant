@@ -15,12 +15,17 @@ from app.catalog import Catalog
 from app.models import AudienceDefinition, Condition
 
 
-def verify_provenance(definition: AudienceDefinition, catalog: Catalog) -> AudienceDefinition:
+def verify_provenance(definition: AudienceDefinition, catalog: Catalog,
+                      advised: list[dict[str, Any]] = ()) -> AudienceDefinition:
     """Keep a "glossary:" source only when the condition is exactly that term's (or option's) current
-    definition. Anything else is relabelled "user", so a client can't make an edited threshold look governed."""
+    definition, and an "advisor" source only when recorded advice proposed exactly that condition.
+    Anything else is relabelled "user", so a client can't make an edit look governed or advised."""
+    advised_keys = [canonical(a) for a in advised]
     out = []
     for c in definition.conditions:
         if c.source not in {"model", "user", "advisor"} and not c.source.startswith("glossary:"):
+            c = c.model_copy(update={"source": "user"})
+        if c.source == "advisor" and canonical(c.model_dump()) not in advised_keys:
             c = c.model_copy(update={"source": "user"})
         if c.source.startswith("glossary:"):
             term_name, _, option = c.source.removeprefix("glossary:").partition("=")

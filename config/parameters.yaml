@@ -3,7 +3,7 @@
 # high-value threshold"); its threshold
 # lives here, with a version and effective date, so changing a number is a new parameter
 # version, not a new rule. Approved audiences record the versions they were built with.
-version: "2026-10-14.1"
+version: "2026-10-15.1"
 
 parameter_sets:
   high_value:
@@ -42,13 +42,14 @@ parameter_sets:
     values: {min_reachable_lines: 100, max_share_of_base: 0.5}
 
   # How every approved audience is measured: a share of it is held out (not contacted), so the
-  # campaign's effect is the difference between the two groups, not a guess.
+  # campaign's effect is the difference between the two groups, not a guess. A reported outcome
+  # whose response rate is above max_response_rate is rejected as implausible (a wrong file).
   measurement:
-    version: 1
-    effective: 2026-10-14
+    version: 2
+    effective: 2026-10-15
     owner: Marketing Analytics
     approved_by: M. Rojas
-    values: {holdout_share: 0.10, min_holdout_lines: 500, window_days: 14}
+    values: {holdout_share: 0.10, min_holdout_lines: 500, window_days: 14, max_response_rate: 0.5}
 
   # When a marketer is warned that an audience has been contacted a lot lately.
   contact_policy:

@@ -73,8 +73,18 @@ about five years to pay back. Assumptions, scenarios and what moves the answer a
 
 ## How I would measure it in a pilot
 
-Two marketers, two weeks, shadow mode first (the assistant runs alongside the ticket process).
-Capture the baseline first: today's request-to-audience time and how often definitions are disputed.
+Two marketers, eight weeks, in two phases. Capture the baseline first: today's
+request-to-audience time and how often definitions are disputed.
+
+**Phase 1, weeks 1–2, shadow mode:** the assistant runs alongside the ticket process and nothing
+it builds is sent. This measures quality and speed safely, but it can't measure money: a campaign
+that isn't sent has no responders.
+
+**Phase 2, weeks 3–8, live:** the two marketers send the audiences they approve in the app, each
+with its holdout, and the campaign tool reports outcomes after each 14-day window. This is where
+the business case's biggest assumption, the value of a campaign, gets measured.
+
+Measured across both phases:
 
 - **Agreement**: did the assistant's audience match the analyst's? (Set equality, the same
   metric as the eval harness.)
@@ -88,5 +98,7 @@ Capture the baseline first: today's request-to-audience time and how often defin
 
 **Go / no-go after the pilot:**
 - **Go** if at least 95% of audiences match the analyst's, no approved audience breaks a policy,
-  and the median request-to-approval time is under 5 minutes.
+  the median request-to-approval time is under 5 minutes, and the pilot campaigns' confirmed
+  outcomes show lift clearly above zero for at least one campaign type (the measured lift then
+  replaces the business case's response assumption, whatever it turns out to be).
 - **Fix the catalog or glossary first** if one field or term drives most of the mismatches.

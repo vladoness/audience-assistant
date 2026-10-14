@@ -3,13 +3,16 @@
 1. `fact_sheet` computes what the system knows about this audience, as numbered facts with ids:
    size and consent, the mix by segment, the other channel, contact pressure, past lift of every
    campaign type, lift by segment for past campaigns of the chosen type (with a strict
-   "clearly different" test), and overlap with recently approved audiences. Aggregates only;
-   no customer row reaches the model.
+   "clearly different" test), and overlap with recently approved audiences (by id, not name).
+   Aggregates only: no customer row, no name typed by a marketer, and no count below SMALL_CELL
+   reaches the model.
 2. The model reads the facts and the goal and proposes up to three changes (ADVICE_SCHEMA).
-3. `check` accepts a proposal only if every fact it cites exists and supports it, every number it
-   uses appears in those facts, and its change is allowed (no policy-blocked field, no segment
-   difference the data doesn't show). `consequence` then applies the change hypothetically and
-   sizes it. Rejected proposals are returned with the reason, never silently dropped.
+3. `check` accepts a structured proposal only if every fact it cites exists and supports it, every
+   number it uses appears in those facts, and its change is allowed (no policy-blocked field, no
+   segment difference the data doesn't show, no campaign-type switch once the marketer chose one).
+   Free-text "advice" and the summary are checked for citations and numbers only: code can't check
+   what a sentence means. `consequence` applies a change hypothetically and sizes it. Withheld
+   proposals are returned with the reason, never silently dropped.
 4. The marketer applies one or ignores them. An applied change is a condition with source
    "advisor" and goes through the same validation and approval as any edit.
 
@@ -30,6 +33,7 @@ from app.synthdata import CAMPAIGN_TYPES
 from app.validate import validate_definition
 
 KINDS = ("narrow_segment", "exclude_segment", "switch_channel", "choose_campaign_type", "advice")
+SMALL_CELL = 10  # counts below this are reported as "fewer than 10" so no group small enough to identify leaves
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
 
@@ -51,6 +55,14 @@ def _signed(v: float) -> str:
     return f"{v:+.2f}"
 
 
+def _count(n: int) -> str:
+    return f"fewer than {SMALL_CELL}" if 0 < n < SMALL_CELL else f"{n:,}"
+
+
+def _share(n: int, of: int) -> str:
+    return f" ({n / of:.0%})" if of and n >= SMALL_CELL else ""
+
+
 def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistory | None, store,
                definition: AudienceDefinition, campaign_type: str | None) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
@@ -60,8 +72,8 @@ def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistor
 
     channel = definition.channel
     sized = engine.size(definition)
-    add("audience", f"The audience reaches {sized.reachable:,} lines on {channel.upper()} ({sized.matched:,} match the "
-                    f"conditions; {sized.excluded_no_consent:,} have no {channel.upper()} consent).",
+    add("audience", f"The audience reaches {_count(sized.reachable)} lines on {channel.upper()} ({_count(sized.matched)} "
+                    f"match the conditions; {_count(sized.excluded_no_consent)} have no {channel.upper()} consent).",
         reachable=sized.reachable)
 
     allowed = [a for a in SEGMENT_ATTRIBUTES if not catalog.violations(a, channel)]
@@ -69,7 +81,7 @@ def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistor
     for attr, counts in mix.items():
         if len(counts) >= 2:
             label = catalog.attributes[attr].label
-            parts = ", ".join(f"{v} {n:,} ({n / sized.reachable:.0%})" for v, n in counts.items())
+            parts = ", ".join(f"{v} {_count(n)}{_share(n, sized.reachable)}" for v, n in counts.items())
             add(f"mix.{attr}", f"By {label.lower()}: {parts}.", values=counts)
 
     other = "email" if channel == "sms" else "sms"
@@ -78,23 +90,24 @@ def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistor
     if blocked:
         add(f"channel.{other}", f"On {other.upper()} this audience is not allowed: {blocked[0].message}", allowed=False)
     else:
-        add(f"channel.{other}", f"On {other.upper()} it would reach {engine.size(moved).reachable:,} lines.",
+        add(f"channel.{other}", f"On {other.upper()} it would reach {_count(engine.size(moved).reachable)} lines.",
             allowed=True, reachable=engine.size(moved).reachable)
 
     if history is not None and history.available:
         pressure = history.contact_pressure(definition)
-        add("pressure.recent", f"{pressure.contacted_recently:,} of these lines "
-                               f"({pressure.contacted_recently / max(pressure.reachable, 1):.0%}) got a campaign in the "
+        add("pressure.recent", f"{_count(pressure.contacted_recently)} of these lines"
+                               f"{_share(pressure.contacted_recently, pressure.reachable)} got a campaign in the "
                                f"last {pressure.recent_days} days.", count=pressure.contacted_recently)
-        add("pressure.cap", f"{pressure.at_or_over_cap:,} of these lines already had {pressure.cap} or more campaigns in "
-                            f"the last {pressure.window_days} days.", count=pressure.at_or_over_cap)
+        add("pressure.cap", f"{_count(pressure.at_or_over_cap)} of these lines already had {pressure.cap} or more "
+                            f"campaigns in the last {pressure.window_days} days.", count=pressure.at_or_over_cap)
         own = store.outcomes()
         for t in CAMPAIGN_TYPES:
             e = history.evidence(t, own)
             p = e["pooled"]
-            add(f"type.{t}", f"Past {e['label'].lower()} campaigns ({e['campaigns']}): {_signed(p['lift_points'])} points "
+            add(f"type.{t}", f"Past {e['label'].lower()} campaigns ({e['campaigns']}, sent by "
+                             f"{CAMPAIGN_TYPES[t]['channel'].upper()}): {_signed(p['lift_points'])} points "
                              f"against their holdout (95% {_signed(p['lift_95_low'])} to {_signed(p['lift_95_high'])}).",
-                lift=p["lift_points"], low=p["lift_95_low"], high=p["lift_95_high"])
+                lift=p["lift_points"], low=p["lift_95_low"], high=p["lift_95_high"], channel=CAMPAIGN_TYPES[t]["channel"])
         for t in CAMPAIGN_TYPES:
             for attr in allowed:
                 present = mix.get(attr, {})
@@ -119,9 +132,16 @@ def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistor
             continue
         shared = len(mine & engine.profile_ids(AudienceDefinition.model_validate_json(a["definition_json"])))
         if shared:
-            add(f"overlap.{a['id']}", f"{shared:,} of these lines ({shared / len(mine):.0%}) are also in approved audience "
-                                      f"#{a['id']} \"{a['name']}\".", shared=shared)
+            add(f"overlap.{a['id']}", f"{_count(shared)} of these lines{_share(shared, len(mine))} are also in approved "
+                                      f"audience #{a['id']} (approved on {a['created_at'][:10]}).", shared=shared)
     return facts
+
+
+def check_summary(summary: str, facts: dict[str, dict[str, Any]]) -> str | None:
+    """The summary may only use numbers that appear somewhere in the facts."""
+    allowed = _with_roundings(set().union(*(_numbers(f["text"]) for f in facts.values())))
+    used = _numbers(summary) - allowed
+    return f"it uses numbers that aren't in the facts ({', '.join(sorted(used))})" if used else None
 
 
 def check(proposal: dict[str, Any], facts: dict[str, dict[str, Any]], catalog: Catalog,
@@ -159,8 +179,16 @@ def check(proposal: dict[str, Any], facts: dict[str, dict[str, Any]], catalog: C
             return "that channel isn't allowed for this audience"
     elif kind == "choose_campaign_type":
         t = proposal.get("campaign_type")
-        if t not in CAMPAIGN_TYPES or t == campaign_type or f"type.{t}" not in cites:
+        if campaign_type:
+            return ("you chose the campaign type; a different type is a different offer, which is your decision, "
+                    "not a change to the audience")
+        if t not in CAMPAIGN_TYPES or f"type.{t}" not in cites:
             return "it doesn't cite past results for that campaign type"
+        d = facts[f"type.{t}"]["data"]
+        if d["channel"] != definition.channel:
+            return f"past campaigns of that type were sent by {d['channel'].upper()}, not {definition.channel.upper()}"
+        if not d["low"] > 0:
+            return "past results for that type can't be told apart from no effect"
     return None
 
 

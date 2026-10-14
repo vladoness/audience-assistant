@@ -122,21 +122,22 @@ FROM behaviour;
 # Synthetic campaign history: the KNOWN TRUTH it is generated from. Each type has an eligible
 # audience, a channel, the response rate of lines that were NOT contacted (base) and the true
 # effect of contacting them (lift, in absolute response rate). Measurement must recover the lift
-# from the data alone; tests/test_history.py checks that it does.
+# from the data alone; tests/test_history.py checks that it does. "response" is what counts as a
+# response, measured from the operator's own records (an assumption Marketing Analytics would own).
 CAMPAIGN_TYPES: dict[str, dict] = {
     "topup_reminder": {"label": "Top-up reminder", "channel": "sms", "base": 0.100, "lift": 0.020,
-                       "audience": "line_type = 'prepaid' AND days_since_last_recharge BETWEEN 15 AND 45"},
+                       "response": "topped up", "audience": "line_type = 'prepaid' AND days_since_last_recharge BETWEEN 15 AND 45"},
     # One planted segment effect: upsells work clearly better on postpaid lines. The advisor should
     # find this and nothing else (every other type has the same lift in every segment).
     "data_upsell": {"label": "Data bundle upsell", "channel": "sms", "base": 0.020, "lift": 0.008,
-                    "lift_by": {"attribute": "line_type", "values": {"postpaid": 0.016, "prepaid": 0.005}},
+                    "response": "bought a data bundle", "lift_by": {"attribute": "line_type", "values": {"postpaid": 0.016, "prepaid": 0.005}},
                     "audience": "data_gb_30d >= 5"},
     "roaming_offer": {"label": "Roaming offer", "channel": "email", "base": 0.030, "lift": 0.012,
-                      "audience": "roaming_30d OR (line_type = 'postpaid' AND plan_tier = 'premium')"},
+                      "response": "bought a roaming pack", "audience": "roaming_30d OR (line_type = 'postpaid' AND plan_tier = 'premium')"},
     "winback": {"label": "Lapsed prepaid win-back", "channel": "sms", "base": 0.050, "lift": 0.010,
-                "audience": "line_type = 'prepaid' AND days_since_last_recharge > 30"},
+                "response": "topped up after the lapse", "audience": "line_type = 'prepaid' AND days_since_last_recharge > 30"},
     "app_adoption": {"label": "App adoption", "channel": "sms", "base": 0.040, "lift": 0.003,
-                     "audience": "NOT app_active_30d AND device_os <> 'feature_phone'"},
+                     "response": "signed in to the app", "audience": "NOT app_active_30d AND device_os <> 'feature_phone'"},
 }
 HISTORY_VERSION = 2  # bump when CAMPAIGN_TYPES change, so existing demo stores regenerate their history
 HISTORY_CAMPAIGNS = 60  # one every 6 days over the last year, types in rotation

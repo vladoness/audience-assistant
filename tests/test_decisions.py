@@ -68,7 +68,7 @@ def test_every_approval_records_a_holdout_and_how_success_is_measured(make_clien
     r = client.post("/api/interpret", json={"request": "prepaid customers"}).json()
     response = approve(client, r).json()
     m = response["measurement"]
-    assert m["goal"] == "Win back lapsed users" and m["parameters"] == "measurement v1"
+    assert m["goal"] == "Win back lapsed users" and m["parameters"] == "measurement v2"
     assert m["target_lines"] + m["holdout_lines"] == response["reachable"]
     assert abs(m["holdout_lines"] / response["reachable"] - m["holdout_share"]) < 0.02
     prepaid = AudienceDefinition(conditions=[Condition(attribute="line_type", op="eq", value="prepaid")])

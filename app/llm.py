@@ -2,8 +2,10 @@
 
 The model gets the catalog, the glossary and the marketer's (masked) request, and must answer
 with structured output constrained to PROPOSAL_SCHEMA (strict JSON schema, so the response always
-parses), or REFINE_SCHEMA for a change to an audience already on screen. It proposes; it never decides. Validation, glossary expansion, consent, sizing and the plain-English summary all
-happen in deterministic code downstream.
+parses), or REFINE_SCHEMA for a change to an audience already on screen, or ADVICE_SCHEMA for the
+advisor (which gets computed facts and the masked goal instead of a request). It proposes; it never
+decides. Validation, glossary expansion, consent, sizing, the advisor's checks and the
+plain-English summary all happen in deterministic code downstream.
 
 Providers:
 - AnthropicProvider: live calls (structured output, configurable effort, cached system prompt).
@@ -74,7 +76,7 @@ PROPOSAL_SCHEMA = {
     "required": ["glossary_terms", "conditions", "channel", "unmapped_phrases", "out_of_scope", "assumptions"],
 }
 
-ADVISOR_VERSION = "a1"
+ADVISOR_VERSION = "a2"
 ADVISOR_SYSTEM = """You are a campaign analyst for a telco's Marketing Operations team. An audience has already
 been defined and sized. You read facts the system computed about it (past campaign results, contact pressure,
 consent, segment results) and propose improvements. You only propose; the system checks every proposal against
@@ -124,7 +126,10 @@ def build_advice_messages(facts: list[dict[str, Any]], goal: str, campaign_type:
         "cited segment fact says 'clearly different' for the chosen campaign type, and in the direction it shows. "
         "A segment that is 'not clearly different' is a reason NOT to narrow.\n"
         "- switch_channel only if the cited channel fact says the other channel is allowed and the goal supports it.\n"
-        "- choose_campaign_type if the goal fits another type whose past results are clearly better, citing both.\n"
+        "- choose_campaign_type only when no campaign type is chosen, for a type that fits the goal, is sent on this "
+        "audience's channel and whose past results are clearly positive (citing its fact). Once a type is chosen, the "
+        "offer is decided: advise on the audience, not the offer.\n"
+        "- The summary may only use numbers from the facts.\n"
         "- advice for a point to consider with no change (for example heavy recent contact). If nothing in the facts "
         "supports a change, return one advice titled 'Keep the audience as it is' and say why.\n"
         "- Use empty strings, and channel none, for fields a kind doesn't use. Never mention fields or segments "

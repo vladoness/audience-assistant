@@ -122,35 +122,78 @@ def _matches(p: dict, matcher: dict) -> bool:
     return all(p.get(k) == v for k, v in matcher.items())
 
 
+def _expectations(expect: dict, proposals: list[dict]) -> dict[str, bool]:
+    checks = {"advice": True}
+    if "must_include" in expect:
+        checks["must_include"] = all(any(_matches(p, m) for p in proposals) for m in expect["must_include"])
+    if "must_include_any" in expect:
+        checks["must_include_any"] = any(_matches(p, m) for m in expect["must_include_any"] for p in proposals)
+    if "must_not_include" in expect:
+        checks["must_not_include"] = not any(_matches(p, m) for m in expect["must_not_include"] for p in proposals)
+    if "cites_any" in expect:
+        checks["cites_any"] = any(str(c).startswith(prefix) for p in proposals for c in p.get("cites", [])
+                                  for prefix in expect["cites_any"])
+    return checks
+
+
+def baseline_proposals(name: str, facts: dict[str, dict], definition: AudienceDefinition,
+                       campaign_type: str | None) -> list[dict]:
+    """No model. "keep": always "keep the audience as it is". "rule": a few lines of code that narrow on
+    every clearly-better segment of the chosen type, mention heavy recent contact, and otherwise cite the
+    type's past results; with no type chosen, pick the best-measured type on the audience's channel."""
+    blank = {"title": "", "rationale": "", "attribute": "", "value": "", "channel": "none", "campaign_type": ""}
+    if name == "keep":
+        return [blank | {"kind": "advice", "title": "Keep the audience as it is", "cites": ["audience"]}]
+    out = []
+    for fid, f in facts.items():
+        d = f["data"]
+        if fid.startswith(f"segment.{campaign_type}.") and d["clearly_different"] and d["difference"] > 0:
+            out.append(blank | {"kind": "narrow_segment", "cites": [fid], "attribute": d["attribute"], "value": d["value"]})
+    if facts.get("pressure.recent", {}).get("data", {}).get("count"):
+        out.append(blank | {"kind": "advice", "cites": ["pressure.recent"]})
+    if campaign_type:
+        out.append(blank | {"kind": "advice", "cites": [f"type.{campaign_type}"]})
+    else:
+        types = [(f["data"]["low"], fid) for fid, f in facts.items()
+                 if fid.startswith("type.") and f["data"]["channel"] == definition.channel]
+        if types:
+            fid = max(types)[1]
+            out.append(blank | {"kind": "choose_campaign_type", "cites": [fid], "campaign_type": fid.removeprefix("type.")})
+    return out[:3]
+
+
 def run_advisor_case(interpreter: Interpreter, engine: AudienceEngine, history, store, catalog, case: dict) -> dict:
-    """One advisor case: facts from code, proposals from the model, checks from code, scored on what is accepted."""
+    """One advisor case: facts from code, proposals from the model, checks from code. Scored on what is
+    accepted (what the marketer sees), and also on the raw proposals (what they'd see without the checks)
+    and on two baselines that use no model, so the score says what the model adds."""
     from app import advisor
 
     definition = AudienceDefinition(**case["definition"])
-    facts = advisor.fact_sheet(engine, catalog, history, store, definition, case["campaign_type"])
+    campaign_type = case.get("campaign_type")
+    facts = advisor.fact_sheet(engine, catalog, history, store, definition, campaign_type)
     by_id = {f["id"]: f for f in facts}
-    try:
-        raw, tel = interpreter.advise(facts, case["goal"], case["campaign_type"])
-    except ProviderUnavailable as exc:
-        return {"id": case["id"], "category": case["category"], "passed": False, "checks": {"advice": False},
-                "accepted": [], "rejected": [str(exc)], "llm_calls": 0, "llm_ms": 0.0, "cost_usd": 0.0}
-    accepted, rejected = [], []
-    for p in (raw.get("proposals") or [])[:3]:
-        reason = advisor.check(p, by_id, catalog, definition, case["campaign_type"])
-        (rejected if reason else accepted).append(p if not reason else {"title": p.get("title"), "reason": reason})
     expect = case["expect"]
-    checks = {"advice": True}
-    if "must_include" in expect:
-        checks["must_include"] = all(any(_matches(p, m) for p in accepted) for m in expect["must_include"])
-    if "must_include_any" in expect:
-        checks["must_include_any"] = any(_matches(p, m) for m in expect["must_include_any"] for p in accepted)
-    if "must_not_include" in expect:
-        checks["must_not_include"] = not any(_matches(p, m) for m in expect["must_not_include"] for p in accepted)
-    if "cites_any" in expect:
-        checks["cites_any"] = any(str(c).startswith(prefix) for p in accepted for c in p.get("cites", [])
-                                  for prefix in expect["cites_any"])
+    baselines = {}
+    for name in ("keep", "rule"):
+        proposals = [p for p in baseline_proposals(name, by_id, definition, campaign_type)
+                     if not advisor.check(p, by_id, catalog, definition, campaign_type)]
+        baselines[name] = all(_expectations(expect, proposals).values())
+    try:
+        raw, tel = interpreter.advise(facts, case["goal"], campaign_type)
+    except ProviderUnavailable as exc:
+        return {"id": case["id"], "category": case["category"], "passed": False, "raw_passed": False,
+                "baselines": baselines, "checks": {"advice": False}, "accepted": [], "rejected": [str(exc)],
+                "llm_calls": 0, "llm_ms": 0.0, "cost_usd": 0.0}
+    proposals = (raw.get("proposals") or [])[:3]
+    accepted, rejected = [], []
+    for p in proposals:
+        reason = advisor.check(p, by_id, catalog, definition, campaign_type)
+        (rejected if reason else accepted).append(p if not reason else {"title": p.get("title"), "reason": reason})
+    checks = _expectations(expect, accepted)
     return {"id": case["id"], "category": case["category"], "passed": all(checks.values()), "checks": checks,
-            "accepted": [{k: p.get(k) for k in ("kind", "title", "attribute", "value", "cites")} for p in accepted],
+            "raw_passed": all(_expectations(expect, proposals).values()), "baselines": baselines,
+            "accepted": [{k: p.get(k) for k in ("kind", "title", "attribute", "value", "campaign_type", "cites")}
+                         for p in accepted],
             "rejected": rejected, "llm_calls": tel.llm_calls, "llm_ms": tel.llm_ms, "cost_usd": tel.cost_usd}
 
 
@@ -161,9 +204,14 @@ def summarize_advice(model: str, rows: list[dict], runs: int) -> dict:
         by_case[r["id"]].append(r["passed"])
         by_cat[r["category"]].append(r["passed"])
     latencies = sorted(r["llm_ms"] for r in rows if r["llm_calls"])
+    rate = lambda xs: round(sum(xs) / len(xs), 3)
+    first_run = [r for r in rows if r["run"] == 1]
     return {
         "model": model, "cases": len(by_case), "runs": runs,
-        "pass_rate": round(sum(r["passed"] for r in rows) / len(rows), 3),
+        "pass_rate": rate([r["passed"] for r in rows]),
+        "raw_pass_rate_without_checks": rate([r["raw_passed"] for r in rows]),
+        "baseline_keep_as_is_pass_rate": rate([r["baselines"]["keep"] for r in first_run]),
+        "baseline_rule_pass_rate": rate([r["baselines"]["rule"] for r in first_run]),
         "proposals_accepted": sum(len(r["accepted"]) for r in rows),
         "proposals_withheld_by_checks": sum(len(r["rejected"]) for r in rows),
         "latency_p50_ms": round(percentile(latencies, 50), 0) if latencies else None,
@@ -171,6 +219,7 @@ def summarize_advice(model: str, rows: list[dict], runs: int) -> dict:
         "cost_per_1k_requests_usd": round(1000 * statistics.mean(r["cost_usd"] for r in rows), 2),
         "by_category": {k: f"{sum(v)}/{len(v)}" for k, v in sorted(by_cat.items())},
         "failures": [{"id": c, "failed_runs": f"{len(v) - sum(v)}/{len(v)}"} for c, v in sorted(by_case.items()) if not all(v)],
+        "baseline_failures": {name: sorted(r["id"] for r in first_run if not r["baselines"][name]) for name in ("keep", "rule")},
     }
 
 
@@ -253,7 +302,8 @@ def main() -> None:
                 row["run"] = run
                 rows.append(row)
                 print(f"{'PASS' if row['passed'] else 'FAIL'}  run {run}  {row['id']:<28} {row['llm_ms']:>7.0f} ms  "
-                      f"accepted={[p['kind'] for p in row['accepted']]} withheld={len(row['rejected'])}  {row['checks']}")
+                      f"accepted={[p['kind'] for p in row['accepted']]} withheld={len(row['rejected'])}  "
+                      f"raw={'pass' if row['raw_passed'] else 'FAIL'} baselines={row['baselines']}  {row['checks']}")
                 continue
             result = run_refine_case(interpreter, case) if args.cases == "refine" else interpreter.interpret(case["request"])
             row = score_case(case, result, engine) | {"run": run}

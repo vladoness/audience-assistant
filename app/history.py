@@ -9,10 +9,10 @@ The answers are evidence, never a recommendation or a forecast. In this prototyp
 synthetic (generated from known effects in app/synthdata.py) and every result says so; in a real
 deployment it comes from the campaign tool's send and response records.
 
-The loop closes here too: when an approved audience's outcome is recorded (POST
-/api/audiences/{id}/outcome, or a labelled simulation in the demo), its measured lift joins the
-evidence for its campaign type, so the next decision of that type sees it, and the approval's own
-expectation is compared with what happened.
+The loop closes here too: when an approved audience's outcome is reported (POST
+/api/audiences/{id}/outcome, or a labelled simulation in the demo) and a person confirms it, its
+measured lift joins the evidence for its campaign type, so the next decision of that type sees it,
+and the approval's own expectation is compared with what happened.
 
 Ontology contract (target, for an AEP rollout): send and response events from Journey Optimizer
 datasets, lift from Customer Journey Analytics or Query Service over the same events.
@@ -45,18 +45,26 @@ class Lift:
     def points(self) -> float:
         return 100 * (self.contacted_rate - self.held_out_rate)
 
+    def _adjusted(self) -> tuple[float, float, int, int]:
+        # Agresti-Caffo: one extra responder and non-responder per group. Without it, a group with no
+        # responders has zero variance and a small campaign gets a falsely exact (zero-width) interval.
+        n_c, n_h = self.contacted + 2, self.held_out + 2
+        return ((self.contacted_rate * self.contacted + 1) / n_c, (self.held_out_rate * self.held_out + 1) / n_h, n_c, n_h)
+
     @property
     def se_points(self) -> float:
         if not self.contacted or not self.held_out:
             return math.nan
-        return 100 * math.sqrt(self.contacted_rate * (1 - self.contacted_rate) / self.contacted
-                               + self.held_out_rate * (1 - self.held_out_rate) / self.held_out)
+        p_c, p_h, n_c, n_h = self._adjusted()
+        return 100 * math.sqrt(p_c * (1 - p_c) / n_c + p_h * (1 - p_h) / n_h)
 
     @property
     def interval(self) -> tuple[float, float]:
         if not self.contacted or not self.held_out:
             return (math.nan, math.nan)
-        return (self.points - Z95 * self.se_points, self.points + Z95 * self.se_points)
+        p_c, p_h, _, _ = self._adjusted()
+        centre = 100 * (p_c - p_h)
+        return (centre - Z95 * self.se_points, centre + Z95 * self.se_points)
 
     def as_dict(self) -> dict[str, Any]:
         low, high = self.interval
@@ -81,7 +89,8 @@ class CampaignHistory:
             return []
         counts = dict(self._engine.connection.execute(
             "SELECT campaign_type, count(*) FROM campaigns GROUP BY 1").fetchall())
-        return [{"id": t, "label": spec["label"], "channel": spec["channel"], "campaigns": counts.get(t, 0)}
+        return [{"id": t, "label": spec["label"], "channel": spec["channel"], "response": spec["response"],
+                 "campaigns": counts.get(t, 0)}
                 for t, spec in CAMPAIGN_TYPES.items()]
 
     def contact_pressure(self, definition: AudienceDefinition) -> ContactPressure | None:
@@ -214,6 +223,8 @@ class CampaignHistory:
         for value, *counts in rows:
             seg = counts_lift(*counts)
             rest = counts_lift(*(t - c for t, c in zip(total, counts)))
+            if not (seg.contacted and seg.held_out and rest.contacted and rest.held_out):
+                continue  # nothing to compare with (e.g. every past send went to this one value)
             diff = seg.points - rest.points
             se = math.sqrt(seg.se_points ** 2 + rest.se_points ** 2)
             out.append({"attribute": attribute, "value": value, **seg.as_dict(),
@@ -240,15 +251,20 @@ def pool(campaigns: list[dict[str, Any]]) -> Lift:
     return counts_lift(n_c, n_h, r_c, r_h)
 
 
-def verdict(expected: dict[str, Any] | None, measured: Lift) -> str:
+def verdict(expected: dict[str, Any] | None, measured: Lift, min_holdout_lines: int = 0) -> str:
     """How a measured campaign compares with what the evidence said when it was approved. One campaign
     is much noisier than the pooled history, so a difference is only claimed when the two 95% intervals
-    don't overlap; otherwise the campaign is consistent with the evidence."""
+    don't overlap. "In line" is only said of a result that also can't be mistaken for no effect: a small
+    holdout, or an interval that includes zero, is "too small to tell", never reassurance."""
     if not expected:
         return "no expectation was recorded at approval"
-    low, high = measured.interval
+    if measured.held_out < min_holdout_lines:
+        return f"too small to tell (fewer than {min_holdout_lines:,} held-out lines)"
+    low, high = (round(v, 2) for v in measured.interval)  # judged on the numbers the reader sees
     if high < expected["lift_95_low"]:
         return "below what past campaigns predicted"
     if low > expected["lift_95_high"]:
         return "above what past campaigns predicted"
+    if low <= 0 <= high:
+        return "too small to tell (the interval includes no effect)"
     return "in line with past campaigns"

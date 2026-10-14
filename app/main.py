@@ -4,12 +4,15 @@
     POST /api/refine      plain-English change to the audience on screen -> validated proposal (calls the model)
     POST /api/check       re-validate after edits or clarification answers (deterministic)
     POST /api/size        audience size, consent exclusions, breakdowns, guardrail warnings
+    POST /api/measurement-preview  before approval: holdout size and the smallest lift it would show
     POST /api/approve     server-side re-check + re-size, then an audit record with provenance
     GET  /api/interpretations/{id}  a recorded interpretation, re-checked, for review (e.g. drafted over MCP)
     GET  /api/audiences   approved audiences + whether a governance change affects them (blast radius)
-    GET  /api/audiences/{id}/export.csv  every reachable line with its group, for the campaign tool
-    POST /api/audiences/{id}/outcome     the campaign tool reports responders; lift is measured and learned from
-    POST /api/audiences/{id}/simulate-outcome  demo only (synthetic history): the same path with generated responses
+    GET  /api/audiences/{id}/export.csv  the lines to contact (?group=held_out|all for the rest), as approved
+    POST /api/audiences/{id}/outcome     the campaign tool reports responders (token); stored as pending
+    POST /api/audiences/{id}/outcome/confirm  a person confirms a pending outcome; only then is it learned from
+    POST /api/audiences/{id}/simulate-outcome  demo only (synthetic history): generated responses, also pending
+    POST /api/advise      the advisor: facts by code, proposals by the model, checked by code (calls the model)
     GET  /api/learning[/{type}]          the loop in numbers, the learning curve per type, expected vs measured
     GET  /api/insights    unmapped-request demand, open-term choices, edit rates (field-to-product signals)
     GET  /api/catalog     attributes, terms and policies for the editor
@@ -20,14 +23,18 @@
 
 from __future__ import annotations
 
+import hmac
+import math
 import json
 import logging
 import os
 import time
 import uuid
-from datetime import date
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from typing import Literal
 
 import duckdb
 from fastapi import FastAPI, HTTPException, Request
@@ -43,10 +50,11 @@ from app.limits import DailyBudget, RateLimiter
 from app.lint import LintReport, lint
 from app.llm import AnthropicProvider, Pricing, Provider, ProviderUnavailable, RecordingProvider, ReplayProvider
 from app.models import (
-    AdviseRequest, ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, InterpretRequest, InterpretResult,
-    OutcomeRequest, RefineRequest, SizeResult,
+    AdviseRequest, ApproveRequest, AudienceDefinition, CheckRequest, CheckResult, ConfirmOutcomeRequest,
+    InterpretRequest, InterpretResult, MeasurementPreviewRequest, OutcomeRequest, RefineRequest, SizeResult,
 )
 from app.observability import Metrics, configure_logging, request_id_var
+from app.pii import mask_pii
 from app.settings import ROOT, Settings
 from app.store import AuditStore, TTLCache, definition_hash
 from app import advisor
@@ -69,6 +77,7 @@ class Services:
     lint_report: LintReport
     eval_summary: dict | None
     history: CampaignHistory | None = None
+    today: Callable[[], date] = date.today
 
 
 def build_provider(settings: Settings) -> Provider:
@@ -254,6 +263,23 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             raise HTTPException(404, detail=f"No campaign history for type {campaign_type!r}.")
         return found
 
+    @app.post("/api/measurement-preview")
+    def measurement_preview(body: MeasurementPreviewRequest, request: Request) -> dict:
+        """Before approval: how big the holdout would be, and whether a lift like past campaigns' would show."""
+        s = svc(request)
+        checked = s.interpreter.check(body.definition, [], {})
+        if checked.status == "invalid" or s.history is None or body.campaign_type not in CAMPAIGN_TYPES:
+            return {"available": False}
+        ps = s.catalog.parameter_sets.get("measurement")
+        share = float(ps.values["holdout_share"]) if ps else 0.0
+        reachable = s.engine.size(checked.definition).reachable
+        holdout = round(reachable * share)  # the expected split: the real one is drawn at approval
+        target = reachable - holdout
+        past = s.history.evidence(body.campaign_type, s.store.outcomes())
+        detectable, note = detectable_lift(past, target, holdout)
+        return {"available": True, "target_lines": target, "holdout_lines": holdout, "past_lift_points":
+                past["pooled"]["lift_points"], "detectable_lift_points": detectable, "power_note": note}
+
     @app.post("/api/approve")
     def approve(body: ApproveRequest, request: Request) -> dict:
         s = svc(request)
@@ -285,8 +311,9 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         sized = s.engine.size(final)
         measurement = measurement_plan(s, final, body.goal.strip(), salt=body.request_id,
                                        campaign_type=body.campaign_type)
+        members = s.engine.members(final, body.request_id, measurement["holdout_share"])
         definition = final.model_dump()
-        audience_id = s.store.record_approval_once({
+        audience_id = s.store.record_approval_once(members=members, row={
             "name": body.name.strip(),
             "approver": body.approver.strip(),
             "request_id": body.request_id,
@@ -301,10 +328,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             "governance_json": json.dumps(snapshot(final, s.catalog)),
             "governance_versions": json.dumps(s.catalog.versions),
             "measurement_json": json.dumps(measurement),
-            # Who called, as far as the server can tell. Without SSO the approver name is self-declared; this
-            # at least records where the approval came from (an agent calling the API directly shows up here).
-            "client_json": json.dumps({"host": request.client.host if request.client else None,
-                                       "user_agent": request.headers.get("user-agent", "")[:200]}),
+            "client_json": json.dumps(_client(request)),
         })
         s.metrics.incr("audiences_approved")
         if audience_id is None:
@@ -320,16 +344,10 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
     def audiences(request: Request) -> list[dict]:
         s = svc(request)
         rows = []
-        outcomes = {o["audience_id"]: o for o in s.store.outcomes()}
+        outcomes = {o["audience_id"]: o for o in s.store.outcomes(include_pending=True)}
         for row in s.store.list_audiences():
             o = outcomes.get(row["id"])
-            if o is not None:
-                measured = counts_lift(o["contacted"], o["held_out"], o["contacted_responders"], o["held_out_responders"])
-                expected = json.loads(row["measurement_json"]).get("evidence_at_approval")
-                row["outcome"] = {"source": o["source"], "sent_at": o["sent_at"], "measured": measured.as_dict(),
-                                  "expected": expected, "verdict": verdict(expected, measured)}
-            else:
-                row["outcome"] = None
+            row["outcome"] = None if o is None else outcome_view(s, o, row["measurement_json"])
             definition = AudienceDefinition(**json.loads(row["definition_json"]))
             changes = impact(json.loads(row["governance_json"]), s.catalog)
             row["governance_changes"] = changes
@@ -347,16 +365,32 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
 
     @app.post("/api/audiences/{audience_id}/outcome")
     def outcome(audience_id: int, body: OutcomeRequest, request: Request) -> dict:
-        """Close the loop: the campaign tool reports who responded; the lift is measured against the
-        holdout recorded at approval and joins the evidence for the next decision."""
+        """Close the loop: the campaign tool reports who responded, with the shared outcome token. The lift
+        is measured against the membership recorded at approval and stored as pending: it joins the
+        evidence only when a person confirms it. A new report replaces a pending one."""
         s = svc(request)
+        if not s.settings.outcome_token:
+            raise HTTPException(403, detail="Outcome reporting is off: set OUTCOME_TOKEN and send it as X-Outcome-Token.")
+        if not hmac.compare_digest(request.headers.get("x-outcome-token", ""), s.settings.outcome_token):
+            raise HTTPException(401, detail="Missing or wrong X-Outcome-Token.")
         return record_outcome(s, audience_id, body.responders, source="campaign_tool",
-                              sent_at=body.sent_at or date.today().isoformat())
+                              sent_at=body.sent_at or s.today().isoformat(), reporter=_client(request))
+
+    @app.post("/api/audiences/{audience_id}/outcome/confirm")
+    def confirm_outcome(audience_id: int, body: ConfirmOutcomeRequest, request: Request) -> dict:
+        """A person checked the reported numbers. Only confirmed outcomes are learned from."""
+        s = svc(request)
+        if not s.store.confirm_outcome(audience_id, body.confirmed_by.strip()):
+            raise HTTPException(409, detail="There is no pending outcome for this audience to confirm.")
+        s.metrics.incr("outcomes_confirmed")
+        log.info("outcome_confirmed", extra={"audience_id": audience_id})
+        return {"audience_id": audience_id, "status": "confirmed"}
 
     @app.post("/api/audiences/{audience_id}/simulate-outcome")
     def simulate_outcome(audience_id: int, request: Request) -> dict:
         """DEMO ONLY, with the synthetic history: generate the responses a send would have produced,
-        from the same known effects, and record them through exactly the same path as a real report."""
+        from the same known effects, and record them through the same path as a real report (pending
+        until confirmed). The send date is today and the measurement window is not waited for."""
         s = svc(request)
         if s.history is None or not s.history.synthetic:
             raise HTTPException(409, detail="Simulated outcomes are only available with the synthetic demo history.")
@@ -366,14 +400,15 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         m = json.loads(row["measurement_json"])
         if not m.get("campaign_type"):
             raise HTTPException(422, detail="This audience has no campaign type, so there is nothing to simulate against.")
-        definition = AudienceDefinition(**json.loads(row["definition_json"]))
-        members = s.engine.members(definition, m["split"]["salt"], m["holdout_share"])
-        responders = s.history.simulate_responders(members, m["campaign_type"], seed=f"outcome:{audience_id}")
-        return record_outcome(s, audience_id, responders, source="simulated", sent_at=date.today().isoformat())
+        responders = s.history.simulate_responders(s.store.members(audience_id), m["campaign_type"],
+                                                   seed=f"outcome:{audience_id}")
+        return record_outcome(s, audience_id, responders, source="simulated", sent_at=s.today().isoformat(),
+                              reporter=_client(request))
 
     @app.get("/api/learning")
     def learning_summary(request: Request) -> dict:
-        """The loop in numbers: how many decisions were defined, approved, measured, and what was learned."""
+        """The loop in numbers: how many decisions were defined, approved, measured, and what was learned.
+        Evidence uses confirmed outcomes only; the scorecard shows pending ones too, marked."""
         s = svc(request)
         own = s.store.outcomes()
         types = []
@@ -383,14 +418,9 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             types.append({"id": t["id"], "label": t["label"], "campaigns": now["campaigns"],
                           "measured_here": now["measured_here"], "estimate_now": now["pooled"],
                           "estimate_from_history_only": before["pooled"]})
-        scorecard = []
-        for o in own:
-            m = json.loads(o["measurement_json"])
-            measured = counts_lift(o["contacted"], o["held_out"], o["contacted_responders"], o["held_out_responders"])
-            scorecard.append({"audience_id": o["audience_id"], "name": o["name"], "campaign_type": o["campaign_type"],
-                              "source": o["source"], "sent_at": o["sent_at"],
-                              "expected": m.get("evidence_at_approval"), "measured": measured.as_dict(),
-                              "verdict": verdict(m.get("evidence_at_approval"), measured)})
+        scorecard = [{"audience_id": o["audience_id"], "name": o["name"], "campaign_type": o["campaign_type"],
+                      **outcome_view(s, o, o["measurement_json"])}
+                     for o in s.store.outcomes(include_pending=True)]
         return {"synthetic": bool(s.history and s.history.synthetic), "loop": s.store.counts(),
                 "types": types, "scorecard": scorecard}
 
@@ -403,24 +433,26 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         return found
 
     @app.get("/api/audiences/{audience_id}/export.csv")
-    def export(audience_id: int, request: Request) -> Response:
-        """The approved audience for the campaign tool: every reachable line with its group (contacted or
-        held out). Headers say whether this is still exactly the approved membership."""
+    def export(audience_id: int, request: Request, group: Literal["contacted", "held_out", "all"] = "contacted") -> Response:
+        """The approved audience for the campaign tool, exactly as approved (the membership recorded at
+        approval, not a re-run of the definition). By default only the lines to contact, so the holdout
+        can't be sent to by mistake; ?group=held_out or all for the measurement side. A header says whether
+        today's data would still produce the same groups."""
         s = svc(request)
         row = s.store.get_audience(audience_id)
         if row is None:
             raise HTTPException(404, detail="Unknown audience.")
-        definition = AudienceDefinition(**json.loads(row["definition_json"]))
-        m = json.loads(row["measurement_json"])
-        salt, share = m["split"]["salt"], m["holdout_share"]
-        matches = m.get("members_sha") == s.engine.member_digests(definition, salt, share)
-        lines = ["profile_id,group", *(f"{pid},{group}" for pid, group in s.engine.members(definition, salt, share))]
+        current = _current_data_matches(s, row)
+        members = s.store.members(audience_id, None if group == "all" else group)
+        lines = ["profile_id,group", *(f"{pid},{grp}" for pid, grp in members)]
         s.metrics.incr("audience_exports")
-        log.info("audience_exported", extra={"audience_id": audience_id, "lines": len(lines) - 1,
-                                             "membership_matches_approval": matches})
+        log.info("audience_exported", extra={"audience_id": audience_id, "lines": len(members), "group": group,
+                                             "current_data_matches_approval": current})
+        m = json.loads(row["measurement_json"])
         return Response("\n".join(lines) + "\n", media_type="text/csv", headers={
-            "Content-Disposition": f'attachment; filename="audience-{audience_id}.csv"',
-            "X-Membership-Matches-Approval": "true" if matches else "false",
+            "Content-Disposition": f'attachment; filename="audience-{audience_id}-{group}.csv"',
+            "X-Membership": "as approved",
+            "X-Current-Data-Matches-Approval": "true" if current else "false",
             "X-Approved-Data-Snapshot": str(m.get("data_snapshot", "")),
             "X-Current-Data-Snapshot": s.engine.snapshot,
         })
@@ -513,50 +545,104 @@ def run_advice(s: Services, definition: AudienceDefinition, goal: str, campaign_
                             | {"cited_facts": [by_id[c]["text"] for c in p["cites"]],
                                "consequence": advisor.consequence(p, by_id, s.engine, s.catalog, checked.definition,
                                                                   campaign_type, holdout_share=share)})
+    summary = str(raw.get("summary", ""))[:600]
+    summary_problem = advisor.check_summary(summary, by_id)
+    if summary_problem:
+        rejected.append({"title": "Summary", "kind": "summary", "reason": summary_problem})
+        summary = ""
     s.metrics.incr("advice_accepted", len(accepted))
     s.metrics.incr("advice_rejected", len(rejected))
-    log.info("advice", extra={"accepted": [p["kind"] for p in accepted], "rejected": [r["reason"] for r in rejected],
-                              "facts": len(facts), "campaign_type": campaign_type})
-    return {"summary": str(raw.get("summary", ""))[:600], "proposals": accepted, "rejected": rejected,
+    advice_id = s.store.record_advice({
+        "campaign_type": campaign_type, "goal_masked": mask_pii(goal.strip()[: s.settings.max_request_chars])[0],
+        "facts_json": json.dumps([{"id": f["id"], "text": f["text"]} for f in facts]), "raw_json": json.dumps(raw),
+        "accepted_json": json.dumps(accepted), "rejected_json": json.dumps(rejected),
+        "model": tel.model, "prompt_version": tel.prompt_version})
+    log.info("advice", extra={"advice_id": advice_id, "accepted": [p["kind"] for p in accepted],
+                              "rejected": [r["reason"] for r in rejected], "facts": len(facts),
+                              "campaign_type": campaign_type})
+    return {"advice_id": advice_id, "summary": summary, "proposals": accepted, "rejected": rejected,
             "facts": [{"id": f["id"], "text": f["text"]} for f in facts], "telemetry": tel.model_dump(),
-            "synthetic_history": bool(s.history and s.history.synthetic)}
+            "synthetic_history": bool(s.history and s.history.synthetic),
+            "model_written": ["summary", "proposals[].title", "proposals[].rationale"]}
 
 
-def record_outcome(s: Services, audience_id: int, responders: list[str], source: str, sent_at: str) -> dict:
-    """Count responders in the approved contacted and held-out groups, measure the lift, store it, and
-    compare it with what the evidence said at approval. One outcome per audience."""
+def record_outcome(s: Services, audience_id: int, responders: list[str], source: str, sent_at: str,
+                   reporter: dict) -> dict:
+    """Count responders in the contacted and held-out groups recorded at approval, measure the lift, and
+    store it as pending. A report that can't be right is rejected before it can reach the evidence: sent
+    before the approval or in the future, still inside the measurement window, mostly lines that aren't in
+    this audience, or a response rate no campaign has."""
     row = s.store.get_audience(audience_id)
     if row is None:
         raise HTTPException(404, detail="Unknown audience.")
     m = json.loads(row["measurement_json"])
     if "split" not in m:
         raise HTTPException(422, detail="This audience was approved without a holdout, so its lift can't be measured.")
-    definition = AudienceDefinition(**json.loads(row["definition_json"]))
-    salt, share = m["split"]["salt"], m["holdout_share"]
-    groups = dict(s.engine.members(definition, salt, share))
+    ps = s.catalog.parameter_sets.get("measurement")
+    max_rate = float(ps.values.get("max_response_rate", 1.0)) if ps else 1.0
+    approved_on = datetime.fromisoformat(row["created_at"]).astimezone().date()  # stored in UTC; compared locally
+    today, sent = s.today(), date.fromisoformat(sent_at)
+    if not approved_on <= sent <= today:
+        raise HTTPException(422, detail=f"sent_at {sent_at} must be between the approval ({approved_on}) and today.")
+    if source == "campaign_tool" and today < sent + timedelta(days=m["window_days"]):
+        raise HTTPException(422, detail=(f"The {m['window_days']}-day measurement window is open until "
+                                         f"{sent + timedelta(days=m['window_days'])}; report after that."))
+    groups = dict(s.store.members(audience_id))
     responded = set(responders)
     contacted = sum(1 for g in groups.values() if g == "contacted")
     held_out = len(groups) - contacted
     contacted_r = sum(1 for p in responded if groups.get(p) == "contacted")
     held_out_r = sum(1 for p in responded if groups.get(p) == "held_out")
-    stored = s.store.record_outcome_once({
+    unknown = len(responded) - contacted_r - held_out_r
+    if responded and unknown > len(responded) / 2:
+        raise HTTPException(422, detail=(f"{unknown:,} of {len(responded):,} reported responders are not in this "
+                                         "audience: is this the right file?"))
+    for name, r, n in (("contacted", contacted_r, contacted), ("held-out", held_out_r, held_out)):
+        if n and r / n > max_rate:
+            raise HTTPException(422, detail=(f"{r / n:.0%} of the {name} lines responding is above the plausible "
+                                             f"maximum ({max_rate:.0%}, measurement v{ps.version})."))
+    stored = s.store.report_outcome({
         "audience_id": audience_id, "source": source, "campaign_type": m.get("campaign_type"), "sent_at": sent_at,
         "contacted": contacted, "contacted_responders": contacted_r, "held_out": held_out,
-        "held_out_responders": held_out_r, "unknown_responders": len(responded) - contacted_r - held_out_r,
-        "membership_matches": int(m.get("members_sha") == s.engine.member_digests(definition, salt, share)),
+        "held_out_responders": held_out_r, "unknown_responders": unknown,
+        "membership_matches": int(_current_data_matches(s, row)), "reporter_json": json.dumps(reporter),
     })
     if not stored:
-        raise HTTPException(409, detail="An outcome is already recorded for this audience.")
-    measured = counts_lift(contacted, held_out, contacted_r, held_out_r)
-    result = {"audience_id": audience_id, "source": source, "campaign_type": m.get("campaign_type"),
-              "measured": measured.as_dict(), "expected": m.get("evidence_at_approval"),
-              "verdict": verdict(m.get("evidence_at_approval"), measured),
-              "unknown_responders": len(responded) - contacted_r - held_out_r,
-              "membership_matches_approval": m.get("members_sha") == s.engine.member_digests(definition, salt, share)}
+        raise HTTPException(409, detail="This audience's outcome is already confirmed; it can't be replaced.")
     s.metrics.incr(f"outcomes_{source}")
-    log.info("outcome_recorded", extra={k: result[k] for k in ("audience_id", "source", "campaign_type", "verdict")}
-             | {"lift_points": result["measured"]["lift_points"]})
+    result = {"audience_id": audience_id, "campaign_type": m.get("campaign_type"),
+              **outcome_view(s, s.store.outcomes(include_pending=True, audience_id=audience_id)[0], row["measurement_json"])}
+    log.info("outcome_reported", extra={k: result[k] for k in ("audience_id", "source", "campaign_type", "verdict")}
+             | {"lift_points": result["measured"]["lift_points"], "unknown_responders": unknown})
     return result
+
+
+def outcome_view(s: Services, o: dict, measurement_json: str) -> dict:
+    """A stored outcome as the UI and API show it: measured against what was expected at approval."""
+    expected = json.loads(measurement_json).get("evidence_at_approval")
+    ps = s.catalog.parameter_sets.get("measurement")
+    measured = counts_lift(o["contacted"], o["held_out"], o["contacted_responders"], o["held_out_responders"])
+    return {"source": o["source"], "sent_at": o["sent_at"], "status": o["status"], "reports": o["reports"],
+            "confirmed_by": o["confirmed_by"], "measured": measured.as_dict(), "expected": expected,
+            "verdict": verdict(expected, measured, int(ps.values["min_holdout_lines"]) if ps else 0),
+            "unknown_responders": o["unknown_responders"],
+            "current_data_matches_approval": bool(o["membership_matches"])}
+
+
+def _current_data_matches(s: Services, row: dict) -> bool:
+    """Would today's profile data still put exactly the same lines in each group?"""
+    m = json.loads(row["measurement_json"])
+    if "split" not in m:
+        return False
+    definition = AudienceDefinition(**json.loads(row["definition_json"]))
+    return m.get("members_sha") == s.engine.member_digests(definition, m["split"]["salt"], m["holdout_share"])
+
+
+def _client(request: Request) -> dict:
+    """Who called, as far as the server can tell. Without SSO a name is self-declared; this at least
+    records where a call came from (an agent calling the API directly shows up here)."""
+    return {"host": request.client.host if request.client else None,
+            "user_agent": request.headers.get("user-agent", "")[:200]}
 
 
 def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, salt: str,
@@ -571,6 +657,7 @@ def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, sal
     measurable = ps is not None and holdout >= int(ps.values["min_holdout_lines"])
     past = s.history.evidence(campaign_type, s.store.outcomes()) if s.history is not None and campaign_type else None
     pressure = s.history.contact_pressure(definition) if s.history is not None else None
+    detectable, power_note = detectable_lift(past, target, holdout)
     return {
         "goal": goal,
         "campaign_type": campaign_type,
@@ -578,7 +665,9 @@ def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, sal
             "synthetic": past["synthetic"], "as_of": past["as_of"], "campaigns": past["campaigns"], **past["pooled"]},
         "contact_pressure_at_approval": None if pressure is None else pressure.model_dump(exclude={"warnings"}),
         "success_measure": (f"Response rate of the {target:,} contacted lines minus that of the {holdout:,} held-out "
-                            f"lines, over {window} days after the send."),
+                            f"lines, over {window} days after the send"
+                            + (f" (a response: the line {CAMPAIGN_TYPES[campaign_type]['response']})."
+                               if campaign_type else ".")),
         "target_lines": target,
         "holdout_lines": holdout,
         "holdout_share": share,
@@ -586,11 +675,28 @@ def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, sal
         "measurable": measurable,
         "note": None if measurable else "The holdout is too small for the result to be reliable; widen the audience "
                                         "or treat the outcome as anecdotal.",
+        "detectable_lift_points": detectable,
+        "power_note": power_note,
         "split": {"method": "md5_number_lower(salt || ':' || profile_id) % 10000 < share x 10000", "salt": salt},
         "parameters": f"measurement v{ps.version}" if ps else None,
         "data_snapshot": s.engine.snapshot,
         "members_sha": s.engine.member_digests(definition, salt, share),
     }
+
+
+def detectable_lift(past: dict | None, target: int, holdout: int) -> tuple[float | None, str | None]:
+    """The smallest lift this split would show clearly (80% of the time, at 95%: z 1.96 + 0.84), at the
+    campaign type's past base rate, and a warning when past campaigns of the type lifted less than that."""
+    if past is None or not target or not holdout:
+        return None, None
+    p = past["pooled"]["held_out_response_pct"] / 100
+    detectable = round(100 * 2.8 * math.sqrt(p * (1 - p) * (1 / target + 1 / holdout)), 2)
+    if past["pooled"]["lift_points"] >= detectable:
+        return detectable, None
+    return detectable, (f"With {holdout:,} lines held out, only a lift of about {detectable:.2f} points or more would "
+                        f"show clearly; past campaigns of this type lifted {past['pooled']['lift_points']:+.2f}, so this "
+                        "one will probably read \"too small to tell\". A wider audience or a larger holdout share "
+                        "would fix it.")
 
 
 def catalog_view(c: Catalog) -> dict:

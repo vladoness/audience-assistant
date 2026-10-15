@@ -63,11 +63,13 @@ def build_server(s: Services) -> MCPServer:
             "summary": r.explanation.summary if r.explanation else None,
             "conditions": [c.model_dump() for c in r.definition.conditions],
             "channel": r.definition.channel,
-            "questions": [{"term": c.term, "question": c.question, "working_default_note": c.working_default_note,
+            "questions": [{"term": c.term, "excludes": c.negated, "question": c.question,
+                           "working_default_note": c.working_default_note,
                            "options": [{"label": o.label, "reachable": o.reachable, "only_with_this_choice": o.only_here,
                                         "working_default": o.working_default} for o in c.options]}
                           for c in r.clarifications],
             "no_data_for": r.unmapped_phrases,
+            "untrusted_text": ["no_data_for", "issues[].message may quote the request or the model"],
             "issues": [{"level": i.level, "code": i.code, "message": i.message} for i in r.issues],
             "changes": r.changes.model_dump() if r.changes else None,
             "review_url": f"{s.settings.public_url}/?review={r.request_id}",
@@ -134,7 +136,9 @@ def build_server(s: Services) -> MCPServer:
         if found is None:
             return {"error": f"No campaign history for {campaign_type!r}.",
                     "known_types": [t["id"] for t in s.history.types()] if s.history is not None else []}
-        return {k: v for k, v in found.items() if k != "per_campaign"} | {"recent_campaigns": found["per_campaign"][:5]}
+        recent = [c | {"name": f"approved audience #{c['audience_id']}"} if c.get("audience_id") else c
+                  for c in found["per_campaign"][:5]]  # names typed by approvers stay in the app
+        return {k: v for k, v in found.items() if k != "per_campaign"} | {"recent_campaigns": recent}
 
     @server.tool(annotations=_READS)
     def explain_term(name: str) -> dict[str, Any]:
@@ -152,7 +156,7 @@ def build_server(s: Services) -> MCPServer:
                     "decided_by": term.owner_pending}
         return out
 
-    @server.tool(annotations=_READS)
+    @server.tool(annotations=_DRAFTS)  # calls the model and records the advice: not a pure read
     def advise_audience(request_id: str, goal: str = "", campaign_type: str = "") -> dict[str, Any]:
         """The campaign advisor for a drafted audience: up to three proposals (narrow or exclude a segment,
         change channel or campaign type, or a point to consider), each checked against facts the system

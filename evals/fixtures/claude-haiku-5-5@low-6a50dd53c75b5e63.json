@@ -23,7 +23,7 @@
       "Channel left unspecified because the request names no channel."
     ]
   },
-  "latency_ms": 1813.7,
+  "latency_ms": 1704.1,
   "usage": {
     "input_tokens": 40,
     "output_tokens": 103,

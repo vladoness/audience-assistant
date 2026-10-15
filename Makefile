@@ -27,10 +27,11 @@ eval-refine:    ## refinement set (fixed starting audience + one change) against
 eval-advisor:   ## advisor set (known-truth synthetic history) against the live model, 3 runs
 	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases advisor --repeat 3
 
-record:         ## live dev, held-out and refine runs that also save replay fixtures for offline mode
+record:         ## live runs of all four eval sets that also save replay fixtures for offline mode
 	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --record
 	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases heldout --record
 	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases refine --record
+	uv run python -m evals.run --provider anthropic --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low) --cases advisor --record
 
 eval-replay:    ## reproduce run 1 of every eval set offline from recorded fixtures (no key)
 	uv run python -m evals.run --provider replay --model $(or $(MODEL),claude-sonnet-5-5) --effort $(or $(EFFORT),low)

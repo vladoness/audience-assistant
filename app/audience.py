@@ -159,6 +159,18 @@ class AudienceEngine:
             [salt, salt, *params]).fetchone()
         return {"contacted": contacted[:16], "held_out": held_out[:16]}
 
+    def without_consent(self, profile_ids: list[str], channel: str) -> set[str]:
+        """Of these lines, the ones that can no longer be contacted on the channel: consent withdrawn since,
+        or gone from the profile store. Checked at every hand-off, because membership is frozen at approval."""
+        if not profile_ids:
+            return set()
+        consent = f'"{self._catalog.channels[channel]}"'
+        rows = self._con.cursor().execute(  # one joined string: binding a long list parameter is ~200x slower
+            f"SELECT m.pid FROM (SELECT unnest(string_split(?, chr(31))) AS pid) m "
+            f"LEFT JOIN profiles p ON p.profile_id = m.pid WHERE p.profile_id IS NULL OR NOT coalesce(p.{consent}, false)",
+            ["\x1f".join(profile_ids)]).fetchall()
+        return {r[0] for r in rows}
+
     def profile_ids(self, definition: AudienceDefinition, reachable_only: bool = True) -> set[str]:
         """Exact membership, used by the evals to compare two definitions by the audience they produce."""
         where, params = self.compile(definition)

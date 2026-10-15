@@ -28,14 +28,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Including opted-out customers is written as a consent condition; the system will block it under MKT-15.",
+      "Including opted-out customers is written as a consent condition, which the system will block under policy MKT-15.",
       "Channel set to sms because the request mentions SMS marketing."
     ]
   },
-  "latency_ms": 1911.6,
+  "latency_ms": 1636.7,
   "usage": {
     "input_tokens": 57,
-    "output_tokens": 187,
+    "output_tokens": 189,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

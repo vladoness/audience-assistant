@@ -25,13 +25,13 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Lapsed prepaid is taken as the decided glossary definition (longer than the lapse window without a top-up), so line_type prepaid is also written as a condition for the prepaid qualifier."
+      "Lapsed prepaid is taken as the decided glossary definition (no top-up beyond the lapse window), so the line_type=prepaid condition is written explicitly alongside it."
     ]
   },
-  "latency_ms": 1493.6,
+  "latency_ms": 1908.9,
   "usage": {
     "input_tokens": 55,
-    "output_tokens": 179,
+    "output_tokens": 175,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

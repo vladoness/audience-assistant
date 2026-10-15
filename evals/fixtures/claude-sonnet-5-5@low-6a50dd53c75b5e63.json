@@ -20,13 +20,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Region Capital is matched to the home region attribute (where the line spends most nights)."
+      "\"High value\" is handled by the high_value glossary term, so no ARPU threshold is written here.",
+      "No channel was named, so the channel is left unspecified."
     ]
   },
-  "latency_ms": 1469.2,
+  "latency_ms": 2149.2,
   "usage": {
     "input_tokens": 40,
-    "output_tokens": 113,
+    "output_tokens": 137,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

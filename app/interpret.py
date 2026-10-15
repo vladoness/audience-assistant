@@ -21,7 +21,7 @@ import uuid
 from typing import Any
 
 from app.audience import AudienceEngine
-from app.catalog import Catalog
+from app.catalog import NOT, Catalog, parse_pending, pending_name
 from app.explain import explain
 from app.limits import DailyBudget
 from app.governance import canonical, reconcile_with_proposal, verify_provenance
@@ -145,10 +145,9 @@ class Interpreter:
 
         parent_proposed = AudienceDefinition(**json.loads(parent["definition_json"]))
         current, _ = validate_definition(current, self.catalog)
-        current, _ = reconcile_with_proposal(verify_provenance(current, self.catalog, self.store.advised_conditions()),
-                                              parent_proposed)
+        current, _ = reconcile_with_proposal(verify_provenance(current, self.catalog), parent_proposed)
         answered = answered_terms(current)
-        pending = [t for t in json.loads(parent["clarifications_json"]) if t not in answered]
+        pending = [t for t in json.loads(parent["clarifications_json"]) if parse_pending(t)[0] not in answered]
         carried_unmapped = json.loads(parent["unmapped_json"])
         # The model sees only conditions that validate: typed catalog values, so client text that failed
         # validation (or was never masked) can't reach the prompt. Invalid ones stay on screen, flagged.
@@ -207,26 +206,32 @@ class Interpreter:
         result.issues = plan.issues + result.issues
         return result
 
-    def check(self, definition: AudienceDefinition, pending_terms: list[str], resolutions: dict[str, str]) -> CheckResult:
+    def check(self, definition: AudienceDefinition, pending_terms: list[str], resolutions: dict[str, str],
+              advice_id: int | None = None) -> CheckResult:
         """Deterministic re-evaluation after the marketer edits conditions or answers a clarification."""
         conditions = list(definition.conditions)
         issues: list[Issue] = []
         still_pending = []
-        for term_name in pending_terms:
+        for name in pending_terms:
+            term_name, negated = parse_pending(name)
             term = self.catalog.terms.get(term_name)
             option_id = resolutions.get(term_name)
             option = term.option(option_id) if term and option_id else None
+            if option is not None and option.id.startswith(NOT) != negated:
+                option = None  # "not active" is only answered by an exclusion, "active" only by a definition
             if term is None:
                 issues.append(Issue(level="error", code="unknown_term", message=f"Unknown glossary term '{term_name}'."))
             elif option is None:
-                still_pending.append(term)
+                still_pending.append((term, negated))
             else:
                 conditions += [Condition(**c, source=f"glossary:{term.name}={option.id}") for c in option.conditions]
 
         validated, problems = validate_definition(definition.model_copy(update={"conditions": conditions}), self.catalog)
-        validated = verify_provenance(validated, self.catalog, self.store.advised_conditions())
+        validated = verify_provenance(validated, self.catalog, self.store.advised_conditions(advice_id))
         issues += problems
-        clarifications = [self._clarification(t) for t in still_pending]
+        clarifications: list[Clarification] = []
+        for term, negated in still_pending:
+            self._ask(term, negated, clarifications, issues)
         self._quantify(validated, clarifications, issues)
         status = "invalid" if any(i.level == "error" for i in issues) else ("needs_clarification" if clarifications else "ready")
         self.metrics.incr(f"check_{status}")
@@ -303,9 +308,11 @@ class Interpreter:
         sources) and open terms still waiting for an answer."""
         issues: list[Issue] = []
         conditions: list[Condition] = list(kept or [])
-        clarifications: list[Clarification] = [
-            self._clarification(self.catalog.terms[t]) for t in carried_pending or [] if t in self.catalog.terms
-        ]
+        clarifications: list[Clarification] = []
+        for name in carried_pending or []:
+            term_name, negated = parse_pending(name)
+            if term_name in self.catalog.terms:
+                self._ask(self.catalog.terms[term_name], negated, clarifications, issues)
 
         raw_conditions = proposal.get("conditions") or []
         if not isinstance(raw_conditions, list):
@@ -328,10 +335,16 @@ class Interpreter:
                     level="warning", code="ungrounded_term",
                     message=f"The assistant applied the governed term '{term.name.replace('_', ' ')}', but your request "
                             "doesn't use any of its phrases. Remove those conditions if that isn't what you meant."))
-            if term.status == "decided":
+            phrase = _phrase_in(request_text, term)
+            negated = phrase is not None and _negated(request_text, phrase)
+            if term.status != "decided":
+                self._ask(term, negated, clarifications, issues)
+            elif not negated:
                 conditions += [Condition(**c, source=f"glossary:{term.name}") for c in term.conditions]
+            elif term.option("not"):
+                conditions += [Condition(**c, source=f"glossary:{term.name}=not") for c in term.option("not").conditions]
             else:
-                clarifications.append(self._clarification(term))
+                issues.append(_cannot_exclude(term))
 
         self._check_unnamed_terms(request_text, proposal, conditions, clarifications, issues)
 
@@ -388,12 +401,13 @@ class Interpreter:
             if term.status == "decided" and {_condition_key(c) for c in term.conditions} <= model_keys:
                 continue  # the model wrote exactly the governed definition: same audience, nothing to flag
             if _negated(request_text, phrase):
-                # "not active": the options describe who IS active, so asking would select the opposite audience.
-                meaning = ("it has competing definitions" if term.status != "decided"
-                           else f"governed: {term.rule.rstrip('.')}")
-                issues.append(Issue(level="warning", code="negated_governed_term", message=(
-                    f'Your request says "not {phrase}" ({meaning}). Check that the conditions below exclude it '
-                    "the way you mean.")))
+                if term.status != "decided":
+                    # "not active": asked with the exclusion of each definition, never the definitions themselves.
+                    self._ask(term, True, clarifications, issues)
+                else:
+                    issues.append(Issue(level="warning", code="negated_governed_term", message=(
+                        f'Your request says "not {phrase}" (governed: {term.rule.rstrip(".")}). Check that the '
+                        "conditions below exclude it the way you mean.")))
                 continue
             if term.status != "decided":
                 clarifications.append(self._clarification(term))
@@ -409,13 +423,27 @@ class Interpreter:
                     f'Your request mentions "{phrase}", but its governed definition ({term.rule.rstrip(".")}) is not applied. '
                     "Add it if you meant it.")))
 
-    def _clarification(self, term) -> Clarification:
+    def _ask(self, term, negated: bool, clarifications: list[Clarification], issues: list[Issue]) -> None:
+        """Ask about an open term; for "not <term>", ask which definition to exclude."""
+        clarification = self._clarification(term, negated)
+        if clarification is None:
+            issues.append(_cannot_exclude(term))
+        else:
+            clarifications.append(clarification)
+
+    def _clarification(self, term, negated: bool = False) -> Clarification | None:
         default = term.working_default.get("option")
         note = (f"Working default, adopted by {term.working_default['adopted_by']}: {term.working_default['why']} "
                 f"The decision itself is with {term.owner_pending}.") if default else None
-        return Clarification(term=term.name, question=term.question, working_default_note=note,
-                             options=[ClarificationOption(id=o.id, label=o.label, working_default=o.id == default)
-                                      for o in term.options])
+        options = [term.option(f"{NOT}{o.id}") for o in term.options] if negated else list(term.options)
+        if any(o is None for o in options):
+            return None
+        question = (f'Your request excludes "{term.name.replace("_", " ")}" lines, and that term has competing '
+                    "definitions. Which lines should be left out?") if negated else term.question
+        chosen_default = f"{NOT}{default}" if negated and default else default
+        return Clarification(term=term.name, question=question, working_default_note=note, negated=negated,
+                             options=[ClarificationOption(id=o.id, label=o.label, working_default=o.id == chosen_default)
+                                      for o in options])
 
     def _quantify(self, definition: AudienceDefinition, clarifications: list[Clarification], issues: list[Issue]) -> None:
         """Show what each answer would do before it is chosen: reachable lines under each option, with the
@@ -428,7 +456,7 @@ class Interpreter:
                 term = self.catalog.terms[c.term]
                 alternatives = [definition.model_copy(update={"conditions": [
                     *definition.conditions, *(Condition(**x, source=f"glossary:{term.name}={o.id}") for x in o.conditions)]})
-                    for o in term.options]
+                    for o in (term.option(choice.id) for choice in c.options)]
                 for option, (reachable, only_here) in zip(c.options, self.engine.compare(alternatives)):
                     option.reachable, option.only_here = reachable, only_here
         except Exception:
@@ -452,7 +480,7 @@ class Interpreter:
             "proposal_json": json.dumps(proposal) if proposal is not None else None,
             "definition_json": result.definition.model_dump_json(),
             "unmapped_json": json.dumps(result.unmapped_phrases),
-            "clarifications_json": json.dumps([c.term for c in result.clarifications]),
+            "clarifications_json": json.dumps([pending_name(c.term, c.negated) for c in result.clarifications]),
             "issues_json": json.dumps([{"code": i.code, "attribute": i.attribute, "message": i.message}
                                        for i in result.issues]),
             "model": result.telemetry.model,
@@ -483,13 +511,25 @@ def _condition_key(c: dict[str, Any]) -> str:
     return json.dumps(canonical(c), sort_keys=True)
 
 
-_NEGATORS = r"(?:not|no|non|never|without|excluding|except|isn't|aren't|isnt|arent|no longer|sin|excepto)"
+_NEGATORS = (r"(?:not(?![ \t]+(?:only|just)\b)|no|non|never|without|excluding|except|stopped|\w+n't|dont|doesnt|"
+             r"didnt|isnt|arent|wasnt|werent|havent|hasnt|wont|cant|no longer|sin|excepto)")  # "not only X but Y" is X
+_CLAUSE_WORDS = r"(?:and|or|but|plus|y|o|pero)"
 
 
 def _negated(request_text: str, phrase: str) -> bool:
-    """Is the phrase negated within the two words before it ("not active", "no longer really active")?"""
-    pattern = rf"(?<!\w){_NEGATORS}(?:\W+\w+){{0,2}}?\W+{re.escape(phrase.lower())}(?!\w)"
-    return re.search(pattern, request_text.lower()) is not None
+    """Is the phrase negated within the two words before it, in the same clause? "not active", "don't use
+    the app" and "no longer really active" are; "no roaming, active lines" and "not prepaid and active"
+    are not (a comma or a conjunction ends the negation)."""
+    text = request_text.lower().replace("\u2019", "'")
+    pattern = (rf"(?<!\w){_NEGATORS}(?:[ \t]+(?!{_CLAUSE_WORDS}\b)[\w']+){{0,2}}?[ \t]+"
+               rf"{re.escape(phrase.lower())}(?!\w)")
+    return re.search(pattern, text) is not None
+
+
+def _cannot_exclude(term) -> Issue:
+    return Issue(level="error", code="negated_term_unsupported", message=(
+        f'Your request excludes "{term.name.replace("_", " ")}", but its definition can\'t be excluded with AND-only '
+        "conditions. Write the exclusion in the editor."))
 
 
 def _phrase_in(request_text: str, term) -> str | None:

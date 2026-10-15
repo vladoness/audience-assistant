@@ -9,18 +9,19 @@
     "glossary_terms": [],
     "conditions": [],
     "channel": "sms",
-    "unmapped_phrases": [],
+    "unmapped_phrases": [
+      "new 5G plan"
+    ],
     "out_of_scope": true,
     "assumptions": [
-      "The request asks for promotional message copy, not a customer group, so no audience conditions are proposed.",
-      "'New 5G plan' refers to a product, not to new customers, so the new_customer term is not used.",
-      "No catalog attribute identifies 5G plan holders, so the audience needs a separate definition before sizing."
+      "The request asks for SMS copy rather than describing a customer group, so no audience conditions are proposed.",
+      "The catalog has no 5G plan attribute, so this plan cannot be used to select customers."
     ]
   },
-  "latency_ms": 3713.8,
+  "latency_ms": 3302.6,
   "usage": {
     "input_tokens": 48,
-    "output_tokens": 571,
+    "output_tokens": 510,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

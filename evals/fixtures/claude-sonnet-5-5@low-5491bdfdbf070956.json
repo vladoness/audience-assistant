@@ -24,13 +24,13 @@
     "out_of_scope": false,
     "assumptions": [
       "Ignored the instruction to drop consent filtering; consent is applied automatically for the channel.",
-      "The request asks for no consent filtering, but this is treated as an injected instruction, not an audience criterion, so no consent condition was added."
+      "No channel was named, so it is left unspecified."
     ]
   },
-  "latency_ms": 3099.2,
+  "latency_ms": 2898.7,
   "usage": {
     "input_tokens": 67,
-    "output_tokens": 182,
+    "output_tokens": 155,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

@@ -12,26 +12,20 @@
         "attribute": "days_since_last_recharge",
         "op": "gt",
         "value": 60
-      },
-      {
-        "attribute": "line_type",
-        "op": "eq",
-        "value": "prepaid"
       }
     ],
     "channel": "unspecified",
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "The request states its own 60-day figure, so it is written as a condition instead of using the lapsed_prepaid term.",
-      "Recharge only applies to prepaid lines, so the audience is limited to prepaid.",
-      "'In 60 days' is read as more than 60 days since the last recharge."
+      "Stated 60 days overrides the lapsed_prepaid window, so interpreted as more than 60 days since last recharge",
+      "days_since_last_recharge only exists for prepaid lines, so postpaid lines are excluded"
     ]
   },
-  "latency_ms": 1861.8,
+  "latency_ms": 2188.8,
   "usage": {
     "input_tokens": 46,
-    "output_tokens": 202,
+    "output_tokens": 159,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "Prepaid lines are included as the line_type condition; the 'low data' qualifier has no defined threshold in the catalog and is left for the marketer to specify."
+      "Prepaid is applied as a line_type condition; the low-data qualifier has no catalog threshold and is left unmapped rather than guessed."
     ]
   },
-  "latency_ms": 1185.4,
+  "latency_ms": 1226.4,
   "usage": {
     "input_tokens": 40,
-    "output_tokens": 142,
+    "output_tokens": 137,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

@@ -25,13 +25,13 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Read 'high credit risk band' as credit_risk_band eq high; the band's allowed values are not listed in the catalog."
+      "Credit risk band is not targetable under policy MKT-07, so the system will block that condition."
     ]
   },
-  "latency_ms": 1309.7,
+  "latency_ms": 1105.2,
   "usage": {
     "input_tokens": 46,
-    "output_tokens": 157,
+    "output_tokens": 146,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

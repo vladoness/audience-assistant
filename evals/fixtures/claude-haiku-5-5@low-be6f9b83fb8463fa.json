@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "Top-up applies to prepaid recharge; days_since_last_recharge exists only for prepaid lines, so no recharge condition was written for postpaid lines."
+      "Top-up applies to prepaid recharges, so the 'haven't topped up' phrase is not expressible for postpaid lines and is left unmapped."
     ]
   },
-  "latency_ms": 1376.9,
+  "latency_ms": 1183.2,
   "usage": {
     "input_tokens": 50,
-    "output_tokens": 150,
+    "output_tokens": 147,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

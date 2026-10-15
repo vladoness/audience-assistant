@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "\"Low data users\" is vague and not a glossary term, so no data usage threshold was guessed; only the prepaid filter was applied."
+      "\"Low data users\" is vague and has no glossary term or stated threshold, so no data usage number was guessed."
     ]
   },
-  "latency_ms": 1694.9,
+  "latency_ms": 1723.4,
   "usage": {
     "input_tokens": 40,
-    "output_tokens": 135,
+    "output_tokens": 127,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

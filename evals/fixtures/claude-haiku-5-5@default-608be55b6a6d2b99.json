@@ -18,17 +18,18 @@
     ],
     "channel": "unspecified",
     "unmapped_phrases": [
-      "called the call centre twice"
+      "who called the call centre twice"
     ],
     "out_of_scope": false,
     "assumptions": [
-      "New customers uses the decided new_customer glossary definition (tenure below the new-customer window)."
+      "Treated 'premium plans' as plan_tier eq premium.",
+      "The catalog has no call-centre contact data, so the call-centre condition was left unmapped rather than approximated with general call counts."
     ]
   },
-  "latency_ms": 1982.1,
+  "latency_ms": 1986.9,
   "usage": {
     "input_tokens": 47,
-    "output_tokens": 328,
+    "output_tokens": 316,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

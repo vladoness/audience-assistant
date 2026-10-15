@@ -24,13 +24,13 @@
     "out_of_scope": false,
     "assumptions": [
       "iPhone maps to device_os ios, based on the handset most recently seen on the network.",
-      "Roaming means attached to a foreign network at least once in the last 30 days (roaming_30d true)."
+      "Roamed abroad in the last 30 days maps to roaming_30d true, which means attached to a foreign network at least once."
     ]
   },
-  "latency_ms": 5608.5,
+  "latency_ms": 1473.0,
   "usage": {
     "input_tokens": 50,
-    "output_tokens": 169,
+    "output_tokens": 175,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

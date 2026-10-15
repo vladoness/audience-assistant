@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "Age is not in the catalog, so the age condition was left out rather than approximated."
+      "Age is not in the catalog, so the age condition is left unmapped rather than guessed."
     ]
   },
-  "latency_ms": 1838.7,
+  "latency_ms": 1708.3,
   "usage": {
     "input_tokens": 43,
-    "output_tokens": 112,
+    "output_tokens": 115,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

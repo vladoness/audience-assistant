@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -59,13 +59,15 @@ CREATE TABLE IF NOT EXISTS audiences (
     governance_json TEXT NOT NULL,
     governance_versions TEXT NOT NULL,
     measurement_json TEXT NOT NULL,
-    client_json TEXT NOT NULL
+    client_json TEXT NOT NULL,
+    advice_id INTEGER REFERENCES advice(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS audiences_one_per_request ON audiences(request_id);
 CREATE TABLE IF NOT EXISTS audience_members (
     audience_id INTEGER NOT NULL REFERENCES audiences(id),
     profile_id TEXT NOT NULL,
     grp TEXT NOT NULL CHECK (grp IN ('contacted', 'held_out')),
+    excluded TEXT,  -- why the line was left out after approval (consent withdrawn, gone from the data)
     PRIMARY KEY (audience_id, profile_id)
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS outcomes (
@@ -84,7 +86,8 @@ CREATE TABLE IF NOT EXISTS outcomes (
     reports INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed')),
     confirmed_by TEXT,
-    confirmed_at TEXT
+    confirmed_at TEXT,
+    confirmer_json TEXT
 );
 CREATE TABLE IF NOT EXISTS advice (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,13 +171,13 @@ class AuditStore:
             cur = self._db.execute(
                 """INSERT INTO audiences (created_at, name, approver, request_id, definition_json, definition_hash,
                    edited_by_user, explanation, channel, matched, reachable, acknowledged_unmapped_json,
-                   governance_json, governance_versions, measurement_json, client_json)
+                   governance_json, governance_versions, measurement_json, client_json, advice_id)
                    VALUES (:created_at, :name, :approver, :request_id, :definition_json, :definition_hash,
                    :edited_by_user, :explanation, :channel, :matched, :reachable, :acknowledged_unmapped_json,
-                   :governance_json, :governance_versions, :measurement_json, :client_json)""",
-                {"created_at": _now(), "client_json": "{}", **row},
+                   :governance_json, :governance_versions, :measurement_json, :client_json, :advice_id)""",
+                {"created_at": _now(), "client_json": "{}", "advice_id": None, **row},
             )
-            self._db.executemany("INSERT INTO audience_members VALUES (?, ?, ?)",
+            self._db.executemany("INSERT INTO audience_members (audience_id, profile_id, grp) VALUES (?, ?, ?)",
                                  ((cur.lastrowid, pid, grp) for pid, grp in members))
             return cur.lastrowid
 
@@ -186,12 +189,24 @@ class AuditStore:
             return None
 
     def members(self, audience_id: int, group: str | None = None) -> list[tuple[str, str]]:
-        """The membership recorded at approval, optionally one group only."""
+        """The membership recorded at approval, minus lines left out since, optionally one group only."""
         with self._lock:
             rows = self._db.execute(
-                "SELECT profile_id, grp FROM audience_members WHERE audience_id = ? AND (? IS NULL OR grp = ?) "
-                "ORDER BY profile_id", (audience_id, group, group)).fetchall()
+                "SELECT profile_id, grp FROM audience_members WHERE audience_id = ? AND excluded IS NULL "
+                "AND (? IS NULL OR grp = ?) ORDER BY profile_id", (audience_id, group, group)).fetchall()
         return [(r[0], r[1]) for r in rows]
+
+    def exclude_members(self, audience_id: int, profile_ids: set[str], reason: str) -> None:
+        """Leave lines out of both groups from now on (both, so the comparison stays like for like)."""
+        with self._lock, self._db:
+            self._db.executemany(
+                "UPDATE audience_members SET excluded = ? WHERE audience_id = ? AND profile_id = ? AND excluded IS NULL",
+                ((reason, audience_id, pid) for pid in profile_ids))
+
+    def excluded_count(self, audience_id: int) -> int:
+        with self._lock:
+            return self._db.execute("SELECT count(*) FROM audience_members WHERE audience_id = ? AND excluded IS NOT NULL",
+                                    (audience_id,)).fetchone()[0]
 
     def report_outcome(self, row: dict[str, Any]) -> bool:
         """Store a reported outcome as pending. A new report replaces a pending one (a corrected file);
@@ -207,12 +222,12 @@ class AuditStore:
             )
             return cur.rowcount == 1
 
-    def confirm_outcome(self, audience_id: int, confirmed_by: str) -> bool:
+    def confirm_outcome(self, audience_id: int, confirmed_by: str, confirmer: dict[str, Any]) -> bool:
         """A person checked the reported numbers; only now does the outcome join the evidence."""
         with self._lock, self._db:
             cur = self._db.execute(
-                "UPDATE outcomes SET status = 'confirmed', confirmed_by = ?, confirmed_at = ? "
-                "WHERE audience_id = ? AND status = 'pending'", (confirmed_by, _now(), audience_id))
+                "UPDATE outcomes SET status = 'confirmed', confirmed_by = ?, confirmed_at = ?, confirmer_json = ? "
+                "WHERE audience_id = ? AND status = 'pending'", (confirmed_by, _now(), json.dumps(confirmer), audience_id))
             return cur.rowcount == 1
 
     def record_advice(self, row: dict[str, Any]) -> int:
@@ -225,14 +240,16 @@ class AuditStore:
                 {"created_at": _now(), **row})
             return cur.lastrowid
 
-    def advised_conditions(self, limit: int = 500) -> list[dict[str, Any]]:
-        """Conditions that recent accepted advice actually proposed: the only ones that may keep the
-        "advisor" label when a client sends them back."""
+    def advised_conditions(self, advice_id: int | None) -> list[dict[str, Any]]:
+        """Conditions that one recorded advice response actually proposed: the only ones that may keep the
+        "advisor" label when a client sends them back with that advice id."""
+        if advice_id is None:
+            return []
         with self._lock:
-            rows = self._db.execute("SELECT accepted_json FROM advice ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-        return [c for r in rows for p in json.loads(r[0])
-                for c in (p.get("consequence", {}).get("definition") or {}).get("conditions", [])
-                if c.get("source") == "advisor"]
+            row = self._db.execute("SELECT accepted_json FROM advice WHERE id = ?", (advice_id,)).fetchone()
+        return [] if row is None else [
+            c for p in json.loads(row[0]) for c in (p.get("consequence", {}).get("definition") or {}).get("conditions", [])
+            if c.get("source") == "advisor"]
 
     def outcomes(self, campaign_type: str | None = None, include_pending: bool = False,
                  audience_id: int | None = None) -> list[dict[str, Any]]:

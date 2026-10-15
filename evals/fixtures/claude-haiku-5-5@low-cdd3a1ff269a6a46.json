@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "'Long tenure' is vague and no threshold is stated, so it was not converted to a number; the marketer should specify a months threshold for tenure_months."
+      "Phrase 'long tenure' has no numeric threshold in the request or catalog, so it was not converted to a tenure_months value."
     ]
   },
-  "latency_ms": 1908.4,
+  "latency_ms": 1418.9,
   "usage": {
     "input_tokens": 46,
-    "output_tokens": 136,
+    "output_tokens": 130,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

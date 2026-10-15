@@ -14,7 +14,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Any
 
-from app.catalog import Catalog
+from app.catalog import Catalog, parse_pending
 from app.store import AuditStore
 
 
@@ -33,7 +33,7 @@ def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
                 policy = re.search(r"policy (\S+)", issue["message"])
                 blocked[(issue["attribute"], policy.group(1) if policy else "?")] += 1
         carried_unmapped = set(json.loads(s["parent_unmapped_json"] or "[]"))
-        carried_terms = set(json.loads(s["parent_clarifications_json"] or "[]"))
+        carried_terms = {parse_pending(t)[0] for t in json.loads(s["parent_clarifications_json"] or "[]")}
         for phrase in json.loads(s["unmapped_json"]):
             if phrase in carried_unmapped:
                 continue
@@ -41,7 +41,7 @@ def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
             demand[key] += 1
             example.setdefault(key, s["request_text"])
             last_seen.setdefault(key, s["created_at"])
-        asked.update(t for t in json.loads(s["clarifications_json"]) if t not in carried_terms)
+        asked.update(t for t in (parse_pending(n)[0] for n in json.loads(s["clarifications_json"])) if t not in carried_terms)
 
     chosen: dict[str, Counter[str]] = defaultdict(Counter)
     edited_fields: Counter[str] = Counter()

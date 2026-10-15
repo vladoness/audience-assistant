@@ -21,13 +21,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "app_user uses app_active_30d, which is not usable for email campaigns (policy MKT-12); the system will block or flag it when the term is expanded."
+      "app_user uses the self-care app attribute, which is not usable for email campaigns (policy MKT-12), so the system will block this part and show the policy.",
+      "Postpaid is read as line_type eq postpaid."
     ]
   },
-  "latency_ms": 1213.9,
+  "latency_ms": 1377.2,
   "usage": {
     "input_tokens": 46,
-    "output_tokens": 139,
+    "output_tokens": 157,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

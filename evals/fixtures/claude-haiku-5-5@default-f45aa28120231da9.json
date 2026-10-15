@@ -23,13 +23,13 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Postpaid lines in the North region, counted per mobile line, with no other filters applied"
+      "Postpaid lines in the North region, regardless of billing status (current, overdue or suspended)."
     ]
   },
-  "latency_ms": 1613.1,
+  "latency_ms": 1514.5,
   "usage": {
     "input_tokens": 42,
-    "output_tokens": 135,
+    "output_tokens": 138,
     "cache_read_tokens": 0,
     "cache_write_tokens": 3026
   }

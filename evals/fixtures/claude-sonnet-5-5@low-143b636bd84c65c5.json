@@ -19,7 +19,7 @@
     "out_of_scope": false,
     "assumptions": []
   },
-  "latency_ms": 1601.4,
+  "latency_ms": 1469.9,
   "usage": {
     "input_tokens": 46,
     "output_tokens": 83,

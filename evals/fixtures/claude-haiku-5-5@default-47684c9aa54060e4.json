@@ -25,14 +25,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "\"Costa\" is mapped to the region value Coast.",
-      "\"Clientes\" is read as mobile lines, since the store counts one row per line."
+      "\"Costa\" is interpreted as the Coast region.",
+      "\"usan la app\" is treated as the decided app_user term (self-care app opened in the last 30 days)."
     ]
   },
-  "latency_ms": 2319.9,
+  "latency_ms": 1992.7,
   "usage": {
     "input_tokens": 49,
-    "output_tokens": 378,
+    "output_tokens": 326,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

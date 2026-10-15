@@ -23,14 +23,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Read 'spending more than 60 dollars a month' as arpu_3m greater than 60 USD, the average monthly revenue per line over the last three months.",
-      "Read 'in the North' as region equal to North (home region)."
+      "Spending is mapped to arpu_3m, the average monthly revenue per line over the last three billing months.",
+      "The stated 60 USD/month threshold is used instead of the high_value glossary term."
     ]
   },
-  "latency_ms": 2508.3,
+  "latency_ms": 2223.5,
   "usage": {
     "input_tokens": 49,
-    "output_tokens": 399,
+    "output_tokens": 380,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

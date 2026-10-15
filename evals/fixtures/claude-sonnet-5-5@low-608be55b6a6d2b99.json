@@ -23,10 +23,10 @@
     "out_of_scope": false,
     "assumptions": [
       "\"New customers\" is handled by the new_customer glossary term, so no tenure condition was written.",
-      "Call centre contact history is not in the catalog, so that part is left out of the audience."
+      "Call centre contact data is not in the catalog, so that part of the request is not applied."
     ]
   },
-  "latency_ms": 1818.5,
+  "latency_ms": 2878.4,
   "usage": {
     "input_tokens": 47,
     "output_tokens": 157,

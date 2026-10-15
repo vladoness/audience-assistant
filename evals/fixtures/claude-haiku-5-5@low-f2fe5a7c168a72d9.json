@@ -20,14 +20,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "'Don't use the app' interpreted as app_active_30d equal to false (no self-care app open in the last 30 days), not the app_user glossary term.",
-      "Channel left unspecified; app_active_30d is not usable for email campaigns, so an email channel would be blocked."
+      "'Don't use the app' is read as not opened the self-care app in the last 30 days (app_active_30d false), which is the app_user concept negated; app_user is not used as a term because the request is a negation.",
+      "Channel left unspecified because the request names no channel; note app_active_30d cannot be used for email campaigns (policy MKT-12)."
     ]
   },
-  "latency_ms": 2016.5,
+  "latency_ms": 2051.0,
   "usage": {
     "input_tokens": 43,
-    "output_tokens": 178,
+    "output_tokens": 200,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

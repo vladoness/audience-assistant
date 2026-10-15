@@ -21,13 +21,13 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "App users is a glossary term that relies on app_active_30d, which is not usable for email campaigns under policy MKT-12, so the system will block or flag it for this email audience."
+      "App users is a glossary term that uses app_active_30d, which is not usable for email campaigns (policy MKT-12), so the system will block this part for the email channel."
     ]
   },
-  "latency_ms": 1696.3,
+  "latency_ms": 1189.3,
   "usage": {
     "input_tokens": 46,
-    "output_tokens": 145,
+    "output_tokens": 142,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

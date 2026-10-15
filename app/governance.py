@@ -18,7 +18,8 @@ from app.models import AudienceDefinition, Condition
 def verify_provenance(definition: AudienceDefinition, catalog: Catalog,
                       advised: list[dict[str, Any]] = ()) -> AudienceDefinition:
     """Keep a "glossary:" source only when the condition is exactly that term's (or option's) current
-    definition, and an "advisor" source only when recorded advice proposed exactly that condition.
+    definition, and an "advisor" source only when the advice response the client names proposed exactly
+    that condition.
     Anything else is relabelled "user", so a client can't make an edit look governed or advised."""
     advised_keys = [canonical(a) for a in advised]
     out = []
@@ -78,11 +79,13 @@ def snapshot(definition: AudienceDefinition, catalog: Catalog) -> dict[str, Any]
         term = catalog.terms.get(term_name)
         entry = snap.setdefault(term_name, {"conditions": []})
         entry["conditions"].append(canonical(c.model_dump()))
-        if option:
+        if option and option != "not":
             entry["option"] = option
         elif term is not None:
             entry["decision"] = term.decision.get("id")
             entry["parameters"] = {s: catalog.parameter_sets[s].version for s in term.parameter_sets}
+            if option == "not":
+                entry["negated"] = True  # "not high value": the exclusion of the decided definition
     return snap
 
 
@@ -103,7 +106,8 @@ def impact(snap: dict[str, Any], catalog: Catalog) -> list[str]:
             for set_name, old in entry.get("parameters", {}).items()
             if set_name in catalog.parameter_sets and catalog.parameter_sets[set_name].version != old
         ]
-        current = sorted(json.dumps(canonical(c), sort_keys=True) for c in term.conditions)
+        governed = (term.option("not").conditions if term.option("not") else ()) if entry.get("negated") else term.conditions
+        current = sorted(json.dumps(canonical(c), sort_keys=True) for c in governed)
         stored = sorted(json.dumps(c, sort_keys=True) for c in entry["conditions"])
         if version_changes:
             changes.append(f"{term_name}: parameters {', '.join(version_changes)}")
@@ -118,12 +122,14 @@ def reexpand(definition: AudienceDefinition, catalog: Catalog) -> AudienceDefini
     replaced: set[str] = set()
     for c in definition.conditions:
         term_name, _, option = c.source.removeprefix("glossary:").partition("=")
-        term = catalog.terms.get(term_name) if c.source.startswith("glossary:") and not option else None
-        if term is None or term.status != "decided":
+        term = catalog.terms.get(term_name) if c.source.startswith("glossary:") and option in ("", "not") else None
+        governed = None if term is None or term.status != "decided" else (
+            term.option("not").conditions if option == "not" and term.option("not") else None if option else term.conditions)
+        if governed is None:
             kept.append(c)
         elif term_name not in replaced:
             replaced.add(term_name)
-            kept += [Condition(**tc, source=f"glossary:{term_name}") for tc in term.conditions]
+            kept += [Condition(**tc, source=c.source) for tc in governed]
     return definition.model_copy(update={"conditions": kept})
 
 

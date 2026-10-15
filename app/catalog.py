@@ -67,6 +67,27 @@ class TermOption:
     conditions: tuple[dict[str, Any], ...]
 
 
+NOT = "not:"  # prefix for a negated term ("not:active" pending) or option ("not:active_usage"; "not" for a decided term)
+_INVERSE = {"eq": "neq", "neq": "eq", "gte": "lt", "lt": "gte", "gt": "lte", "lte": "gt", "in": "not_in", "not_in": "in"}
+
+
+def pending_name(term: str, negated: bool) -> str:
+    return f"{NOT}{term}" if negated else term
+
+
+def parse_pending(name: str) -> tuple[str, bool]:
+    """A pending term as recorded: its name, and whether the request negated it."""
+    return (name.removeprefix(NOT), True) if name.startswith(NOT) else (name, False)
+
+
+def invert(conditions: tuple[dict[str, Any], ...]) -> tuple[dict[str, Any], ...] | None:
+    """The exclusion of a one-condition definition; None when it would need OR (the editor is AND-only)."""
+    if len(conditions) != 1 or conditions[0]["op"] not in _INVERSE:
+        return None
+    c = conditions[0]
+    return ({**c, "op": _INVERSE[c["op"]]},)
+
+
 @dataclass(frozen=True)
 class Term:
     name: str
@@ -82,6 +103,15 @@ class Term:
     working_default: dict[str, str] = field(default_factory=dict)  # option, adopted_by, why: until the owner decides
 
     def option(self, option_id: str) -> TermOption | None:
+        """An answer to this term. "not:<option>" is the exclusion of an option, and "not" the exclusion of a
+        decided term's definition, for requests like "not active"; None if it can't be expressed."""
+        if option_id == "not" and self.status == "decided":
+            inverted = invert(self.conditions)
+            return TermOption("not", f"Not {self.name.replace('_', ' ')}", inverted) if inverted else None
+        if option_id.startswith(NOT):
+            base = next((o for o in self.options if o.id == option_id.removeprefix(NOT)), None)
+            inverted = invert(base.conditions) if base else None
+            return TermOption(option_id, f"Not: {base.label[0].lower()}{base.label[1:]}", inverted) if inverted else None
         return next((o for o in self.options if o.id == option_id), None)
 
 

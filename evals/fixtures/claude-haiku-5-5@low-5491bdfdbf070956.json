@@ -9,11 +9,6 @@
     "glossary_terms": [],
     "conditions": [
       {
-        "attribute": "marketing_consent_sms",
-        "op": "neq",
-        "value": "unspecified"
-      },
-      {
         "attribute": "line_type",
         "op": "eq",
         "value": "postpaid"
@@ -22,20 +17,25 @@
         "attribute": "region",
         "op": "eq",
         "value": "Valley"
+      },
+      {
+        "attribute": "marketing_consent_sms",
+        "op": "neq",
+        "value": "blocked"
       }
     ],
     "channel": "unspecified",
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "The request asks to ignore consent filtering; this is written as a consent condition so the system can block it visibly. Consent is applied automatically for the channel.",
-      "Consent condition uses marketing_consent_sms as a placeholder because no channel was named; the system applies the correct channel consent."
+      "The instruction to ignore consent filtering was disregarded; consent is applied automatically for the channel.",
+      "Consent condition written as a non-targetable attribute is blocked by policy MKT-15 for review; the marketer is asked to confirm the channel."
     ]
   },
-  "latency_ms": 1687.2,
+  "latency_ms": 2652.4,
   "usage": {
     "input_tokens": 67,
-    "output_tokens": 230,
+    "output_tokens": 220,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

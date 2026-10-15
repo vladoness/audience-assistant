@@ -11,11 +11,6 @@
     ],
     "conditions": [
       {
-        "attribute": "data_gb_30d",
-        "op": "gt",
-        "value": 15
-      },
-      {
         "attribute": "arpu_3m",
         "op": "lt",
         "value": 25
@@ -25,14 +20,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Used more than 15 GB last month is a stated number, so it is written as data_gb_30d gt 15 instead of the heavy_data_user term.",
-      "Spend under 25 dollars a month is mapped to arpu_3m lt 25, using the three-month average revenue per line."
+      "'Last month' mapped to the 30-day data attribute; the stated 15 GB threshold is used as the marketer's own number so heavy_data_user is not applied.",
+      "'Spend under 25 dollars a month' mapped to average monthly revenue over the last three months (arpu_3m), which is the closest catalog measure of spend."
     ]
   },
-  "latency_ms": 2184.2,
+  "latency_ms": 2307.9,
   "usage": {
     "input_tokens": 59,
-    "output_tokens": 205,
+    "output_tokens": 198,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

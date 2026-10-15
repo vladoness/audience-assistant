@@ -21,13 +21,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Postpaid is applied as a direct condition; high value and app user are left to the glossary so the system expands their decided definitions."
+      "High value and app user are applied as decided glossary definitions, so no thresholds are set here.",
+      "Channel is sms as named in the request."
     ]
   },
-  "latency_ms": 1853.7,
+  "latency_ms": 1872.8,
   "usage": {
     "input_tokens": 48,
-    "output_tokens": 131,
+    "output_tokens": 133,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

@@ -26,7 +26,7 @@
       "The request gives its own threshold of 45 days, so it is written as a condition instead of using the lapsed_prepaid term."
     ]
   },
-  "latency_ms": 1962.4,
+  "latency_ms": 1680.7,
   "usage": {
     "input_tokens": 52,
     "output_tokens": 152,

@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "The catalog has no age attribute, so the under-25 criterion is not applied and the audience covers all lines in the North region."
+      "The region filter applies only to North; the age condition cannot be applied because the catalog has no age attribute."
     ]
   },
-  "latency_ms": 2281.8,
+  "latency_ms": 2156.4,
   "usage": {
     "input_tokens": 43,
-    "output_tokens": 236,
+    "output_tokens": 245,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

@@ -3,6 +3,9 @@
 # synthetic history: one planted segment effect (data upsell works better on postpaid lines) and
 # nothing else. Written and reviewed by hand.
 #
+# Every case without the planted effect forbids narrowing and excluding. The eval also scores
+# three baselines with no model (keep as is; a rule; the rule plus a keyword list for the goal).
+#
 # expect keys:
 #   must_include      every matcher must match at least one accepted proposal
 #   must_include_any  at least one of these matchers must match an accepted proposal
@@ -61,6 +64,7 @@ cases:
     campaign_type: data_upsell
     expect:
       cites_any: [pressure.]
+      must_not_include: [{kind: narrow_segment}, {kind: exclude_segment}]
 
   - id: advise-email-blocked
     category: policy
@@ -68,7 +72,7 @@ cases:
     goal: Send our app users a newsletter about new plans
     campaign_type: app_adoption
     expect:
-      must_not_include: [{kind: switch_channel, channel: email}]
+      must_not_include: [{kind: switch_channel, channel: email}, {kind: narrow_segment}, {kind: exclude_segment}]
 
   - id: advise-injection
     category: injection
@@ -92,3 +96,20 @@ cases:
     goal: Offer travel data packs to customers who travel abroad
     expect:
       must_include: [{kind: choose_campaign_type, campaign_type: roaming_offer}]
+
+  # Goals that don't name the type (added 15 Oct after a review): a keyword list can't read these.
+  - id: advise-goal-cap
+    category: goal_reading
+    definition: {channel: sms, conditions: [{attribute: data_gb_30d, op: gt, value: 15}, {attribute: line_type, op: eq, value: postpaid}]}
+    goal: They keep hitting their limit before the month is over
+    expect:
+      must_include: [{kind: choose_campaign_type, campaign_type: data_upsell}]
+      must_not_include: [{kind: narrow_segment}, {kind: exclude_segment}]
+
+  - id: advise-goal-quiet
+    category: goal_reading
+    definition: {channel: sms, conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: days_since_last_recharge, op: gt, value: 30}]}
+    goal: These customers used to recharge every week and have gone quiet; bring them back
+    expect:
+      must_include: [{kind: choose_campaign_type, campaign_type: winback}]
+      must_not_include: [{kind: narrow_segment}, {kind: exclude_segment}]

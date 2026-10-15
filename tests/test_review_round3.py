@@ -57,15 +57,61 @@ def test_an_open_term_the_model_did_not_name_is_still_asked(make_client):
     assert "unflagged_open_term" in {i["code"] for i in r["issues"]}
 
 
-@pytest.mark.parametrize("request_text", ["Prepaid customers who are not active", "Prepaid lines no longer active",
-                                          "Prepaid customers who are not high value"])
-def test_a_negated_governed_phrase_never_forces_the_opposite_audience(make_client, request_text):
-    silent = proposal(conditions=[{"attribute": "line_type", "op": "eq", "value": "prepaid"},
-                                  {"attribute": "usage_events_30d", "op": "eq", "value": 0}])
-    client = make_client(ScriptedProvider(silent))
+PREPAID_ONLY = [{"attribute": "line_type", "op": "eq", "value": "prepaid"}]
+
+
+@pytest.mark.parametrize("terms", [[], ["active"]])  # the model didn't flag the term, or named it
+@pytest.mark.parametrize("request_text", ["Prepaid customers who are not active", "Prepaid lines no longer active"])
+def test_not_active_is_asked_as_an_exclusion_never_as_active(make_client, request_text, terms):
+    client = make_client(ScriptedProvider(proposal(conditions=PREPAID_ONLY, terms=terms)))
     r = client.post("/api/interpret", json={"request": request_text}).json()
-    assert r["status"] == "ready" and not r["clarifications"]
-    assert "negated_governed_term" in {i["code"] for i in r["issues"]}
+    (c,) = r["clarifications"]
+    assert r["status"] == "needs_clarification" and c["term"] == "active" and c["negated"]
+    assert all(o["id"].startswith("not:") and o["label"].startswith("Not:") for o in c["options"])
+    assert sum(o["reachable"] for o in c["options"]) > 0
+
+    wrong = client.post("/api/check", json={"definition": r["definition"], "pending_terms": ["not:active"],
+                                            "resolutions": {"active": "active_usage"}}).json()
+    assert wrong["status"] == "needs_clarification"  # a definition can't answer "not active"
+    right = client.post("/api/check", json={"definition": r["definition"], "pending_terms": ["not:active"],
+                                            "resolutions": {"active": "not:active_usage"}}).json()
+    assert right["status"] == "ready"
+    assert {"attribute": "usage_events_30d", "op": "lt", "value": 1, "source": "glossary:active=not:active_usage"} in \
+        right["definition"]["conditions"]
+
+    forged = [*PREPAID_ONLY, {"attribute": "usage_events_30d", "op": "gte", "value": 1, "source": "glossary:active=active_usage"}]
+    assert approve(client, r, definition={"channel": "sms", "conditions": forged}).status_code == 422
+    assert approve(client, r, definition=right["definition"]).status_code == 200
+
+
+@pytest.mark.parametrize("text, phrase, negated", [
+    ("Prepaid customers who are not active", "active", True), ("customers who haven't been active", "active", True),
+    ("Customers who don't use the app", "use the app", True), ("customers who stopped using the app", "using the app", True),
+    ("non active lines", "active", True), ("Prepaid, no roaming, active lines", "active", False),
+    ("no complaints, active on Android", "active", False), ("not only active but high spenders", "active", False),
+    ("not prepaid and active", "active", False), ("customers who want active plans", "active", False)])
+def test_what_counts_as_a_negation(text, phrase, negated):
+    from app.interpret import _negated
+    assert _negated(text, phrase) is negated
+
+
+def test_a_comma_or_conjunction_ends_the_negation(make_client):
+    client = make_client(ScriptedProvider(proposal(conditions=PREPAID_ONLY), proposal(conditions=PREPAID_ONLY)))
+    for request_text in ["Prepaid, no roaming, active lines", "Prepaid lines not roaming and active"]:
+        r = client.post("/api/interpret", json={"request": request_text}).json()
+        assert r["status"] == "needs_clarification" and not r["clarifications"][0]["negated"], request_text
+
+
+def test_a_negated_decided_term_is_its_exclusion_or_a_warning(make_client):
+    named = proposal(conditions=PREPAID_ONLY, terms=["high_value"])
+    silent = proposal(conditions=[{"attribute": "app_active_30d", "op": "eq", "value": False}])
+    client = make_client(ScriptedProvider(named, silent))
+    r = client.post("/api/interpret", json={"request": "Prepaid customers who are not high value"}).json()
+    assert {"attribute": "arpu_3m", "op": "lt", "value": 40.0, "source": "glossary:high_value=not"} in \
+        r["definition"]["conditions"]
+    r = client.post("/api/interpret", json={"request": "Customers who don't use the app"}).json()
+    codes = {i["code"] for i in r["issues"]}
+    assert "negated_governed_term" in codes and "governed_term_missed" not in codes
 
 
 def test_whole_words_only(make_client):

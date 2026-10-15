@@ -69,6 +69,7 @@ class Clarification(BaseModel):
     question: str
     options: list[ClarificationOption]
     working_default_note: str | None = None  # who adopted the interim default and why, until the owner decides
+    negated: bool = False  # the request excludes the term ("not active"): every option is an exclusion
 
 
 class Explanation(BaseModel):
@@ -185,6 +186,7 @@ class CheckRequest(BaseModel):
     definition: AudienceDefinition
     pending_terms: list[str] = Field(default_factory=list)
     resolutions: dict[str, str] = Field(default_factory=dict)
+    advice_id: int | None = None  # the advice an "advisor" condition came from; without it the label isn't kept
 
 
 class CheckResult(BaseModel):
@@ -204,3 +206,4 @@ class ApproveRequest(BaseModel):
     campaign_type: str | None = None  # links the decision to past campaigns of the same type (evidence)
     definition: AudienceDefinition
     acknowledged_unmapped: bool = False
+    advice_id: int | None = None

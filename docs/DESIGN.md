@@ -53,6 +53,18 @@ a warning saying the model's own condition replaced the governed definition, or 
 definition is missing. So guessing an open term is prevented by code; drifting a decided one is
 flagged, not prevented, because a marketer's own number legitimately replaces it.
 
+*Negation.* "Not active" is the case where asking the usual question is worse than not asking:
+every option describes who *is* active, so any answer selects the opposite audience. My first fix
+turned a negated phrase into a warning. A reviewer showed that this opened a hole: in "no roaming,
+active lines" the "no" was read as negating "active", so the question was skipped. Now:
+- A negated open term is asked as an exclusion ("Not: used the network…", option ids
+  `not:<option>`), and only an exclusion answers it, at check and at approval.
+- A negated decided term that the model named applies the exclusion of the governed definition
+  (`glossary:high_value=not`). It is still governed, so a threshold change reaches it.
+- A negation spans at most two words and stops at a comma or a conjunction.
+- A definition with more than one condition can't be excluded in AND-only logic, so it is an
+  error that sends the marketer to the editor, never a guess.
+
 **3. Nothing is dropped silently by the system; a model omission is surfaced, not prevented.**
 The most dangerous model behaviour here is quietly ignoring the part it can't do: "premium
 customers who called the call centre" becomes "premium customers". The schema has an
@@ -322,16 +334,21 @@ connects them.
 1. **Approval stores the membership.** Every line with its group goes into `audience_members` in
    the same transaction as the approval. The export reads that list, not a re-run of the
    definition, so a data refresh can't change who gets the campaign or who is counted. A digest
-   check against today's data is shown for information. The default export holds only the lines
-   to contact; the holdout is a separate download.
+   check against today's data is shown for information. Consent is the exception: freezing it
+   would send to people who opted out after approval (a reviewer showed exactly that). So at every
+   export and outcome count, lines without consent for the channel today are left out of both
+   groups, with the reason stored. The default export holds only the lines to contact; the
+   holdout is a separate download.
 2. **A report must be plausible to be stored.** `POST /api/audiences/{id}/outcome` needs the
    shared `OUTCOME_TOKEN`. `record_outcome` rejects a send date outside approval-to-today, a
    report inside the measurement window, a file where most responders aren't in the audience, and
    a response rate above the governed maximum. It counts responders inside each stored group; ids
    outside the audience are reported, never attributed.
 3. **Stored as pending; learned from after a person confirms.** A corrected file replaces a
-   pending report. `POST .../outcome/confirm` (named, like the approver) makes it evidence, and a
-   confirmed outcome can't be overwritten. The first version kept the first report and refused
+   pending report. `POST .../outcome/confirm` makes it evidence, and a confirmed outcome can't be
+   overwritten. The confirmer must not be the approver: the person whose decision is judged
+   doesn't sign off its result. Without SSO that is separation of duties by record (names and
+   clients are stored), not by credential. The first version kept the first report and refused
    the rest, so a wrong or hostile first report would have become permanent evidence.
 4. **It is measured with the same code as the history,** and compared with the evidence recorded
    at approval.
@@ -403,27 +420,35 @@ improvements. The design keeps the rule of decision 1 (the model proposes, code 
 - **Withheld proposals are shown**, with the reason. They are evidence of what the checks are
   for, and a signal if the prompt needs work.
 - **Every advice response is recorded** (`advice` table: masked goal, facts, raw proposals,
-  what was accepted and withheld). A condition keeps the "advisor" label only if recorded advice
-  proposed exactly that condition; a client can't make its own edit look advised.
+  what was accepted and withheld). A condition keeps the "advisor" label only if the advice
+  response the client names (`advice_id`) proposed exactly that condition, and the approval
+  stores the id. My first version accepted a match against any recent advice, so a reviewer could
+  label an unrelated edit "advisor".
 
 *How it is evaluated.* The synthetic history has exactly one planted segment effect (data upsells
 work better on postpaid lines). That makes a known truth to score against: the advisor should
 propose narrowing where the effect exists, not where it doesn't, note weak campaign types and
 contact pressure, never propose a blocked channel or field, not follow the instruction injected
-through one goal, and, with no campaign type chosen, suggest the type the goal describes
-(`evals/advisor.yaml`). Separately, the tests check that the segment analysis itself flags the
+through one goal, and, with no campaign type chosen, suggest the type the goal describes, even
+when the goal doesn't name it (`evals/advisor.yaml`, 12 cases). Separately, the tests check that the segment analysis itself flags the
 planted effect and nothing else.
 
 The eval also reports what it can't otherwise show:
 - **The raw score**, as if the checks didn't exist: how often the model alone would have misled.
-- **Two baselines with no model.** One always says "keep the audience as it is". The other is
-  twenty lines of rules: narrow on every clearly-better segment, mention recent contact, and pick
-  the best-measured type on the channel.
+- **Three baselines with no model:**
+  - one always says "keep the audience as it is";
+  - one is twenty lines of rules: narrow on every clearly-better segment, mention recent contact,
+    and pick the best-measured type on the channel;
+  - one is the same rules plus a keyword list for the goal.
+- **A 95% interval over cases,** because twelve cases can't carry a precise number.
 
-On the structured cases, the rule baseline does about as well as the model, and the README says
-so. The cases test that nothing misleading reaches the marketer more than that the model finds
-more than rules would. What the model adds is reading the goal (the two goal cases, where the
-rule picks the wrong type) and explaining in the marketer's terms, and only the first is scored.
+Results (README trade-offs): keep 42%, rule 75%, keyword rule 83%, Sonnet 92%. On the structured
+cases the rules do as well as the model: those cases test that nothing misleading reaches the
+marketer, not that the model finds more than rules would. The model's measurable edge is reading
+a goal that doesn't name the type. It fails where the goal's words point the wrong way, the same
+trap as the keyword rule. Explaining in the marketer's terms isn't scored. The checks withheld
+nothing from Sonnet in the latest run, so on this set they are insurance; the tests show what
+they stop.
 
 *Rejected: letting the model compute the impact itself.* It would read well and be wrong in ways
 no one would notice. The model's job is to notice and explain; arithmetic and policy are code's.

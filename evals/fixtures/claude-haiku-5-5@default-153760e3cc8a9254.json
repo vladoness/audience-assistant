@@ -19,12 +19,15 @@
     "channel": "unspecified",
     "unmapped_phrases": [],
     "out_of_scope": false,
-    "assumptions": []
+    "assumptions": [
+      "'high credit risk band' maps to credit_risk_band, which is NOT TARGETABLE under policy MKT-07, so it is not written as a condition and no value is assumed.",
+      "Per the catalog, the attribute is not targetable and needs a condition for the system to block it visibly; this may still require the marketer's clarification on the intended credit band value."
+    ]
   },
-  "latency_ms": 990.6,
+  "latency_ms": 1561.1,
   "usage": {
     "input_tokens": 46,
-    "output_tokens": 90,
+    "output_tokens": 201,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

@@ -23,13 +23,13 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Stated threshold of more than 45 days without a top-up used directly instead of the lapsed_prepaid glossary term."
+      "Stated threshold of 45 days without a top-up used directly instead of the lapsed_prepaid glossary term, since the request gives its own number."
     ]
   },
-  "latency_ms": 2323.5,
+  "latency_ms": 1340.7,
   "usage": {
     "input_tokens": 52,
-    "output_tokens": 152,
+    "output_tokens": 159,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

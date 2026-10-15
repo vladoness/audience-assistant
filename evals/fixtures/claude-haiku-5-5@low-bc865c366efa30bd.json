@@ -23,14 +23,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "'Last month' mapped to the last-30-day data attribute (data_gb_30d).",
-      "'Spend under 25 dollars a month' mapped to average monthly revenue over three months (arpu_3m) as the closest spend measure."
+      "'Last month' mapped to the last-30-day data attribute as the closest available window.",
+      "'Spend under 25 dollars a month' mapped to average monthly revenue over the last three months (arpu_3m) as the closest available spend measure."
     ]
   },
-  "latency_ms": 1535.9,
+  "latency_ms": 1807.5,
   "usage": {
     "input_tokens": 59,
-    "output_tokens": 183,
+    "output_tokens": 184,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

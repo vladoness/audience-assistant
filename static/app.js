@@ -114,6 +114,7 @@ async function loadEvidence() {
       + (p.power_note ? esc(p.power_note)
         : `With about ${fmt(p.holdout_lines)} lines held out, a lift of ${p.detectable_lift_points.toFixed(2)} points or more would show clearly; past campaigns lifted ${signed(p.past_lift_points)}.`) + "</p>";
   }
+  if (p && p.overlap_note) box.innerHTML += `<p class="warn-text" style="margin:6px 0 0"><strong>Overlap:</strong> ${esc(p.overlap_note)}</p>`;
 }
 
 function renderPressure(p) {
@@ -135,6 +136,7 @@ async function advise() {
   try {
     const r = await api("/api/advise", { definition: state.definition, goal: $("goal").value, campaign_type: $("campaign-type").value || null });
     state.advice = r.proposals;
+    state.adviceId = r.advice_id;
     const proposals = r.proposals.map((p, i) => {
       const action = { narrow_segment: "Apply", exclude_segment: "Apply", switch_channel: `Switch to ${(p.channel || "").toUpperCase()}`,
         choose_campaign_type: "Use this campaign type" }[p.kind];
@@ -166,6 +168,7 @@ async function applyAdvice(p) {
     await loadEvidence();
   } else if (p.consequence?.definition) {
     state.definition = p.consequence.definition;
+    state.appliedAdviceId = state.adviceId;
     await recheck();
   }
   $("advice").classList.add("hidden");
@@ -175,6 +178,7 @@ async function loadForReview(requestId) {
   try {
     const r = await api(`/api/interpretations/${encodeURIComponent(requestId)}`);
     state.requestId = r.request_id;
+    state.appliedAdviceId = null;
     state.unmapped = r.unmapped_phrases;
     state.acknowledged = false;
     $("request").value = r.request_text || "";
@@ -201,9 +205,10 @@ async function interpret() {
   try {
     const r = await api("/api/interpret", { request: text });
     state.requestId = r.request_id;
+    state.appliedAdviceId = null;
     state.unmapped = r.unmapped_phrases;
     state.acknowledged = false;
-    state.pendingTerms = r.clarifications.map((c) => c.term);
+    state.pendingTerms = r.clarifications.map((c) => (c.negated ? `not:${c.term}` : c.term));
     applyResult(r);
     renderChanges(null);
     renderTelemetry(r.telemetry, r.request_id);
@@ -228,6 +233,7 @@ async function refine() {
     const r = await api("/api/refine", { request_id: state.requestId, instruction: text, definition: state.definition });
     const before = new Set(state.unmapped);
     state.requestId = r.request_id;
+    state.appliedAdviceId = null;
     state.unmapped = r.unmapped_phrases;
     state.acknowledged = state.acknowledged && r.unmapped_phrases.every((p) => before.has(p));
     applyResult(r);
@@ -259,7 +265,7 @@ function renderChanges(changes) {
 function applyResult(r) {
   state.status = r.status;
   state.definition = r.definition;
-  state.pendingTerms = r.clarifications.map((c) => c.term);
+  state.pendingTerms = r.clarifications.map((c) => (c.negated ? `not:${c.term}` : c.term));
   $("result").classList.remove("hidden");
   $("refine-btn").disabled = !state.requestId;
   $("channel").value = r.definition.channel;
@@ -426,7 +432,8 @@ async function resolve(term, optionId) {
 }
 
 async function recheck(resolutions = {}) {
-  const r = await api("/api/check", { definition: state.definition, pending_terms: state.pendingTerms, resolutions });
+  const r = await api("/api/check", { definition: state.definition, pending_terms: state.pendingTerms, resolutions,
+    advice_id: state.appliedAdviceId || null });
   applyResult({ ...r, unmapped_phrases: state.unmapped });
   renderChanges(null);
 }
@@ -497,6 +504,7 @@ async function approve() {
       request_id: state.requestId, name: $("aud-name").value, approver: $("approver").value, goal: $("goal").value,
       campaign_type: $("campaign-type").value || null,
       definition: state.definition, acknowledged_unmapped: state.acknowledged,
+      advice_id: state.appliedAdviceId || null,
     });
     const m = r.measurement;
     loadLearning();
@@ -504,7 +512,8 @@ async function approve() {
       + `<strong>${fmt(m.target_lines)}</strong> lines get the campaign and <strong>${fmt(m.holdout_lines)}</strong> `
       + `(${Math.round(m.holdout_share * 100)}%) are held out. How we'll know: ${esc(m.success_measure)}`
       + (m.measurable ? "" : `<br><span class="warn-text">${esc(m.note)}</span>`)
-      + (m.power_note ? `<br><span class="warn-text">${esc(m.power_note)}</span>` : "");
+      + (m.power_note ? `<br><span class="warn-text">${esc(m.power_note)}</span>` : "")
+      + (m.overlap_note ? `<br><span class="warn-text">${esc(m.overlap_note)}</span>` : "");
     loadAudit();
     loadInsights();
   } catch (e) {
@@ -518,7 +527,8 @@ async function loadAudit() {
     const m = JSON.parse(r.measurement_json || "{}");
     const plan = m.goal ? `<div class="hint"><strong>Goal:</strong> ${esc(m.goal)} · ${fmt(m.holdout_lines)} held out to measure it${m.measurable ? "" : " (too few to be reliable)"}`
       + ` · export for the campaign tool: <a href="/api/audiences/${r.id}/export.csv">lines to contact</a>, <a href="/api/audiences/${r.id}/export.csv?group=held_out">holdout (don't send)</a>`
-      + `${r.data_changed_since_approval ? ' <span class="hint">(profile data refreshed since approval; the export is still the approved list)</span>' : ""}</div>`
+      + `${r.data_changed_since_approval ? ' <span class="hint">(profile data refreshed since approval; the export is still the approved list)</span>' : ""}`
+      + `${r.excluded_since_approval ? ` <span class="warn-text">${fmt(r.excluded_since_approval)} lines left out since approval (consent withdrawn or no longer in the data)</span>` : ""}</div>`
       + outcomeLine(r, m) : "";
     return `
     <tr><td>${r.id}</td><td>${esc(r.name)}</td><td>${fmt(r.reachable)}</td><td>${esc(r.approver)}</td>
@@ -566,7 +576,7 @@ async function simulateOutcome(id, btn) {
 }
 
 async function confirmOutcome(id, btn) {
-  const by = window.prompt("Your name, to confirm you checked these numbers:", $("approver").value || "");
+  const by = window.prompt("Your name, to confirm you checked these numbers (not the audience's approver):", "");
   if (!by || !by.trim()) return;
   btn.disabled = true;
   try {

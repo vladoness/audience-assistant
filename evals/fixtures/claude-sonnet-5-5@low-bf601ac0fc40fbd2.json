@@ -15,7 +15,7 @@
       "The request asks for promotional copy, not a group of customers, so no audience was defined."
     ]
   },
-  "latency_ms": 2158.0,
+  "latency_ms": 1423.6,
   "usage": {
     "input_tokens": 48,
     "output_tokens": 84,

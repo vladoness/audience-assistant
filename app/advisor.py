@@ -30,9 +30,12 @@ from app.catalog import Catalog
 from app.history import SEGMENT_ATTRIBUTES, CampaignHistory
 from app.models import AudienceDefinition, Condition
 from app.synthdata import CAMPAIGN_TYPES
+from app.store import definition_hash
 from app.validate import validate_definition
 
 KINDS = ("narrow_segment", "exclude_segment", "switch_channel", "choose_campaign_type", "advice")
+FIELDS_BY_KIND = {"narrow_segment": {"attribute", "value"}, "exclude_segment": {"attribute", "value"},
+                  "switch_channel": {"channel"}, "choose_campaign_type": {"campaign_type"}, "advice": set()}
 SMALL_CELL = 10  # counts below this are reported as "fewer than 10" so no group small enough to identify leaves
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
@@ -63,6 +66,14 @@ def _share(n: int, of: int) -> str:
     return f" ({n / of:.0%})" if of and n >= SMALL_CELL else ""
 
 
+def _counts(values: list[int]) -> list[str]:
+    """Counts that add up (a total and its parts): if any is suppressed, the others are rounded to tens,
+    so the suppressed one can't be recovered by subtraction."""
+    if not any(0 < n < SMALL_CELL for n in values):
+        return [f"{n:,}" for n in values]
+    return [_count(n) if n < SMALL_CELL else f"about {round(n, -1):,}" for n in values]
+
+
 def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistory | None, store,
                definition: AudienceDefinition, campaign_type: str | None) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
@@ -72,16 +83,17 @@ def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistor
 
     channel = definition.channel
     sized = engine.size(definition)
-    add("audience", f"The audience reaches {_count(sized.reachable)} lines on {channel.upper()} ({_count(sized.matched)} "
-                    f"match the conditions; {_count(sized.excluded_no_consent)} have no {channel.upper()} consent).",
-        reachable=sized.reachable)
+    reachable, matched, excluded = _counts([sized.reachable, sized.matched, sized.excluded_no_consent])
+    add("audience", f"The audience reaches {reachable} lines on {channel.upper()} ({matched} match the conditions; "
+                    f"{excluded} have no {channel.upper()} consent).", reachable=sized.reachable)
 
     allowed = [a for a in SEGMENT_ATTRIBUTES if not catalog.violations(a, channel)]
     mix = engine.mix(definition, allowed)
     for attr, counts in mix.items():
         if len(counts) >= 2:
             label = catalog.attributes[attr].label
-            parts = ", ".join(f"{v} {_count(n)}{_share(n, sized.reachable)}" for v, n in counts.items())
+            shown = _counts(list(counts.values()))
+            parts = ", ".join(f"{v} {c}{_share(n, sized.reachable)}" for (v, n), c in zip(counts.items(), shown))
             add(f"mix.{attr}", f"By {label.lower()}: {parts}.", values=counts)
 
     other = "email" if channel == "sms" else "sms"
@@ -125,16 +137,43 @@ def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistor
                         campaign_type=t, attribute=attr, value=seg["value"], difference=seg["difference_points"],
                         clearly_different=seg["clearly_different"], lift=seg["lift_points"])
 
+    for o in recent_overlaps(engine, store, definition):
+        add(f"overlap.{o['audience_id']}", f"{_count(o['shared'])} of these lines{_share(o['shared'], o['of'])} are also "
+                                           f"in approved audience #{o['audience_id']} (approved on {o['approved_on']}).",
+            shared=o["shared"])
+    return facts
+
+
+def recent_overlaps(engine: AudienceEngine, store, definition: AudienceDefinition, days: int = 14,
+                    limit: int = 20) -> list[dict[str, Any]]:
+    """Reachable lines this audience shares with audiences approved in the last `days`, largest first.
+    Overlapping audiences send to the same people and blur each other's holdouts."""
     mine = engine.profile_ids(definition)
-    since = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
-    for a in store.list_audiences(limit=20):
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    out = []
+    for a in store.list_audiences(limit=limit):
         if a["created_at"] < since or not mine:
             continue
-        shared = len(mine & engine.profile_ids(AudienceDefinition.model_validate_json(a["definition_json"])))
+        other = AudienceDefinition.model_validate_json(a["definition_json"])
+        shared = len(mine & engine.profile_ids(other))
         if shared:
-            add(f"overlap.{a['id']}", f"{_count(shared)} of these lines{_share(shared, len(mine))} are also in approved "
-                                      f"audience #{a['id']} (approved on {a['created_at'][:10]}).", shared=shared)
-    return facts
+            out.append({"audience_id": a["id"], "approved_on": a["created_at"][:10], "shared": shared, "of": len(mine),
+                        "share": round(shared / len(mine), 3), "same_definition": a["definition_hash"] == definition_hash(
+                            definition.model_dump())})
+    return sorted(out, key=lambda o: -o["shared"])
+
+
+def overlap_note(overlaps: list[dict[str, Any]], threshold: float = 0.25) -> str | None:
+    """A warning when a large share of this audience was approved recently in another audience."""
+    big = [o for o in overlaps if o["share"] >= threshold]
+    if not big:
+        return None
+    o = big[0]
+    same = " with the same definition" if o["same_definition"] else ""
+    more = f" (and {len(big) - 1} more)" if len(big) > 1 else ""
+    return (f"{o['share']:.0%} of these lines are also in audience #{o['audience_id']}, approved on {o['approved_on']}"
+            f"{same}{more}. Lines held out of one can be contacted by the other, which blurs both measurements: "
+            "send it as the same campaign, or wait until the other one's window has closed.")
 
 
 def check_summary(summary: str, facts: dict[str, dict[str, Any]]) -> str | None:
@@ -150,7 +189,7 @@ def check(proposal: dict[str, Any], facts: dict[str, dict[str, Any]], catalog: C
     kind = proposal.get("kind")
     cites = [str(c) for c in proposal.get("cites") or []]
     if kind not in KINDS:
-        return f"unknown kind {kind!r}"
+        return "it isn't a kind of change the advisor may propose"
     if not cites or any(c not in facts for c in cites):
         return "it cites facts the system didn't provide"
     allowed_numbers = _with_roundings(set().union(*(_numbers(facts[c]["text"]) for c in cites)))
@@ -162,7 +201,7 @@ def check(proposal: dict[str, Any], facts: dict[str, dict[str, Any]], catalog: C
         attr, value = proposal.get("attribute"), proposal.get("value")
         fid = f"segment.{campaign_type}.{attr}.{value}"
         if attr not in SEGMENT_ATTRIBUTES or catalog.violations(attr, definition.channel):
-            return f"{attr!r} isn't a field the advisor may use for {definition.channel.upper()} campaigns"
+            return f"it uses a field the advisor may not use for {definition.channel.upper()} campaigns"
         if fid not in cites:
             return "it doesn't cite past results for that segment under this campaign type"
         seg = facts[fid]["data"]

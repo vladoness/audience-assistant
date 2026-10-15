@@ -20,15 +20,15 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "\"Don't use the app\" is the negation of the app_user term, which cannot be expressed as a glossary term, so it is written as app_active_30d eq false (no self-care app open in the last 30 days).",
-      "\"Heavy data users\" uses the decided heavy_data_user term, so the system applies its heavy-use threshold.",
-      "The channel is unspecified; app_active_30d cannot be used for email campaigns, so an email channel would be blocked."
+      "\"Don't use the app\" is mapped to app_active_30d = false, meaning the line did not open the self-care app in the last 30 days.",
+      "The app_user glossary term cannot express a negation, so the attribute is used directly.",
+      "app_active_30d is not usable for email campaigns (policy MKT-12), so an email channel would be blocked for this condition."
     ]
   },
-  "latency_ms": 4567.0,
+  "latency_ms": 4633.6,
   "usage": {
     "input_tokens": 43,
-    "output_tokens": 833,
+    "output_tokens": 752,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

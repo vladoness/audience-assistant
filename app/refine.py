@@ -16,7 +16,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.catalog import Catalog
+from app.catalog import Catalog, parse_pending
 from app.explain import describe_condition
 from app.governance import canonical
 from app.models import AudienceDefinition, Changes, Condition, Issue
@@ -85,9 +85,9 @@ def plan_refinement(current: AudienceDefinition, delta: dict[str, Any], pending_
 
     in_use = {term_of(c) for c in kept if term_of(c)}
     answered = answered_terms(current)
-    pending = [t for t in pending_terms if t not in remove_terms and t not in answered]
+    pending = [t for t in pending_terms if parse_pending(t)[0] not in remove_terms and parse_pending(t)[0] not in answered]
     new_terms = [t for t in dict.fromkeys(delta.get("add_glossary_terms") or [])
-                 if t not in in_use and t not in pending]
+                 if t not in in_use and t not in {parse_pending(p)[0] for p in pending}]
 
     channel = delta.get("channel")
     if channel in (None, "", "unchanged"):

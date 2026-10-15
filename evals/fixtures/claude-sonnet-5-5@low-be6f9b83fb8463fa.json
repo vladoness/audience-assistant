@@ -23,14 +23,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "days_since_last_recharge only exists for prepaid lines, so combining it with postpaid lines will likely return no customers.",
-      "Used the stated 30 days as the threshold instead of the lapsed_prepaid glossary term."
+      "days_since_last_recharge only exists for prepaid lines, so combining it with postpaid will likely return no lines; the request may have meant prepaid customers.",
+      "Used the stated 30 days as the threshold rather than the lapsed_prepaid glossary term, since the request gives its own number."
     ]
   },
-  "latency_ms": 2474.3,
+  "latency_ms": 2139.9,
   "usage": {
     "input_tokens": 50,
-    "output_tokens": 185,
+    "output_tokens": 205,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

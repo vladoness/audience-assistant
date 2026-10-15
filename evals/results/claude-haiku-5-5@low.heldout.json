@@ -9,6 +9,10 @@
       0.889,
       0.833
     ],
+    "cases_passed_every_run_95_interval": [
+      0.608,
+      0.942
+    ],
     "status_accuracy": 0.926,
     "audience_exact_match": 0.961,
     "repair_rate": 0.0,

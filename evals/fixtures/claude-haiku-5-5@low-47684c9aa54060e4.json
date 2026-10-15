@@ -25,14 +25,15 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Region 'Costa' interpreted as the Coast region.",
-      "Channel not named, so left unspecified; app_user is not usable for email campaigns if email is chosen later."
+      "'Costa' mapped to the region Coast.",
+      "'Clientes prepago' mapped to line_type prepaid.",
+      "'que usan la app' mapped to the app_user glossary term, which is decided."
     ]
   },
-  "latency_ms": 1311.6,
+  "latency_ms": 1255.7,
   "usage": {
     "input_tokens": 49,
-    "output_tokens": 167,
+    "output_tokens": 176,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

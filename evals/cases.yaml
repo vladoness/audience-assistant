@@ -9,6 +9,7 @@
 #                               is what remains once the flagged conditions are removed (added 15 Oct to the
 #                               five policy cases: refusing correctly is not enough, the rest must be right)
 #   clarify                     glossary terms that must trigger a clarification question
+#   clarify_negated             exactly the terms asked as an exclusion ("not active"), no more, no fewer
 #   unmapped_contains           substrings that must appear in the unmapped phrases (never silently dropped)
 #   forbid_attributes           attributes that must never be in a sizable/approvable definition (policy enforced)
 #   issues_include              issue codes that must be raised (e.g. policy_violation: the policy is named to the user)
@@ -265,3 +266,38 @@ cases:
     expect:
       status: ready
       definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: region, op: eq, value: Highlands}]}
+
+  # Negation (added 15 Oct after a review): asking "which active?" for "not active" selects the
+  # opposite audience, so a negated open term must be asked as an exclusion, and a negated decided
+  # term must become the exclusion of its definition. The last case checks a comma ends a negation.
+  - id: negated-term-01
+    category: negation
+    request: Prepaid customers who are not active
+    expect:
+      status: needs_clarification
+      clarify: [active]
+      clarify_negated: [active]
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}]}
+
+  - id: negated-term-02
+    category: negation
+    request: Postpaid customers who are not high value
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: arpu_3m, op: lt, value: 40}]}
+
+  - id: negated-term-03
+    category: negation
+    request: Android customers who don't use the app
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: device_os, op: eq, value: android}, {attribute: app_active_30d, op: eq, value: false}]}
+
+  - id: negated-term-04
+    category: negation
+    request: Prepaid, no roaming, active lines
+    expect:
+      status: needs_clarification
+      clarify: [active]
+      clarify_negated: []
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: roaming_30d, op: eq, value: false}]}

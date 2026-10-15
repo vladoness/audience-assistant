@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "Only the prepaid segment was mapped; the 'low data' qualifier has no defined threshold in the catalog and needs a number from the marketer."
+      "Prepaid lines are kept as the population; the vague qualifier 'low data users' is not given a numeric threshold."
     ]
   },
-  "latency_ms": 1481.4,
+  "latency_ms": 1736.2,
   "usage": {
     "input_tokens": 40,
-    "output_tokens": 138,
+    "output_tokens": 129,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

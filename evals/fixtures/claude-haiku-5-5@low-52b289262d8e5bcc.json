@@ -23,14 +23,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Silent is mapped to usage_events_30d equal to 0, since zero events means the line was silent.",
-      "No channel was named, so channel is unspecified."
+      "Silent is interpreted as usage_events_30d equal to 0, matching the catalog definition of a silent line.",
+      "Channel left unspecified because the request names no channel."
     ]
   },
-  "latency_ms": 1981.5,
+  "latency_ms": 1724.9,
   "usage": {
     "input_tokens": 61,
-    "output_tokens": 159,
+    "output_tokens": 164,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

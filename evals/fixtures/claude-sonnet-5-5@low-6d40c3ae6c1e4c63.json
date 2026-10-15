@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "Only the postpaid billing model could be mapped; the catalog has no purchase or store data, so the phone purchase criterion is not applied."
+      "Only the postpaid line type could be mapped; there is no purchase or store data in the catalog, so the phone purchase criterion is not applied."
     ]
   },
-  "latency_ms": 2343.1,
+  "latency_ms": 1608.9,
   "usage": {
     "input_tokens": 53,
-    "output_tokens": 145,
+    "output_tokens": 146,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

@@ -198,11 +198,11 @@ class CampaignHistory:
         synthetic history (held-out lines respond at the base rate, contacted lines at base + lift)."""
         spec = CAMPAIGN_TYPES[campaign_type]
         rows = self._engine.connection.cursor().execute(
-            "SELECT m.profile_id FROM (SELECT unnest(?) AS profile_id, unnest(?) AS held_out) m "
-            "JOIN profiles USING (profile_id) "
+            "SELECT m.profile_id FROM (SELECT unnest(string_split(?, chr(31))) AS profile_id, "
+            "unnest(string_split(?, chr(31))) = 'held_out' AS held_out) m JOIN profiles USING (profile_id) "
             "WHERE (md5_number_lower(? || ':' || m.profile_id) % 1000000) / 1000000.0 < "
             f"CASE WHEN m.held_out THEN ? ELSE ? + {lift_sql(spec)} END",
-            [[p for p, _ in members], [g == "held_out" for _, g in members], seed, spec["base"], spec["base"]],
+            ["\x1f".join(p for p, _ in members), "\x1f".join(g for _, g in members), seed, spec["base"], spec["base"]],
         ).fetchall()
         return [r[0] for r in rows]
 

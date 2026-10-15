@@ -41,8 +41,8 @@ def members(client, audience_id, group="all"):
     return [line.split(",") for line in rows]
 
 
-def confirm(client, audience_id):
-    return client.post(f"/api/audiences/{audience_id}/outcome/confirm", json={"confirmed_by": "Ana"})
+def confirm(client, audience_id, by="Luis (Analytics)"):
+    return client.post(f"/api/audiences/{audience_id}/outcome/confirm", json={"confirmed_by": by})
 
 
 def test_reported_responders_are_counted_against_the_approved_groups(reporting_client):
@@ -70,7 +70,28 @@ def test_the_export_is_the_contacted_group_unless_asked_and_matches_the_approval
     assert default.text.strip().splitlines()[1:] == [",".join(r) for r in contacted]
     assert {g for _, g in contacted} == {"contacted"} and {g for _, g in held_out} == {"held_out"}
     assert (len(contacted), len(held_out)) == (a["measurement"]["target_lines"], a["measurement"]["holdout_lines"])
-    assert default.headers["x-membership"] == "as approved"
+    assert default.headers["x-membership"].startswith("as approved") and default.headers["x-excluded-since-approval"] == "0"
+
+
+def test_lines_that_lose_consent_after_approval_are_left_out_of_both_groups(reporting_client):
+    client = reporting_client(PREPAID)
+    a = approve(client)
+    contacted = [p for p, _ in members(client, a["id"], "contacted")]
+    held_out = [p for p, _ in members(client, a["id"], "held_out")]
+    engine = client.app.state.services.engine
+    withdrawn = {contacted[0], held_out[0]}
+    real = engine.without_consent
+    engine.without_consent = lambda ids, channel: withdrawn & set(ids)  # as if they opted out after approval
+    export = client.get(f"/api/audiences/{a['id']}/export.csv")
+    assert contacted[0] not in export.text and export.headers["x-excluded-since-approval"] == "2"
+    out = report(client, a["id"], contacted[:100]).json()
+    assert (out["measured"]["contacted"], out["measured"]["held_out"]) == (len(contacted) - 1, len(held_out) - 1)
+    assert client.get("/api/audiences").json()[0]["excluded_since_approval"] == 2
+
+    engine.without_consent = real
+    no_consent = engine.connection.execute(
+        "SELECT profile_id FROM profiles WHERE NOT marketing_consent_sms LIMIT 1").fetchone()[0]
+    assert real([contacted[1], no_consent, "L_GONE"], "sms") == {no_consent, "L_GONE"}
 
 
 def test_outcome_reports_need_the_token(make_client):
@@ -109,6 +130,7 @@ def test_a_pending_outcome_can_be_replaced_and_only_a_confirmed_one_is_learned_f
     assert second["reports"] == 2 and second["measured"]["contacted_response_pct"] > 0.5
     assert client.get("/api/history/evidence/winback").json()["campaigns"] == before  # pending: not evidence yet
     assert client.get("/api/learning").json()["scorecard"][0]["status"] == "pending"
+    assert confirm(client, a["id"], by=" ana ").status_code == 422  # the approver doesn't sign off their own result
     assert confirm(client, a["id"]).status_code == 200
     assert client.get("/api/history/evidence/winback").json()["campaigns"] == before + 1
     assert confirm(client, a["id"]).status_code == 409
@@ -143,6 +165,23 @@ def test_the_learning_curve_ends_with_the_campaign_measured_here_and_narrows(mak
     assert summary["loop"] == {"interpreted": 1, "approved": 1, "approved_with_type": 1, "measured": 1,
                                "pending_confirmation": 0}
     assert summary["scorecard"][0]["audience_id"] == a["id"] and summary["scorecard"][0]["expected"]
+
+
+def test_a_repeat_of_a_recent_audience_is_flagged_before_and_at_approval(make_client):
+    client = make_client(ScriptedProvider(PREPAID, PREPAID))
+    first = approve(client)
+    assert first["measurement"]["overlap_note"] is None
+    definition = {"channel": "sms", "conditions": [{"attribute": "line_type", "op": "eq", "value": "prepaid"}]}
+    preview = client.post("/api/measurement-preview", json={"definition": definition, "campaign_type": "winback"}).json()
+    assert f"audience #{first['id']}" in preview["overlap_note"] and "same definition" in preview["overlap_note"]
+    second = approve(client, name="Second wave")
+    assert second["measurement"]["overlaps_at_approval"][0]["share"] == 1.0
+    assert "blurs both measurements" in second["measurement"]["overlap_note"]
+
+
+def test_past_campaigns_on_another_channel_are_not_evidence_for_this_one(make_client):
+    client = make_client(ScriptedProvider(PREPAID))
+    assert "sent by EMAIL" in str(approve(client, campaign_type="roaming_offer"))  # an SMS audience
 
 
 def test_simulation_needs_a_campaign_type_and_the_synthetic_history(make_client):

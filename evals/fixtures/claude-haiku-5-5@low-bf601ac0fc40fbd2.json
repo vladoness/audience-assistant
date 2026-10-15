@@ -14,14 +14,14 @@
     ],
     "out_of_scope": true,
     "assumptions": [
-      "The request asks for SMS copy writing rather than describing a customer group, so no audience conditions were proposed.",
-      "No 5G attribute exists in the catalog, so the plan itself cannot be used to target lines."
+      "The request asks for SMS copy writing, not a customer group, so no audience conditions were proposed.",
+      "No 5G or network-technology attribute exists in the catalog."
     ]
   },
-  "latency_ms": 1894.1,
+  "latency_ms": 1834.7,
   "usage": {
     "input_tokens": 48,
-    "output_tokens": 131,
+    "output_tokens": 117,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

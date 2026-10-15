@@ -30,7 +30,7 @@
     "out_of_scope": false,
     "assumptions": []
   },
-  "latency_ms": 1408.1,
+  "latency_ms": 1501.7,
   "usage": {
     "input_tokens": 54,
     "output_tokens": 117,

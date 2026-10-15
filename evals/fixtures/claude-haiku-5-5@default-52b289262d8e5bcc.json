@@ -23,13 +23,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Silent is mapped to usage_events_30d equal to 0, since zero in that attribute means the line was silent."
+      "Silent is mapped to usage_events_30d equal to 0, since zero means the line was silent.",
+      "Channel is unspecified because the request names no SMS or email channel."
     ]
   },
-  "latency_ms": 1650.6,
+  "latency_ms": 1760.7,
   "usage": {
     "input_tokens": 61,
-    "output_tokens": 147,
+    "output_tokens": 164,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

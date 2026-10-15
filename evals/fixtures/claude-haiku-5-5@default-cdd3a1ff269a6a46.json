@@ -20,14 +20,14 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "Region is limited to Coast, using the home region derived from where the line spends most nights.",
-      "\"Long tenure\" has no stated threshold, so it is not applied; specify a number of months (for example, tenure_months above a value you choose) to include it."
+      "Region filter uses the home region value Coast.",
+      "'Long tenure' has no stated number in the catalog, so it was not converted to a tenure_months threshold."
     ]
   },
-  "latency_ms": 1823.9,
+  "latency_ms": 1799.2,
   "usage": {
     "input_tokens": 46,
-    "output_tokens": 264,
+    "output_tokens": 288,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

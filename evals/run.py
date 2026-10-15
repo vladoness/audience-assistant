@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import re
 import statistics
 import tempfile
 from collections import defaultdict
@@ -73,6 +75,8 @@ def score_case(case: dict, result, engine: AudienceEngine) -> dict:
 
     if "clarify" in expect:
         checks["clarify"] = set(expect["clarify"]) <= {c.term for c in result.clarifications}
+    if "clarify_negated" in expect:
+        checks["clarify_negated"] = set(expect["clarify_negated"]) == {c.term for c in result.clarifications if c.negated}
     if "unmapped_contains" in expect and result.status != "invalid":
         phrases = " | ".join(result.unmapped_phrases).lower()
         checks["unmapped"] = all(s.lower() in phrases for s in expect["unmapped_contains"])
@@ -137,10 +141,11 @@ def _expectations(expect: dict, proposals: list[dict]) -> dict[str, bool]:
 
 
 def baseline_proposals(name: str, facts: dict[str, dict], definition: AudienceDefinition,
-                       campaign_type: str | None) -> list[dict]:
+                       campaign_type: str | None, goal: str = "") -> list[dict]:
     """No model. "keep": always "keep the audience as it is". "rule": a few lines of code that narrow on
     every clearly-better segment of the chosen type, mention heavy recent contact, and otherwise cite the
-    type's past results; with no type chosen, pick the best-measured type on the audience's channel."""
+    type's past results; with no type chosen, pick the best-measured type on the audience's channel.
+    "keyword": the rule, but with no type chosen it first looks for a type's keywords in the goal."""
     blank = {"title": "", "rationale": "", "attribute": "", "value": "", "channel": "none", "campaign_type": ""}
     if name == "keep":
         return [blank | {"kind": "advice", "title": "Keep the audience as it is", "cites": ["audience"]}]
@@ -156,10 +161,18 @@ def baseline_proposals(name: str, facts: dict[str, dict], definition: AudienceDe
     else:
         types = [(f["data"]["low"], fid) for fid, f in facts.items()
                  if fid.startswith("type.") and f["data"]["channel"] == definition.channel]
-        if types:
+        guess = next((t for t, words in KEYWORDS.items() if name == "keyword" and re.search(words, goal.lower())), None)
+        if guess:
+            out.append(blank | {"kind": "choose_campaign_type", "cites": [f"type.{guess}"], "campaign_type": guess})
+        elif types:
             fid = max(types)[1]
             out.append(blank | {"kind": "choose_campaign_type", "cites": [fid], "campaign_type": fid.removeprefix("type.")})
     return out[:3]
+
+
+# The keyword baseline reads the goal with a word list instead of a model.
+KEYWORDS = {"roaming_offer": r"roam|travel|abroad|trip", "data_upsell": r"data|bundle|\bgb\b",
+            "topup_reminder": r"top.?up|recharge", "winback": r"win.?back|lapsed|come back", "app_adoption": r"\bapp\b"}
 
 
 def run_advisor_case(interpreter: Interpreter, engine: AudienceEngine, history, store, catalog, case: dict) -> dict:
@@ -174,8 +187,8 @@ def run_advisor_case(interpreter: Interpreter, engine: AudienceEngine, history, 
     by_id = {f["id"]: f for f in facts}
     expect = case["expect"]
     baselines = {}
-    for name in ("keep", "rule"):
-        proposals = [p for p in baseline_proposals(name, by_id, definition, campaign_type)
+    for name in ("keep", "rule", "keyword"):
+        proposals = [p for p in baseline_proposals(name, by_id, definition, campaign_type, case["goal"])
                      if not advisor.check(p, by_id, catalog, definition, campaign_type)]
         baselines[name] = all(_expectations(expect, proposals).values())
     try:
@@ -197,6 +210,23 @@ def run_advisor_case(interpreter: Interpreter, engine: AudienceEngine, history, 
             "rejected": rejected, "llm_calls": tel.llm_calls, "llm_ms": tel.llm_ms, "cost_usd": tel.cost_usd}
 
 
+def wilson(k: int, n: int, z: float = 1.96) -> list[float] | None:
+    """95% interval for a pass rate of k out of n cases: how far a small set can be trusted."""
+    if not n:
+        return None
+    p, d = k / n, 1 + z * z / n
+    centre, half = (p + z * z / (2 * n)) / d, z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return [round(centre - half, 3), round(centre + half, 3)]
+
+
+def _case_interval(rows: list[dict]) -> list[float] | None:
+    """Over cases (a case passes when every run passed), not case-runs: runs of one case aren't independent."""
+    by_case: dict[str, bool] = {}
+    for r in rows:
+        by_case[r["id"]] = by_case.get(r["id"], True) and r["passed"]
+    return wilson(sum(by_case.values()), len(by_case))
+
+
 def summarize_advice(model: str, rows: list[dict], runs: int) -> dict:
     by_case: dict[str, list[bool]] = defaultdict(list)
     by_cat: dict[str, list[bool]] = defaultdict(list)
@@ -209,9 +239,11 @@ def summarize_advice(model: str, rows: list[dict], runs: int) -> dict:
     return {
         "model": model, "cases": len(by_case), "runs": runs,
         "pass_rate": rate([r["passed"] for r in rows]),
+        "cases_passed_every_run_95_interval": _case_interval(rows),
         "raw_pass_rate_without_checks": rate([r["raw_passed"] for r in rows]),
         "baseline_keep_as_is_pass_rate": rate([r["baselines"]["keep"] for r in first_run]),
         "baseline_rule_pass_rate": rate([r["baselines"]["rule"] for r in first_run]),
+        "baseline_keyword_rule_pass_rate": rate([r["baselines"]["keyword"] for r in first_run]),
         "proposals_accepted": sum(len(r["accepted"]) for r in rows),
         "proposals_withheld_by_checks": sum(len(r["rejected"]) for r in rows),
         "latency_p50_ms": round(percentile(latencies, 50), 0) if latencies else None,
@@ -219,7 +251,8 @@ def summarize_advice(model: str, rows: list[dict], runs: int) -> dict:
         "cost_per_1k_requests_usd": round(1000 * statistics.mean(r["cost_usd"] for r in rows), 2),
         "by_category": {k: f"{sum(v)}/{len(v)}" for k, v in sorted(by_cat.items())},
         "failures": [{"id": c, "failed_runs": f"{len(v) - sum(v)}/{len(v)}"} for c, v in sorted(by_case.items()) if not all(v)],
-        "baseline_failures": {name: sorted(r["id"] for r in first_run if not r["baselines"][name]) for name in ("keep", "rule")},
+        "baseline_failures": {name: sorted(r["id"] for r in first_run if not r["baselines"][name])
+                              for name in ("keep", "rule", "keyword")},
     }
 
 
@@ -240,6 +273,7 @@ def summarize(model: str, rows: list[dict], runs: int) -> dict:
         "runs": runs,
         "pass_rate": round(sum(r["passed"] for r in rows) / len(rows), 3),
         "pass_rate_per_run": per_run,
+        "cases_passed_every_run_95_interval": _case_interval(rows),
         "status_accuracy": round(sum(r["checks"]["status"] for r in rows) / len(rows), 3),
         "audience_exact_match": round(sum(r["checks"]["audience"] for r in audience_rows) / max(len(audience_rows), 1), 3),
         "repair_rate": round(sum(r["repaired"] for r in rows) / len(rows), 3),

@@ -29,10 +29,10 @@
     "out_of_scope": false,
     "assumptions": [
       "Outside the Capital is read as any region other than Capital, including Coast, Highlands, Valley and North.",
-      "Not on basic plans is read as plan_tier not equal to basic, which includes standard and premium."
+      "Not on basic plans is read as plan_tier not equal to basic, so standard and premium are included."
     ]
   },
-  "latency_ms": 3200.1,
+  "latency_ms": 2188.1,
   "usage": {
     "input_tokens": 52,
     "output_tokens": 201,

@@ -20,13 +20,13 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "Only the postpaid condition was mapped; the catalog has no purchase or store-visit data."
+      "Postpaid lines only; the store purchase cannot be identified from the catalog."
     ]
   },
-  "latency_ms": 1474.9,
+  "latency_ms": 1821.0,
   "usage": {
     "input_tokens": 53,
-    "output_tokens": 131,
+    "output_tokens": 127,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

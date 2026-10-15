@@ -20,14 +20,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "\"likely to churn\" maps to the open glossary term churn_risk, so the marketer must choose a definition.",
-      "No channel was named, so the channel is left unspecified."
+      "\"likely to churn\" maps to the open churn_risk glossary term, so the marketer must choose a definition",
+      "\"in the Capital\" is read as home region = Capital"
     ]
   },
-  "latency_ms": 2178.5,
+  "latency_ms": 1726.2,
   "usage": {
     "input_tokens": 44,
-    "output_tokens": 143,
+    "output_tokens": 144,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

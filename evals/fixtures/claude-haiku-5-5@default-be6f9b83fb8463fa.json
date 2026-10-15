@@ -12,22 +12,25 @@
         "attribute": "line_type",
         "op": "eq",
         "value": "postpaid"
+      },
+      {
+        "attribute": "days_since_last_recharge",
+        "op": "gt",
+        "value": 30
       }
     ],
     "channel": "unspecified",
-    "unmapped_phrases": [
-      "haven't topped up in 30 days"
-    ],
+    "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Top-up recency (days_since_last_recharge) exists only for prepaid lines and is null for postpaid, so the top-up condition could not be applied to postpaid lines and was left unmapped.",
-      "The audience is postpaid lines only; the top-up criterion needs a different data source or a prepaid audience instead."
+      "Days since last recharge exists only for prepaid lines and is empty for postpaid lines, so this combination may return zero lines.",
+      "Read \"haven't topped up in 30 days\" as more than 30 days since the last recharge."
     ]
   },
-  "latency_ms": 3531.8,
+  "latency_ms": 4024.4,
   "usage": {
     "input_tokens": 50,
-    "output_tokens": 683,
+    "output_tokens": 801,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

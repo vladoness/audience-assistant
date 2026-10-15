@@ -15,14 +15,14 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "'Active' is an open glossary term, so the marketer must choose its definition before the audience can be sized.",
-      "'High value' is a decided term and will be expanded by the system using its high-value threshold."
+      "'Active' is an open glossary term; the marketer must choose its definition before the audience is sized.",
+      "'High value' is expanded from its decided glossary definition, with no separate threshold written."
     ]
   },
-  "latency_ms": 1232.9,
+  "latency_ms": 1082.3,
   "usage": {
     "input_tokens": 37,
-    "output_tokens": 126,
+    "output_tokens": 124,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

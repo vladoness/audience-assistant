@@ -23,13 +23,13 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "Channel left unspecified because the request does not name SMS or email."
+      "Region is the home region derived from where the line spends most nights, not current location."
     ]
   },
-  "latency_ms": 2083.3,
+  "latency_ms": 1651.1,
   "usage": {
     "input_tokens": 42,
-    "output_tokens": 127,
+    "output_tokens": 129,
     "cache_read_tokens": 0,
     "cache_write_tokens": 3026
   }

@@ -20,13 +20,14 @@
     ],
     "out_of_scope": false,
     "assumptions": [
-      "The catalog has no store purchase or handset purchase-date data, so the audience is limited to postpaid lines and the store purchase condition is not applied."
+      "Only the postpaid condition is applied; the catalog has no handset purchase or store-visit data, so the purchase part of the request cannot be targeted.",
+      "device_os shows the handset most recently seen on the network, which is not the same as a purchase, so it was not used as a proxy."
     ]
   },
-  "latency_ms": 3938.5,
+  "latency_ms": 2461.0,
   "usage": {
     "input_tokens": 53,
-    "output_tokens": 357,
+    "output_tokens": 387,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

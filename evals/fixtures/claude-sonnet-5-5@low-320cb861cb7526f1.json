@@ -15,14 +15,15 @@
     "unmapped_phrases": [],
     "out_of_scope": false,
     "assumptions": [
-      "\"Active\" is an open term, so the marketer must choose its definition.",
-      "\"High value\" uses the decided glossary definition based on 3-month ARPU."
+      "'Active' is an open term, so the marketer will need to choose which definition applies.",
+      "'High value' uses the decided glossary definition based on average revenue over the last three months.",
+      "No channel was named, so it is left unspecified."
     ]
   },
-  "latency_ms": 2038.6,
+  "latency_ms": 1597.9,
   "usage": {
     "input_tokens": 37,
-    "output_tokens": 117,
+    "output_tokens": 134,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

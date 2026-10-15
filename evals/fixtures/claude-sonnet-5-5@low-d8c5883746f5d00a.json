@@ -12,13 +12,13 @@
     "unmapped_phrases": [],
     "out_of_scope": true,
     "assumptions": [
-      "The request asks about the weather, not a group of customers, so no audience was defined."
+      "The request asks about weather, not a group of customers, so no audience was built."
     ]
   },
-  "latency_ms": 1837.3,
+  "latency_ms": 1369.8,
   "usage": {
     "input_tokens": 49,
-    "output_tokens": 84,
+    "output_tokens": 82,
     "cache_read_tokens": 3026,
     "cache_write_tokens": 0
   }

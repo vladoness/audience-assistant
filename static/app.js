@@ -9,7 +9,7 @@ const OPS = {
 };
 const OP_LABELS = { eq: "is", neq: "is not", in: "is any of", not_in: "is none of", gt: ">", gte: "≥", lt: "<", lte: "≤", between: "between" };
 const STATUS_TEXT = {
-  ready: "Ready. Check the summary, then size and approve.",
+  ready: "Ready. Check the summary, then continue.",
   needs_clarification: "One term in your request has competing definitions. Choose the one you mean.",
   needs_confirmation: "Part of your request can't be built from the available data. Confirm before approving.",
   unsupported: "This doesn't describe an audience the profile store can build. Try rephrasing, or use the editor.",
@@ -19,7 +19,15 @@ const STATUS_TEXT = {
 
 const state = {
   catalog: null, attrs: {}, requestId: null, status: null, definition: { conditions: [], channel: "sms" },
-  pendingTerms: [], unmapped: [], acknowledged: false, sized: null,
+  pendingTerms: [], unmapped: [], acknowledged: false, sized: null, step: 1,
+};
+
+const REVIEW_HINTS = {
+  needs_clarification: "Answer the question above to continue.",
+  needs_confirmation: "Tick “Build the audience without this part” to continue.",
+  invalid: "Fix the highlighted conditions to continue.",
+  unsupported: "Rephrase the request, or add conditions in the editor.",
+  ai_unavailable: "Build it with the editor below, or try again in a moment.",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -75,6 +83,17 @@ async function init() {
   $("campaign-type").onchange = loadEvidence;
   $("learning-type").onchange = () => loadLearning();
   $("advise-btn").onclick = advise;
+  document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => showView(t.dataset.view)));
+  document.querySelectorAll(".step-nav .back").forEach((b) => (b.onclick = () => goStep(Number(b.dataset.go))));
+  document.querySelectorAll("#stepper li").forEach((li) => (li.onclick = () => {
+    const n = Number(li.dataset.step);
+    if (n <= maxStep()) goStep(n);
+  }));
+  $("to-size").onclick = () => goStep(3);
+  $("to-plan").onclick = () => goStep(4);
+  $("go-audiences").onclick = () => showView("audiences");
+  $("new-audience").onclick = newAudience;
+  goStep(1);
   loadAudit();
   loadInsights();
   loadHistoryTypes();
@@ -188,6 +207,7 @@ async function loadForReview(requestId) {
     const who = r.telemetry.origin === "mcp" ? "drafted by an AI agent (MCP)" : "recorded earlier";
     $("review-note").textContent = `Reviewing request ${r.request_id}, ${who}. Check it against today's rules, answer any question, then size and approve.`;
     $("review-note").hidden = false;
+    goStep(2);
   } catch (e) {
     $("interpret-error").textContent = `Couldn't load request ${requestId} for review: ${e.data?.detail || e.message}`;
     $("interpret-error").hidden = false;
@@ -214,6 +234,7 @@ async function interpret() {
     renderTelemetry(r.telemetry, r.request_id);
     renderAssumptions(r.assumptions);
     $("approve-msg").textContent = "";
+    goStep(2);
   } catch (e) {
     const detail = typeof e.data?.detail === "string" ? e.data.detail : e.message;
     $("interpret-error").textContent = `Request failed: ${detail}${e.data?.request_id ? ` (request ${e.data.request_id})` : ""}`;
@@ -266,7 +287,6 @@ function applyResult(r) {
   state.status = r.status;
   state.definition = r.definition;
   state.pendingTerms = r.clarifications.map((c) => (c.negated ? `not:${c.term}` : c.term));
-  $("result").classList.remove("hidden");
   $("refine-btn").disabled = !state.requestId;
   $("channel").value = r.definition.channel;
   renderBanner();
@@ -280,6 +300,7 @@ function applyResult(r) {
   renderIssues($("issues"), r.issues);
   const sizable = ["ready", "needs_confirmation"].includes(displayStatus());
   if (sizable && state.definition.conditions.length) size(); else hideSize();
+  updateNav();
 }
 
 function displayStatus() {
@@ -331,7 +352,7 @@ function renderUnmapped() {
     <label class="inline" style="margin-top:8px"><input type="checkbox" id="ack" ${state.acknowledged ? "checked" : ""}>
     Build the audience without this part</label>`;
   box.appendChild(div);
-  $("ack").onchange = (e) => { state.acknowledged = e.target.checked; renderBanner(); updateApprove(); if (state.acknowledged) size(); };
+  $("ack").onchange = (e) => { state.acknowledged = e.target.checked; renderBanner(); updateApprove(); updateNav(); if (state.acknowledged) size(); };
 }
 
 function sourceBadge(source) {
@@ -423,7 +444,6 @@ function addCondition() {
   const used = new Set(state.definition.conditions.map((c) => c.attribute));
   const attr = state.catalog.attributes.find((a) => !used.has(a.name)) || state.catalog.attributes[0];
   state.definition.conditions.push({ attribute: attr.name, op: OPS[attr.type][0], value: defaultValue(attr, "eq"), source: "user" });
-  $("result").classList.remove("hidden");
   recheck();
 }
 
@@ -442,8 +462,6 @@ async function size() {
   try {
     const s = await api("/api/size", state.definition);
     state.sized = s;
-    $("size-card").classList.remove("hidden");
-    $("approve-card").classList.remove("hidden");
     $("reachable").textContent = fmt(s.reachable);
     $("matched").textContent = fmt(s.matched);
     $("excluded").textContent = fmt(s.excluded_no_consent);
@@ -457,12 +475,66 @@ async function size() {
     hideSize();
   }
   updateApprove();
+  updateNav();
 }
 
 function hideSize() {
   state.sized = null;
-  $("size-card").classList.add("hidden");
-  $("approve-card").classList.add("hidden");
+  if (state.step === 3 || state.step === 4) goStep(2);  // the audience changed and can't be sized: back to review
+  updateNav();
+}
+
+// ---- The journey: one step at a time, each unlocked when the one before is resolved ----
+
+function canContinueReview() {
+  return Boolean(state.sized) && displayStatus() === "ready" && !state.pendingTerms.length
+    && state.definition.conditions.length > 0;
+}
+
+function maxStep() {
+  if (!state.requestId) return 1;
+  return canContinueReview() ? 4 : 2;
+}
+
+function goStep(n) {
+  state.step = n;
+  document.querySelectorAll(".step-panel").forEach((p) => p.classList.toggle("hidden", Number(p.dataset.step) !== n));
+  $("stepper").classList.toggle("hidden", n === 5);
+  updateNav();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function updateNav() {
+  const top = maxStep();
+  document.querySelectorAll("#stepper li").forEach((li) => {
+    const n = Number(li.dataset.step);
+    li.className = n === state.step ? "current" : n < state.step || n <= top ? "done" : "locked";
+  });
+  const ok = canContinueReview();
+  $("to-size").disabled = !ok;
+  $("review-hint").textContent = ok ? "" : (REVIEW_HINTS[displayStatus()] || (state.sized ? "" : "Sizing…"));
+}
+
+function showView(name) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === name));
+  ["build", "audiences", "insights"].forEach((v) => $(`view-${v}`).classList.toggle("hidden", v !== name));
+  if (name === "audiences") { loadAudit(); loadLearning(); }
+  if (name === "insights") loadInsights();
+  window.scrollTo({ top: 0 });
+}
+
+function newAudience() {
+  Object.assign(state, { requestId: null, status: null, definition: { conditions: [], channel: "sms" }, pendingTerms: [],
+    unmapped: [], acknowledged: false, sized: null, appliedAdviceId: null, advice: null, adviceId: null });
+  ["request", "refine-input", "goal", "aud-name"].forEach((id) => ($(id).value = ""));
+  $("campaign-type").value = "";
+  ["evidence", "advice", "changes"].forEach((id) => $(id).classList.add("hidden"));
+  ["review-note", "interpret-error", "refine-error"].forEach((id) => ($(id).hidden = true));
+  $("approve-msg").textContent = "";
+  updateApprove();
+  showView("build");
+  goStep(1);
+  $("request").focus();
 }
 
 function renderBars(el, counts, total) {
@@ -492,10 +564,14 @@ function renderTelemetry(t, requestId) {
 }
 
 function updateApprove() {
-  const ok = state.sized && displayStatus() === "ready" && !state.pendingTerms.length
-    && $("aud-name").value.trim().length >= 3 && $("approver").value.trim().length >= 2
-    && $("goal").value.trim().length >= 3;
+  const missing = [
+    $("goal").value.trim().length < 3 && "what the campaign is for",
+    $("aud-name").value.trim().length < 3 && "an audience name",
+    $("approver").value.trim().length < 2 && "your name",
+  ].filter(Boolean);
+  const ok = state.sized && displayStatus() === "ready" && !state.pendingTerms.length && !missing.length;
   $("approve-btn").disabled = !ok;
+  $("approve-hint").textContent = missing.length ? `Add ${missing.join(", ")} to approve.` : "";
 }
 
 async function approve() {
@@ -507,34 +583,52 @@ async function approve() {
       advice_id: state.appliedAdviceId || null,
     });
     const m = r.measurement;
-    loadLearning();
-    $("approve-msg").innerHTML = `Approved as audience #${r.id} · definition ${esc(r.definition_hash)}.<br>`
-      + `<strong>${fmt(m.target_lines)}</strong> lines get the campaign and <strong>${fmt(m.holdout_lines)}</strong> `
-      + `(${Math.round(m.holdout_share * 100)}%) are held out. How we'll know: ${esc(m.success_measure)}`
-      + (m.measurable ? "" : `<br><span class="warn-text">${esc(m.note)}</span>`)
-      + (m.power_note ? `<br><span class="warn-text">${esc(m.power_note)}</span>` : "")
-      + (m.overlap_note ? `<br><span class="warn-text">${esc(m.overlap_note)}</span>` : "");
+    $("approve-msg").textContent = "";
+    $("done-title").textContent = `Audience #${r.id} approved: ${$("aud-name").value.trim()}`;
+    $("done-detail").innerHTML =
+      `<p><strong>${fmt(m.target_lines)}</strong> lines get the campaign and <strong>${fmt(m.holdout_lines)}</strong> `
+      + `(${Math.round(m.holdout_share * 100)}%) are held out, so its effect can be measured.</p>`
+      + `<p><strong>How we'll know:</strong> ${esc(m.success_measure)}</p>`
+      + (m.measurable ? "" : `<p class="warn-text">${esc(m.note)}</p>`)
+      + (m.power_note ? `<p class="warn-text">${esc(m.power_note)}</p>` : "")
+      + (m.overlap_note ? `<p class="warn-text">${esc(m.overlap_note)}</p>` : "")
+      + `<p class="hint">Next: export the lines to contact from Audiences &amp; results, send the campaign, and record what happened after ${m.window_days} days. Definition ${esc(r.definition_hash)}.</p>`;
+    goStep(5);
     loadAudit();
-    loadInsights();
+    loadLearning();
   } catch (e) {
-    $("approve-msg").textContent = "Not approved: " + JSON.stringify(e.data?.detail || e.message);
+    const d = e.data?.detail;
+    $("approve-msg").textContent = "Not approved: " + (typeof d === "string" ? d : JSON.stringify(d || e.message));
   }
 }
 
 async function loadAudit() {
   const rows = await api("/api/audiences");
+  $("count-audiences").textContent = rows.length ? rows.length : "";
   $("audit").innerHTML = rows.map((r) => {
     const m = JSON.parse(r.measurement_json || "{}");
-    const plan = m.goal ? `<div class="hint"><strong>Goal:</strong> ${esc(m.goal)} · ${fmt(m.holdout_lines)} held out to measure it${m.measurable ? "" : " (too few to be reliable)"}`
-      + ` · export for the campaign tool: <a href="/api/audiences/${r.id}/export.csv">lines to contact</a>, <a href="/api/audiences/${r.id}/export.csv?group=held_out">holdout (don't send)</a>`
-      + `${r.data_changed_since_approval ? ' <span class="hint">(profile data refreshed since approval; the export is still the approved list)</span>' : ""}`
-      + `${r.excluded_since_approval ? ` <span class="warn-text">${fmt(r.excluded_since_approval)} lines left out since approval (consent withdrawn or no longer in the data)</span>` : ""}</div>`
-      + outcomeLine(r, m) : "";
-    return `
-    <tr><td>${r.id}</td><td>${esc(r.name)}</td><td>${fmt(r.reachable)}</td><td>${esc(r.approver)}</td>
-    <td>${r.edited_by_user ? "yes" : "no"}</td><td class="def">${esc(r.explanation)}${plan}<div class="mono">${r.definition_hash} · ${esc(r.model || "manual")} · ${esc(r.created_at.replace("T", " ").replace("+00:00", ""))}</div></td>
-    <td>${governanceCell(r)}</td></tr>`;
-  }).join("") || '<tr><td colspan="7" class="hint">Nothing approved yet.</td></tr>';
+    const typeLabel = m.campaign_type ? ($("campaign-type").querySelector(`option[value="${m.campaign_type}"]`)?.textContent || m.campaign_type).replace(/ \(.*/, "") : null;
+    const notes = [
+      r.data_changed_since_approval ? '<span class="hint-inline">Profile data refreshed since approval; the export is still the approved list.</span>' : "",
+      r.excluded_since_approval ? `<span class="warn-text">${fmt(r.excluded_since_approval)} lines left out since approval (consent withdrawn or no longer in the data).</span>` : "",
+    ].filter(Boolean).join(" ");
+    return `<article class="aud-card">
+      <div class="aud-head">
+        <span class="aud-id">#${r.id}</span><strong class="aud-name">${esc(r.name)}</strong>
+        <span class="aud-gov">${governanceCell(r)}</span>
+      </div>
+      <div class="aud-meta">${fmt(r.reachable)} reachable · approved by ${esc(r.approver)} · ${esc(r.created_at.slice(0, 10))}${r.edited_by_user ? " · edited before approval" : ""}</div>
+      <p class="aud-def">${esc(r.explanation)}</p>
+      ${m.goal ? `<div class="aud-plan"><span><strong>Goal:</strong> ${esc(m.goal)}</span>${typeLabel ? `<span><strong>Type:</strong> ${esc(typeLabel)}</span>` : ""}<span><strong>Held out:</strong> ${fmt(m.holdout_lines)}${m.measurable ? "" : " (too few to be reliable)"}</span></div>` : ""}
+      <div class="aud-actions">Export for the campaign tool:
+        <a href="/api/audiences/${r.id}/export.csv">lines to contact</a>
+        <a href="/api/audiences/${r.id}/export.csv?group=held_out">holdout (don't send)</a></div>
+      ${notes ? `<div class="aud-notes">${notes}</div>` : ""}
+      ${m.goal ? outcomeLine(r, m) : ""}
+      <details class="tech"><summary>Technical</summary><span class="mono">definition ${r.definition_hash} · ${esc(r.model || "manual")} · ${esc(r.created_at.replace("T", " ").replace("+00:00", " UTC"))}</span></details>
+    </article>`;
+  }).join("") || '<p class="empty">Nothing approved yet. Build one under <a href="#" id="empty-new">New audience</a>.</p>';
+  $("empty-new")?.addEventListener("click", (e) => { e.preventDefault(); showView("build"); });
   document.querySelectorAll(".simulate-btn").forEach((b) => (b.onclick = () => simulateOutcome(b.dataset.id, b)));
   document.querySelectorAll(".confirm-btn").forEach((b) => (b.onclick = () => confirmOutcome(b.dataset.id, b)));
 }
@@ -551,7 +645,7 @@ function outcomeLine(r, m) {
   if (r.outcome) {
     const o = r.outcome.measured;
     const pending = r.outcome.status === "pending";
-    return `<div class="hint"><strong>${pending ? "Reported" : "Measured"}</strong> (${esc(r.outcome.source === "simulated" ? "simulated send" : "campaign tool")}): `
+    return `<div class="aud-outcome ${pending ? "pending" : "measured"}"><strong>${pending ? "Reported" : "Measured"}</strong> (${esc(r.outcome.source === "simulated" ? "simulated send" : "campaign tool")}): `
       + `${signed(o.lift_points)} pts (95% ${signed(o.lift_95_low)} to ${signed(o.lift_95_high)})`
       + `${r.outcome.expected ? ` against ${signed(r.outcome.expected.lift_points)} expected` : ""}: <span class="${verdictClass(r.outcome.verdict)}">${esc(r.outcome.verdict)}</span>`
       + (pending ? `<br>Not learned from until someone checks it: ${fmt(o.contacted)} contacted, ${fmt(o.held_out)} held out, ${fmt(r.outcome.unknown_responders)} responders not in this audience. `
@@ -560,7 +654,7 @@ function outcomeLine(r, m) {
         : ` · confirmed by ${esc(r.outcome.confirmed_by)}`) + "</div>";
   }
   if (!m.campaign_type) return "";
-  return `<div class="hint">Not measured yet. After the ${m.window_days}-day window the campaign tool posts responses to <span class="mono">/api/audiences/${r.id}/outcome</span>. `
+  return `<div class="aud-outcome">Not measured yet. After the ${m.window_days}-day window the campaign tool posts responses to <span class="mono">/api/audiences/${r.id}/outcome</span>. `
     + (state.historySynthetic ? `<button class="small simulate-btn" data-id="${r.id}">Simulate the send (demo)</button>` : "") + "</div>";
 }
 

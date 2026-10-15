@@ -9,10 +9,15 @@
 </head>
 <body>
   <header class="topbar">
-    <div>
+    <div class="brand">
       <h1>Audience Assistant</h1>
       <p class="sub">Andino Telecom · Marketing Operations</p>
     </div>
+    <nav class="tabs" aria-label="Sections">
+      <button class="tab active" data-view="build">New audience</button>
+      <button class="tab" data-view="audiences">Audiences &amp; results <span class="count" id="count-audiences"></span></button>
+      <button class="tab" data-view="insights">Insights</button>
+    </nav>
     <div class="topbar-right">
       <span id="model-pill" class="pill">connecting…</span>
       <a href="/api/metrics" target="_blank" class="link">metrics</a>
@@ -20,141 +25,203 @@
   </header>
 
   <main>
-    <section class="card" id="ask">
-      <label for="request" class="step">1 · Describe the audience</label>
-      <textarea id="request" rows="3" maxlength="500"
-        placeholder="e.g. Prepaid customers in the Coast region who haven't topped up in over 30 days but still use the app"></textarea>
-      <div class="row between">
-        <div id="examples" class="chips"></div>
-        <button id="interpret-btn" class="primary">Interpret</button>
-      </div>
-      <p class="hint">Describe groups, not people. Personal data (emails, phone numbers) is masked before the AI sees it.</p>
-      <p class="hint" id="accuracy-hint"></p>
-      <p class="review-note" id="review-note" hidden></p>
-      <p class="error-text" id="interpret-error" hidden></p>
-    </section>
+    <!-- New audience: a guided journey, one step at a time -->
+    <div class="view" id="view-build">
+      <ol class="stepper" id="stepper">
+        <li data-step="1"><span class="num">1</span><span class="label">Describe</span></li>
+        <li data-step="2"><span class="num">2</span><span class="label">Review</span></li>
+        <li data-step="3"><span class="num">3</span><span class="label">Size</span></li>
+        <li data-step="4"><span class="num">4</span><span class="label">Plan &amp; approve</span></li>
+      </ol>
 
-    <section class="card hidden" id="result">
-      <div class="step">2 · Check what will run</div>
-      <div id="status-banner" class="banner"></div>
-      <div id="clarify"></div>
-      <div id="unmapped"></div>
+      <section class="card step-panel" id="ask" data-step="1">
+        <h2>Who do you want to reach?</h2>
+        <p class="lead">Describe the audience in your own words. The assistant turns it into a precise definition you can check before anything is sent.</p>
+        <textarea id="request" rows="3" maxlength="500"
+          placeholder="e.g. Prepaid customers in the Coast region who haven't topped up in over 30 days but still use the app"></textarea>
+        <div class="row between">
+          <p class="hint" style="margin:0">Describe groups, not people. Personal data is masked before the AI sees it.</p>
+          <button id="interpret-btn" class="primary">Interpret</button>
+        </div>
+        <div class="examples-block">
+          <div class="mini-label">Or start from an example</div>
+          <div id="examples" class="chips"></div>
+        </div>
+        <p class="error-text" id="interpret-error" hidden></p>
+        <p class="hint" id="accuracy-hint"></p>
+      </section>
 
-      <div class="summary-box">
-        <div class="summary-label" id="summary-label">This audience is exactly:</div>
-        <p id="summary"></p>
-      </div>
-      <div id="changes" class="changes-box hidden"></div>
+      <section class="card step-panel hidden" id="result" data-step="2">
+        <h2>Check the audience</h2>
+        <p class="lead">This is exactly what will run. Answer any question, then continue.</p>
+        <p class="review-note" id="review-note" hidden></p>
+        <div id="status-banner" class="banner"></div>
+        <div id="clarify"></div>
+        <div id="unmapped"></div>
 
-      <div class="row refine-row">
-        <input id="refine-input" maxlength="500"
-          placeholder="Change it in your own words: “also the Highlands”, “drop the region”, “make it email”">
-        <button id="refine-btn" class="ghost">Apply change</button>
-      </div>
-      <div id="refine-examples" class="chips refine-chips"></div>
-      <p class="error-text" id="refine-error" hidden></p>
+        <div class="summary-box">
+          <div class="summary-label" id="summary-label">This audience is exactly:</div>
+          <p id="summary"></p>
+        </div>
+        <div id="changes" class="changes-box hidden"></div>
 
-      <table class="conditions">
-        <thead><tr><th>Field</th><th>Rule</th><th>Value</th><th>Source</th><th></th></tr></thead>
-        <tbody id="conditions"></tbody>
-      </table>
-      <div class="row between">
-        <button id="add-condition" class="ghost">+ Add condition</button>
-        <label class="inline">Channel
-          <select id="channel"><option value="sms">SMS</option><option value="email">Email</option></select>
-        </label>
-      </div>
-      <ul id="issues" class="issues"></ul>
-      <details id="assumptions-box" class="hidden"><summary>AI assumptions</summary><ul id="assumptions"></ul></details>
-      <div id="pii-note" class="hint"></div>
-      <details class="telemetry"><summary>Technical details</summary><div id="telemetry"></div></details>
-    </section>
+        <div class="mini-label">Change it in your own words</div>
+        <div class="row refine-row">
+          <input id="refine-input" maxlength="500"
+            placeholder="“also the Highlands”, “drop the region”, “make it email”">
+          <button id="refine-btn" class="secondary">Apply change</button>
+        </div>
+        <div id="refine-examples" class="chips refine-chips"></div>
+        <p class="error-text" id="refine-error" hidden></p>
 
-    <section class="card hidden" id="size-card">
-      <div class="step">3 · Size</div>
-      <div class="metrics-row">
-        <div class="metric big"><span id="reachable">–</span><label>reachable lines</label></div>
-        <div class="metric"><span id="matched">–</span><label>match the conditions</label></div>
-        <div class="metric"><span id="excluded">–</span><label>excluded: no consent</label></div>
-        <div class="metric"><span id="share">–</span><label>of all lines</label></div>
-      </div>
-      <div class="breakdowns">
-        <div><h3>By region</h3><div id="by-region"></div></div>
-        <div><h3>By line type</h3><div id="by-line-type"></div></div>
-      </div>
-      <div id="pressure" class="pressure hidden"></div>
-      <ul id="size-warnings" class="issues"></ul>
-      <p class="hint" id="size-meta"></p>
-    </section>
+        <details class="editor" id="editor" open>
+          <summary>Conditions <span class="hint-inline">(edit directly if you prefer)</span></summary>
+          <table class="conditions">
+            <thead><tr><th>Field</th><th>Rule</th><th>Value</th><th>Source</th><th></th></tr></thead>
+            <tbody id="conditions"></tbody>
+          </table>
+          <div class="row between">
+            <button id="add-condition" class="ghost">+ Add condition</button>
+            <label class="inline">Channel
+              <select id="channel"><option value="sms">SMS</option><option value="email">Email</option></select>
+            </label>
+          </div>
+        </details>
+        <ul id="issues" class="issues"></ul>
+        <details id="assumptions-box" class="hidden"><summary>AI assumptions</summary><ul id="assumptions"></ul></details>
+        <div id="pii-note" class="hint"></div>
+        <details class="telemetry"><summary>Technical details</summary><div id="telemetry"></div></details>
 
-    <section class="card hidden" id="approve-card">
-      <div class="step">4 · Approve</div>
-      <div class="row">
-        <input id="goal" class="wide" maxlength="200"
-          placeholder="What is this campaign for? e.g. win back lapsed prepaid before month-end">
-      </div>
-      <div class="row" id="campaign-type-row" hidden>
-        <label class="inline">Campaign type
-          <select id="campaign-type"><option value="">Choose, to see what happened last time</option></select>
-        </label>
-      </div>
-      <div id="evidence" class="evidence-box hidden"></div>
-      <div class="row">
-        <button id="advise-btn" class="ghost">Ask the advisor</button>
-        <span class="hint" style="margin:0">AI reads what the system knows about this audience and proposes changes; every proposal is checked against the facts before you see it.</span>
-      </div>
-      <div id="advice" class="advice-box hidden"></div>
-      <div class="row">
-        <input id="aud-name" placeholder="Audience name" maxlength="80">
-        <input id="approver" placeholder="Your name" maxlength="60">
-        <button id="approve-btn" class="primary" disabled>Approve audience</button>
-      </div>
-      <p class="hint">A share of the audience is held out (not contacted), so the campaign's effect can be measured, not assumed.</p>
-      <p id="approve-msg" class="hint"></p>
-    </section>
+        <div class="step-nav">
+          <button class="back" data-go="1">← Back</button>
+          <span class="nav-hint" id="review-hint"></span>
+          <button class="primary" id="to-size" disabled>Continue to size →</button>
+        </div>
+      </section>
 
-    <section class="card" id="history">
-      <div class="step">Approved audiences</div>
-      <table class="audit">
-        <thead><tr><th>#</th><th>Name</th><th>Reachable</th><th>Approved by</th><th>Edited</th><th>Definition</th><th>Governance</th></tr></thead>
-        <tbody id="audit"></tbody>
-      </table>
-    </section>
+      <section class="card step-panel hidden" id="size-card" data-step="3">
+        <h2>How many people will this reach?</h2>
+        <p class="lead">Counted on the profile store, with consent for the channel applied.</p>
+        <div class="metrics-row">
+          <div class="metric big"><span id="reachable">–</span><label>reachable lines</label></div>
+          <div class="metric"><span id="matched">–</span><label>match the conditions</label></div>
+          <div class="metric"><span id="excluded">–</span><label>excluded: no consent</label></div>
+          <div class="metric"><span id="share">–</span><label>of all lines</label></div>
+        </div>
+        <div class="breakdowns">
+          <div><h3>By region</h3><div id="by-region"></div></div>
+          <div><h3>By line type</h3><div id="by-line-type"></div></div>
+        </div>
+        <div id="pressure" class="pressure hidden"></div>
+        <ul id="size-warnings" class="issues"></ul>
+        <p class="hint" id="size-meta"></p>
+        <div class="step-nav">
+          <button class="back" data-go="2">← Back</button>
+          <span class="nav-hint"></span>
+          <button class="primary" id="to-plan">Continue to plan &amp; approve →</button>
+        </div>
+      </section>
 
-    <section class="card" id="learning-card">
-      <div class="row between" style="margin-top:0">
-        <div class="step" style="margin:0">Learning loop: every measured campaign informs the next decision</div>
-        <span id="learning-synthetic"></span>
-      </div>
-      <div id="loop" class="loop"></div>
-      <div class="row">
-        <label class="inline">Campaign type <select id="learning-type"></select></label>
-        <span class="hint" id="learning-reading" style="margin:0"></span>
-      </div>
-      <svg id="learning-chart" class="chart" viewBox="0 0 900 300" role="img"
-        aria-label="Lift of each past campaign against its holdout, and the running estimate"></svg>
-      <p class="hint legend"><span class="dot synthetic"></span> past campaign, with its 95% interval
-        <span class="dot here"></span> approved here and measured
-        <span class="swatch"></span> running estimate and its 95% band: the band narrowing is the learning</p>
-      <h3 style="margin-top:14px">Expected at approval against measured</h3>
-      <table class="audit">
-        <thead><tr><th>#</th><th>Audience</th><th>Type</th><th>Expected (evidence at approval)</th><th>Measured</th><th>Verdict</th></tr></thead>
-        <tbody id="scorecard"></tbody>
-      </table>
-    </section>
+      <section class="card step-panel hidden" id="approve-card" data-step="4">
+        <h2>Plan and approve</h2>
+        <p class="lead">Say what the campaign is for, see what happened last time, optionally ask the advisor, then approve.</p>
 
-    <section class="card" id="insights-card">
-      <div class="row between" style="margin-top:0">
-        <div class="step" style="margin:0">Signals for the data &amp; governance team</div>
-        <button id="refresh-insights" class="ghost">Refresh</button>
-      </div>
-      <div class="insights">
-        <div><h3>Asked for, but no data exists</h3><ul id="ins-demand" class="plain"></ul>
-          <h3 style="margin-top:14px">Blocked by data-usage policy</h3><ul id="ins-blocked" class="plain"></ul></div>
-        <div><h3>Open definitions: what people chose</h3><ul id="ins-terms" class="plain"></ul></div>
-        <div><h3>Where marketers corrected the AI</h3><ul id="ins-edits" class="plain"></ul></div>
-      </div>
-    </section>
+        <div class="sub-step">
+          <div class="sub-title"><span class="sub-num">a</span>What is this campaign for?</div>
+          <input id="goal" class="wide" maxlength="200"
+            placeholder="e.g. Win back lapsed prepaid customers before month-end">
+          <div class="row" id="campaign-type-row" hidden>
+            <label class="inline">Campaign type
+              <select id="campaign-type"><option value="">Choose, to see what happened last time</option></select>
+            </label>
+          </div>
+          <div id="evidence" class="evidence-box hidden"></div>
+        </div>
+
+        <div class="sub-step">
+          <div class="sub-title"><span class="sub-num">b</span>Get a second opinion <span class="hint-inline">(optional)</span></div>
+          <div class="row" style="margin-top:6px">
+            <button id="advise-btn" class="secondary">Ask the advisor</button>
+            <span class="hint" style="margin:0">The AI reads what the system knows about this audience and proposes changes; every proposal is checked against the facts before you see it.</span>
+          </div>
+          <div id="advice" class="advice-box hidden"></div>
+        </div>
+
+        <div class="sub-step">
+          <div class="sub-title"><span class="sub-num">c</span>Approve</div>
+          <div class="row" style="margin-top:6px">
+            <input id="aud-name" placeholder="Audience name" maxlength="80">
+            <input id="approver" placeholder="Your name" maxlength="60">
+          </div>
+          <p class="hint">10% of the audience is held out (not contacted), so the campaign's effect can be measured, not assumed.</p>
+          <p id="approve-msg" class="error-text"></p>
+        </div>
+
+        <div class="step-nav">
+          <button class="back" data-go="3">← Back</button>
+          <span class="nav-hint" id="approve-hint"></span>
+          <button id="approve-btn" class="primary" disabled>Approve audience</button>
+        </div>
+      </section>
+
+      <section class="card step-panel hidden done" id="done-card" data-step="5">
+        <div class="done-icon">✓</div>
+        <h2 id="done-title">Audience approved</h2>
+        <div id="done-detail" class="done-detail"></div>
+        <div class="row center">
+          <button class="primary" id="go-audiences">See it in Audiences &amp; results</button>
+          <button class="secondary" id="new-audience">Start a new audience</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Approved audiences, measuring them, and what was learned -->
+    <div class="view hidden" id="view-audiences">
+      <section class="card" id="history">
+        <h2>Approved audiences</h2>
+        <p class="lead">Export an audience for the campaign tool, then measure the send. A result counts only after someone other than the approver confirms it.</p>
+        <div id="audit" class="audience-list"></div>
+      </section>
+
+      <section class="card" id="learning-card">
+        <div class="row between" style="margin-top:0">
+          <h2 style="margin:0">What we learn from each campaign</h2>
+          <span id="learning-synthetic"></span>
+        </div>
+        <div id="loop" class="loop"></div>
+        <div class="row">
+          <label class="inline">Campaign type <select id="learning-type"></select></label>
+          <span class="hint" id="learning-reading" style="margin:0"></span>
+        </div>
+        <svg id="learning-chart" class="chart" viewBox="0 0 900 300" role="img"
+          aria-label="Lift of each past campaign against its holdout, and the running estimate"></svg>
+        <p class="hint legend"><span class="dot synthetic"></span> past campaign, with its 95% interval
+          <span class="dot here"></span> approved here and measured
+          <span class="swatch"></span> running estimate and its 95% band: the band narrowing is the learning</p>
+        <h3 class="table-title">Expected at approval against measured</h3>
+        <table class="audit">
+          <thead><tr><th>#</th><th>Audience</th><th>Type</th><th>Expected (evidence at approval)</th><th>Measured</th><th>Verdict</th></tr></thead>
+          <tbody id="scorecard"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- Signals for the people who own the data and the definitions -->
+    <div class="view hidden" id="view-insights">
+      <section class="card" id="insights-card">
+        <div class="row between" style="margin-top:0">
+          <h2 style="margin:0">Signals for the data &amp; governance team</h2>
+          <button id="refresh-insights" class="secondary">Refresh</button>
+        </div>
+        <p class="lead">Counted from every request and approval: what to add to the data, which definitions to settle, and where the assistant needs work.</p>
+        <div class="insights">
+          <div><h3>Asked for, but no data exists</h3><ul id="ins-demand" class="plain"></ul>
+            <h3 style="margin-top:18px">Blocked by data-usage policy</h3><ul id="ins-blocked" class="plain"></ul></div>
+          <div><h3>Open definitions: what people chose</h3><ul id="ins-terms" class="plain"></ul></div>
+          <div><h3>Where marketers corrected the AI</h3><ul id="ins-edits" class="plain"></ul></div>
+        </div>
+      </section>
+    </div>
   </main>
 
   <script src="/static/app.js"></script>

@@ -73,7 +73,8 @@ def build_insights(store: AuditStore, catalog: Catalog) -> dict[str, Any]:
         ],
         "open_terms": [
             {"term": t.name, "asked": asked[t.name], "owner_pending": t.owner_pending,
-             "chosen": {o.label: chosen[t.name][o.id] for o in t.options}}
+             # answers to "not <term>" are exclusions ("Not: ..."), counted next to the definitions they exclude
+             "chosen": {t.option(i).label: n for i, n in chosen[t.name].items() if t.option(i)}}
             for t in catalog.terms.values() if t.status == "open"
         ],
         "edits": {

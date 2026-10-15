@@ -16,14 +16,22 @@ marketer's decision (whom to target, under which definition) and never makes it.
   [docs/BUSINESS-CASE.md](docs/BUSINESS-CASE.md)
 - **Design note and diagram:** [docs/DESIGN.md](docs/DESIGN.md)
 
-| An open term asks, and shows what each answer would reach | A data-usage policy is named, per channel |
-|---|---|
-| ![Clarification](docs/screenshots/1-clarify.png) | ![Policy](docs/screenshots/3-policy.png) |
-| **What has no data behind it is surfaced for the marketer to accept** | **Sized, approved, audited** |
-| ![Unmapped](docs/screenshots/4-unmapped.png) | ![Sized and approved](docs/screenshots/2-sized-approved.png) |
+The app has three sections: **New audience** (a guided journey), **Audiences & results**
+(export, measure, learn) and **Insights** (signals for the data and governance team). Building an
+audience is four steps, one at a time; each unlocks when the one before is resolved, and the
+Continue button says what is still missing.
 
-**Evidence before approving: contact pressure, and what past campaigns of this type achieved**
-(from the synthetic campaign history, labelled as such)
+| **1 · Describe** in plain language | **2 · Review**: an open term asks, and shows what each answer would reach |
+|---|---|
+| ![Describe](docs/screenshots/0-describe.png) | ![Clarification](docs/screenshots/1-clarify.png) |
+| **3 · Size**, with contact pressure from past campaigns | **4 · Plan & approve**, then a holdout and a success measure are recorded |
+| ![Size](docs/screenshots/2-size.png) | ![Approved](docs/screenshots/10-approved.png) |
+| **A data-usage policy is named, and Continue stays locked** | **What has no data behind it must be accepted to continue** |
+| ![Policy](docs/screenshots/3-policy.png) | ![Unmapped](docs/screenshots/4-unmapped.png) |
+
+**Evidence before approving: what past campaigns of this type achieved, whether this one's result
+will be readable, and overlap with recent approvals** (from the synthetic campaign history,
+labelled as such)
 
 <img src="docs/screenshots/7-evidence.png" alt="Contact pressure and past campaign evidence" width="640">
 
@@ -93,9 +101,13 @@ tests. None of them is needed to judge the core slice.
 
 ## The workflow
 
+The four steps below are the **New audience** section; a step unlocks when the one before is
+resolved. Approved audiences are measured under **Audiences & results**, and **Insights** counts
+what marketers asked for that the data or the policies can't serve.
+
 1. **Describe** the audience in plain language (English or Spanish). Emails, phone numbers, IBANs
    and common EU national IDs are masked before the model sees the request.
-2. **Check what will run.** Each condition shows where it came from: **AI**, **governed** (a
+2. **Review what will run.** Each condition shows where it came from: **AI**, **governed** (a
    glossary decision with an id and owner), **your choice** (a clarification answer) or
    **edited**. The marketer can change, add or remove any condition; every change is re-validated
    on the server. The UI shows three kinds of problem:
@@ -121,7 +133,8 @@ tests. None of them is needed to judge the core slice.
    base) audiences. **Contact pressure** comes from past campaigns: the share of these lines
    contacted in the last 7 and 30 days, and how many already had 3 or more campaigns this month
    (thresholds in the `contact_policy` parameter set).
-4. **Approve.** The server re-validates and re-sizes. It checks that every open term was answered
+4. **Plan & approve.** The marketer states the goal, picks the campaign type (evidence appears),
+   can ask the advisor, and approves. The server re-validates and re-sizes. It checks that every open term was answered
    and every unmapped part acknowledged, and that "governed" labels are genuine. Then it writes an
    audit record:
    - the masked request and the model's raw proposal;

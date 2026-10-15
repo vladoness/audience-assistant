@@ -458,6 +458,26 @@ lines" that would have failed the case: the one time on this set they changed an
 *Rejected: letting the model compute the impact itself.* It would read well and be wrong in ways
 no one would notice. The model's job is to notice and explain; arithmetic and policy are code's.
 
+**23. The screen follows the marketer's journey, one step at a time.**
+The first UI was one long page: the four building steps, then the approved audiences, the
+learning loop and the insights, all visible from the start, mostly empty. Looking at it as a
+first-time user, nothing said where you were or what to do next, and the approval step held nine
+things. Now:
+- **Three sections:** New audience, Audiences & results, Insights. Each is for a different moment
+  (building, after the send, governance review), and two of them are empty on day one.
+- **A four-step journey** (Describe, Review, Size, Plan & approve), one step shown at a time.
+  Continue unlocks only when the step is resolved, and says what is missing ("Answer the
+  question above", "Tick 'Build the audience without this part'", "Fix the highlighted
+  conditions"). The server still enforces every rule; the stepper only makes the order visible.
+- **Plan & approve in three parts:** what the campaign is for (with the evidence), an optional
+  second opinion (the advisor), approve.
+- **A success screen** that says what was recorded and what to do next (export, send, measure).
+- **Technical detail** (request ids, tokens, cost, definition hashes) is collapsed, not removed:
+  the audit trail is the same, the marketer just isn't asked to read it.
+
+No logic moved: the same API, the same element ids, the same tests. A Playwright walk-through
+checks the gating at each step (24 checks).
+
 ## Where the time goes (and why that shapes the design)
 
 | Stage | Typical | Notes |

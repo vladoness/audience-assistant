@@ -632,7 +632,8 @@ async function loadAudit() {
     const typeLabel = m.campaign_type ? ($("campaign-type").querySelector(`option[value="${m.campaign_type}"]`)?.textContent || m.campaign_type).replace(/ \(.*/, "") : null;
     const notes = [
       r.data_changed_since_approval ? '<span class="hint-inline">Profile data refreshed since approval; the export is still the approved list.</span>' : "",
-      r.excluded_since_approval ? `<span class="warn-text">${fmt(r.excluded_since_approval)} lines left out since approval (consent withdrawn or no longer in the data).</span>` : "",
+      r.excluded_since_approval ? `<span class="warn-text">${fmt(r.excluded_since_approval)} lines left out before the hand-off (consent withdrawn or no longer in the data).</span>` : "",
+      r.handed_off_at ? `<span class="hint-inline">Handed off on ${esc(r.handed_off_at.slice(0, 10))}: the lists are frozen from then on.</span>` : "",
     ].filter(Boolean).join(" ");
     return `<article class="aud-card">
       <div class="aud-head">

@@ -366,6 +366,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
             o = outcomes.get(row["id"])
             row["outcome"] = None if o is None else outcome_view(s, o, row["measurement_json"])
             row["excluded_since_approval"] = s.store.excluded_count(row["id"])
+            row["handed_off_at"] = s.store.handed_off_at(row["id"])
             definition = AudienceDefinition(**json.loads(row["definition_json"]))
             changes = impact(json.loads(row["governance_json"]), s.catalog)
             row["governance_changes"] = changes
@@ -426,6 +427,8 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         m = json.loads(row["measurement_json"])
         if not m.get("campaign_type"):
             raise HTTPException(422, detail="This audience has no campaign type, so there is nothing to simulate against.")
+        recheck_consent(s, audience_id, row)  # a simulated send is a hand-off too: consent applies up to it
+        s.store.record_handoff(audience_id, "simulated send")
         responders = s.history.simulate_responders(s.store.members(audience_id), m["campaign_type"],
                                                    seed=f"outcome:{audience_id}")
         return record_outcome(s, audience_id, responders, source="simulated", sent_at=s.today().isoformat(),
@@ -462,14 +465,17 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
     def export(audience_id: int, request: Request, group: Literal["contacted", "held_out", "all"] = "contacted") -> Response:
         """The approved audience for the campaign tool, exactly as approved (the membership recorded at
         approval, not a re-run of the definition). By default only the lines to contact, so the holdout
-        can't be sent to by mistake; ?group=held_out or all for the measurement side. A header says whether
-        today's data would still produce the same groups."""
+        can't be sent to by mistake; ?group=held_out or all for the measurement side. The first export of the
+        lines to contact is the hand-off: consent is re-checked up to then, and every later export serves the
+        same frozen list. A header says whether today's data would still produce the same groups."""
         s = svc(request)
         row = s.store.get_audience(audience_id)
         if row is None:
             raise HTTPException(404, detail="Unknown audience.")
         current = _current_data_matches(s, row)
         excluded = recheck_consent(s, audience_id, row)
+        if group in ("contacted", "all"):
+            s.store.record_handoff(audience_id, f"export ({group})")
         members = s.store.members(audience_id, None if group == "all" else group)
         lines = ["profile_id,group", *(f"{pid},{grp}" for pid, grp in members)]
         s.metrics.incr("audience_exports")
@@ -478,7 +484,8 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         m = json.loads(row["measurement_json"])
         return Response("\n".join(lines) + "\n", media_type="text/csv", headers={
             "Content-Disposition": f'attachment; filename="audience-{audience_id}-{group}.csv"',
-            "X-Membership": "as approved, minus lines without consent today",
+            "X-Membership": "as approved, minus lines without consent at hand-off",
+            "X-Handed-Off-At": s.store.handed_off_at(audience_id) or "",
             "X-Excluded-Since-Approval": str(excluded),
             "X-Current-Data-Matches-Approval": "true" if current else "false",
             "X-Approved-Data-Snapshot": str(m.get("data_snapshot", "")),
@@ -622,6 +629,7 @@ def record_outcome(s: Services, audience_id: int, responders: list[str], source:
     if source == "campaign_tool" and today < sent + timedelta(days=m["window_days"]):
         raise HTTPException(422, detail=(f"The {m['window_days']}-day measurement window is open until "
                                          f"{sent + timedelta(days=m['window_days'])}; report after that."))
+    s.store.record_handoff(audience_id, f"outcome report ({source})")  # the send has happened by now
     groups = dict(s.store.members(audience_id))  # as handed off: consent was applied at export, before the send
     responded = set(responders)
     contacted = sum(1 for g in groups.values() if g == "contacted")
@@ -669,10 +677,12 @@ def outcome_view(s: Services, o: dict, measurement_json: str) -> dict:
 
 
 def recheck_consent(s: Services, audience_id: int, row: dict) -> int:
-    """Membership is frozen at approval, consent isn't: at export (the hand-off before the send), lines that
-    lost consent for the channel, or left the profile store, are left out of both groups. Never after the
-    send: only contacted lines can opt out because of the campaign, so dropping them then would inflate
-    the measured lift. Returns how many lines have been left out since approval."""
+    """Membership is frozen at approval, consent isn't: up to the hand-off (the first export of the lines to
+    contact), lines that lost consent for the channel, or left the profile store, are left out of both
+    groups. Never after it: only contacted lines can opt out because of the campaign, so dropping them then
+    would inflate the measured lift. Returns how many lines have been left out since approval."""
+    if s.store.handed_off_at(audience_id):
+        return s.store.excluded_count(audience_id)
     gone = s.engine.without_consent([pid for pid, _ in s.store.members(audience_id)], row["channel"])
     if gone:
         s.store.exclude_members(audience_id, gone, f"no {row['channel']} consent on {s.today().isoformat()}")

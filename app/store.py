@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS audience_members (
     excluded TEXT,  -- why the line was left out after approval (consent withdrawn, gone from the data)
     PRIMARY KEY (audience_id, profile_id)
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS handoffs (  -- when the list was handed to the campaign tool: groups are frozen from then on
+    audience_id INTEGER PRIMARY KEY REFERENCES audiences(id),
+    handed_off_at TEXT NOT NULL,
+    how TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS outcomes (
     audience_id INTEGER PRIMARY KEY REFERENCES audiences(id),
     recorded_at TEXT NOT NULL,
@@ -145,7 +150,8 @@ class AuditStore:
         current = self._db.execute("PRAGMA user_version").fetchone()[0]
         if current < SCHEMA_VERSION:
             existing = {r[0] for r in self._db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            for table in ("interpretations", "audiences", "audience_members", "outcomes", "outcome_reports", "advice"):
+            for table in ("interpretations", "audiences", "audience_members", "handoffs", "outcomes", "outcome_reports",
+                          "advice"):
                 if table in existing:
                     self._db.execute(f"ALTER TABLE {table} RENAME TO {table}_v{current}_{int(time.time())}")
         self._db.executescript(_SCHEMA)
@@ -209,6 +215,16 @@ class AuditStore:
                 "SELECT profile_id, grp FROM audience_members WHERE audience_id = ? AND excluded IS NULL "
                 "AND (? IS NULL OR grp = ?) ORDER BY profile_id", (audience_id, group, group)).fetchall()
         return [(r[0], r[1]) for r in rows]
+
+    def handed_off_at(self, audience_id: int) -> str | None:
+        with self._lock:
+            row = self._db.execute("SELECT handed_off_at FROM handoffs WHERE audience_id = ?", (audience_id,)).fetchone()
+        return row[0] if row else None
+
+    def record_handoff(self, audience_id: int, how: str) -> None:
+        """The first hand-off wins: a later export or report doesn't move it."""
+        with self._lock, self._db:
+            self._db.execute("INSERT OR IGNORE INTO handoffs VALUES (?, ?, ?)", (audience_id, _now(), how))
 
     def exclude_members(self, audience_id: int, profile_ids: set[str], reason: str) -> None:
         """Leave lines out of both groups from now on (both, so the comparison stays like for like)."""

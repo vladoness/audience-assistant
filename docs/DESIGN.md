@@ -349,10 +349,12 @@ connects them.
    the same transaction as the approval. The export reads that list, not a re-run of the
    definition, so a data refresh can't change who gets the campaign or who is counted. A digest
    check against today's data is shown for information. Consent is the exception: freezing it
-   would send to people who opted out after approval (a reviewer showed exactly that). So at
-   export, the hand-off before the send, lines without consent for the channel today are left out
-   of both groups, with the reason stored. Never after the send: my first version also re-checked
-   at the outcome count, and a later review showed why that is wrong. Only contacted customers
+   would send to people who opted out after approval (a reviewer showed exactly that). So up to
+   the hand-off (the first export of the lines to contact), lines without consent for the channel
+   are left out of both groups, with the reason stored; from then on every export serves the
+   frozen lists. Never after the hand-off: my first version also re-checked at the outcome count,
+   and the next one at every export (so a later holdout download still dropped lines), and
+   reviews showed why that is wrong. Only contacted customers
    can reply STOP, so dropping post-send opt-outs removes non-responders from one group only and
    inflates the lift (+3.61 became +3.78 on the same file). After the send, groups are frozen. The default export holds only the lines to contact; the
    holdout is a separate download.
@@ -461,13 +463,15 @@ The eval also reports what it can't otherwise show:
   - one is the same rules plus a keyword list for the goal.
 - **A 95% interval over cases,** because twelve cases can't carry a precise number.
 
-Results (README trade-offs): keep 42%, rule 75%, keyword rule 83%, Sonnet 92%, Haiku 100%. On the structured
+Results (README trade-offs, share of runs): keep 42%, rule 75%, keyword rule 83%, Sonnet 92%, Haiku 97%. On the structured
 cases the rules do as well as the model: those cases test that nothing misleading reaches the
 marketer, not that the model finds more than rules would. The model's measurable edge is reading
 a goal that doesn't name the type. It fails where the goal's words point the wrong way, the same
-trap as the keyword rule. Explaining in the marketer's terms isn't scored. The checks withheld
-nothing from Sonnet in the latest run. For Haiku they withheld an unsupported "Narrow to iOS
-lines" that would have failed the case: the one time on this set they changed an outcome.
+trap as the keyword rule. Explaining in the marketer's terms isn't scored. In the latest run the
+checks withheld 9 of Sonnet's 87 proposals (mostly top-up reminders proposed for postpaid lines,
+which the eligibility check stops) and 2 of Haiku's 60; scored without them, Haiku drops from 97%
+to 94%. The advisor also compares one attribute at a time, so correlated attributes (premium
+plans are mostly postpaid) are confounded; the README lists it as a limitation.
 
 *Rejected: letting the model compute the impact itself.* It would read well and be wrong in ways
 no one would notice. The model's job is to notice and explain; arithmetic and policy are code's.

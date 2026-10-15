@@ -76,8 +76,9 @@ def test_the_export_is_the_contacted_group_unless_asked_and_matches_the_approval
 def test_consent_is_applied_at_export_to_both_groups_and_never_after_the_send(reporting_client):
     client = reporting_client(PREPAID)
     a = approve(client)
-    contacted = [p for p, _ in members(client, a["id"], "contacted")]
-    held_out = [p for p, _ in members(client, a["id"], "held_out")]
+    store = client.app.state.services.store  # read without exporting: the first export is the hand-off
+    contacted = [p for p, _ in store.members(a["id"], "contacted")]
+    held_out = [p for p, _ in store.members(a["id"], "held_out")]
     engine = client.app.state.services.engine
     withdrawn = {contacted[0], held_out[0]}
     real = engine.without_consent
@@ -94,6 +95,21 @@ def test_consent_is_applied_at_export_to_both_groups_and_never_after_the_send(re
     no_consent = engine.connection.execute(
         "SELECT profile_id FROM profiles WHERE NOT marketing_consent_sms LIMIT 1").fetchone()[0]
     assert real([contacted[1], no_consent, "L_GONE"], "sms") == {no_consent, "L_GONE"}
+
+
+def test_an_export_after_the_hand_off_never_changes_the_groups(reporting_client):
+    client = reporting_client(PREPAID)
+    a = approve(client)
+    contacted = [p for p, _ in members(client, a["id"], "contacted")]  # the hand-off
+    held_out = [p for p, _ in members(client, a["id"], "held_out")]
+    engine = client.app.state.services.engine
+    engine.without_consent = lambda ids, channel: {contacted[0]} & set(ids)  # opts out after the send
+    holdout_file = client.get(f"/api/audiences/{a['id']}/export.csv?group=held_out")
+    again = client.get(f"/api/audiences/{a['id']}/export.csv")
+    assert holdout_file.headers["x-excluded-since-approval"] == "0" and contacted[0] in again.text
+    assert again.headers["x-handed-off-at"]
+    out = report(client, a["id"], contacted[:100]).json()
+    assert (out["measured"]["contacted"], out["measured"]["held_out"]) == (len(contacted), len(held_out))
 
 
 def test_outcome_reports_need_the_token(make_client):

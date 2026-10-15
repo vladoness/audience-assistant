@@ -48,7 +48,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 182 tests, no network or API key needed
+make test         # 183 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 make mcp          # the same assistant as an MCP server for AI agents (see "Use it from an AI agent")
 ```
@@ -170,11 +170,11 @@ The loop closes in the app, not only on a slide:
    probably read "too small to tell"; a data upsell to 37,000 lines doesn't.
 3. **Send:** approval stores the exact membership: every line with its group. The export is
    that stored list, not a re-run of the definition, so a data refresh can't change who gets the
-   campaign. Consent is the exception: it is re-checked at export, the hand-off before the send,
-   and a line that has withdrawn consent (or left the profile store) since approval is left out
-   of both groups, with the reason recorded and the count shown. After the send the groups are
-   frozen: only contacted customers can reply STOP, so dropping post-send opt-outs would inflate
-   the measured lift. By default the export contains only the lines to
+   campaign. Consent is the exception: it is re-checked up to the hand-off (the first export of
+   the lines to contact), and a line that has withdrawn consent (or left the profile store) since
+   approval is left out of both groups, with the reason recorded and the count shown. From the
+   hand-off on, every export serves the same frozen lists: only contacted customers can reply
+   STOP, so dropping later opt-outs would inflate the measured lift. By default the export contains only the lines to
    contact; the holdout is a separate file (`?group=held_out`), so it can't be sent to by mistake.
 4. **Measure:** after the 14-day window, the operator's data team reports which lines responded
    (`POST /api/audiences/{id}/outcome`, a list of profile ids, with the shared `OUTCOME_TOKEN`).
@@ -399,7 +399,7 @@ can be trusted, and it is wide.
 | Development set, 43 cases × 3 runs | **100%** (92–100%) | 98% (88–100%) | 97% (85–99%) |
 | Held-out set, 18 cases × 3 runs | **100%** (82–100%) | 89% (67–97%) | 93% (67–97%) |
 | Refinement set, 17 cases × 3 runs | **100%** (82–100%) | 94% (73–99%) | not run |
-| Advisor set, 12 cases × 3 runs (known-truth history) | **92%** (55–95%) | 97% (65–99%) | not run |
+| Advisor set, 12 cases × 3 runs (known-truth history) | **92%** of runs (33 of 36); 10 of 12 cases every run (55–95%) | 97% of runs (35 of 36); 11 of 12 cases (65–99%) | not run |
 | Latency p50 / p95 / max (dev) | 2.0 s / 3.9 s / 15.1 s | 1.4 s / 2.2 s / 3.5 s | 1.7 s / 3.2 s / 4.2 s |
 | Latency p50 / p95 / max (refinement) | 1.8 s / 2.2 s / 7.2 s | 1.5 s / 2.5 s / 2.7 s | not run |
 | Latency p50 / p95 (advisor) | 4.3 s / 6.1 s | 2.7 s / 5.9 s | not run |
@@ -427,9 +427,6 @@ single slow calls (the SDK's retry after a timeout); they are why the timeout an
 
 The advisor costs under a cent a call; at this customer's volume that is about 35 cents a month.
 
-The 9.1 s refinement maximum is a single slow call (the SDK's retry after a timeout); slow calls
-like it are why the timeout and breaker exist.
-
 "Pass" means every expectation for that case held: the right outcome status, **exactly the same
 set of reachable lines as the expected audience** (for a refused policy case, the part left after
 the refusal), the right clarification or unmapped phrase, and policies named and enforced.
@@ -439,7 +436,8 @@ advisor set replays at 10 of 12). Three Sonnet dev requests
 share their text with the UI examples and were re-recorded with them: same outcomes, different
 latencies.
 
-**What the misses were.** Sonnet missed none of the 219 interpretation and refinement case-runs
+**What the misses were.** Sonnet missed none of the 234 interpretation and refinement case-runs
+(43, 18 and 17 cases × 3 runs)
 in these runs, including all nine negation cases ("not active", "inactive", "other than high
 value", "neither … nor", Spanish "no están activos", and "No roaming high value", where the
 negation belongs to roaming). In an earlier run it missed one: it read "haven't recharged in 60
@@ -463,10 +461,9 @@ Haiku-default miss is a rate-limited call, counted as a failure):
   Sonnet got it right every time.
 
 **Decision: Sonnet 5.5 at low effort.** At this customer's volume (about 40 audiences a month)
-the cost difference is under a dollar a month. The accuracy difference is the gap between "right
-in every interpretation case-run of these runs, and in 206 of 207 an earlier run" and "check the
-warnings". Haiku
-at low effort is the documented option for high-volume tenants: about 17× cheaper and a little
+the cost difference is under a dollar a month. The accuracy difference is between Sonnet, right
+in every interpretation case-run of these runs (and in all but one of 207 in an earlier run), and
+Haiku, whose misses the marketer has to catch from the warnings. Haiku at low effort is the documented option for high-volume tenants: about 17× cheaper and a little
 faster, with every governed-term miss surfaced by the grounding check. The configuration is one
 environment variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 
@@ -546,7 +543,7 @@ environment variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 | Profile data refreshed between approval and send | The export and the outcome count use the member list stored at approval; a header and the audit view say whether today's data would still produce the same groups |
 | The same audience approved twice, or two audiences that share most lines | Warned before approval and recorded with it; the outcome is shown but kept out of the pooled evidence, because overlapping holdouts and sends aren't independent campaigns |
 | Model text reaching an agent over MCP | Fields a proposal kind doesn't use are blanked, titles and rationales are capped, withheld reasons are written by code, approved-audience names are replaced by numbers, and every response lists which fields are model or request text |
-| A customer withdraws consent after approval | Consent is re-checked at export, before the send: the line is left out of both groups (so the comparison stays like for like), the reason is stored, and the audit view shows how many. After the send the groups are frozen, because only contacted customers can opt out in reply to the campaign |
+| A customer withdraws consent after approval | Consent is re-checked up to the hand-off (the first export of the lines to contact): the line is left out of both groups (so the comparison stays like for like), the reason is stored, and the audit view shows how many. From the hand-off on, every export serves the frozen lists, because only contacted customers can opt out in reply to the campaign |
 | The holdout list sent to by mistake | The default export holds only the lines to contact; the holdout is a separate download |
 | "Not active", "inactive", "other than high value" read the wrong way round | The model reports which governed terms the request excludes; a phrase check is the alarm. Agreed exclusions of an open term are asked as an exclusion ("Not: used the network…") and only an exclusion answers it; a negated decided term becomes the exclusion of its governed definition. When the two disagree on an open term, both readings are offered; on a decided term the model's reading is applied with a warning |
 | Broken governance config (unknown field, wrong type, mistyped policy status) | Startup lint fails with the list of errors |
@@ -625,14 +622,14 @@ OpenAPI docs are at `/docs`.
   test checks that the measured lift recovers each true effect. In a real deployment it would
   be the campaign tool's send and response records.
 - **Activation** (sending the audience to an SMS/email tool) is out of scope. The hand-off is
-  the CSV export of the approved member list (lines to contact by default, consent re-checked),
+  the CSV export of the approved member list (lines to contact by default, consent re-checked up to the first export),
   with the definition hash in the approval record.
 
 ---
 
 ## Testing and reliability
 
-- **`make test`: 182 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 183 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;
@@ -678,7 +675,7 @@ OpenAPI docs are at `/docs`.
   test per finding from the external reviews (see "Use of AI"), and `tests/test_eval_scorer.py`
   checks that the eval scorer fails wrong answers.
 - **Evals.**
-  - `evals/cases.yaml` is the development set (34 cases).
+  - `evals/cases.yaml` is the development set (43 cases).
   - `evals/heldout.yaml` is the frozen held-out set (18 cases).
   - Both cover simple and threshold requests, decided and open glossary terms, missing data,
     vague qualifiers, policies, injection, out-of-scope, Spanish and PII.
@@ -868,6 +865,11 @@ conventions. The mapping, and which parts are tested, is in
   are a single yes/no with an assumed definition per type; margin per response is still an
   assumption (see BUSINESS-CASE.md). Holdouts aren't coordinated across campaigns, so overlapping
   audiences blur each other's measurement.
+- **The advisor compares one attribute at a time.** Each segment fact is one value against all
+  the others, so correlated attributes are confounded: premium plans are mostly postpaid, so a
+  postpaid effect can show up partly as a premium one, and the advisor can't say which is the
+  cause. With one planted effect the evals don't expose this; a real history would need a model
+  with several attributes at once (or a stratified comparison) before acting on segment advice.
 - **The advisor's free text is checked for citations and numbers, not meaning.** A sentence can
   still be misleading in a way no check catches; that is why it is labelled as the AI's words and
   never changes the audience by itself.
@@ -909,8 +911,8 @@ drafted each fix. I decided what to build, what to accept, and what to push back
   after moving negation into the model caught two bugs in the code.
 - **Repeated outside review.** I ran six rounds of review by AI reviewer agents, each with a
   persona (for example an Adobe FDE manager, a Palantir FDE lead, an LLM-evals practitioner, an
-  LLM-security practitioner and a telco CMO), each on a fresh clone with access to nothing else. All rated it
-  "advance", and every round found something real that I had missed:
+  LLM-security practitioner and a telco CMO), each on a fresh clone with access to nothing else. Every round found something real that I had
+  missed:
   - approval trusting client-supplied labels;
   - "not active" selecting the active customers;
   - a frozen member list that kept customers who had since withdrawn consent;

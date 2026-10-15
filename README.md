@@ -87,7 +87,7 @@ the benchmark, and the customer and design notes. Read `app/interpret.py`, `app/
 | Change it in words (refinement) | "Adobe's Audience Agent is conversational; is yours?" | `app/refine.py`, design decision 16 |
 | Options with consequences, goal and holdout at approval | "Does it support a decision, and how will anyone know it was right?" | design decision 19 |
 | Past campaigns as evidence (synthetic history) | "What should the marketer know before approving?" | `app/history.py`, decision 20 |
-| The learning loop (outcomes, learning curve, expected against measured) | "Does it actually learn from campaigns, and does the loop close?" | `record_outcome` in `app/main.py`, decision 21 |
+| The learning loop (outcomes, learning curve, expected against measured) | "Does it actually learn from campaigns, and does the loop close?" | `record_outcome` in `app/learning.py`, decision 21 |
 | The campaign advisor | "Could AI do more than translate the request, without being trusted blindly?" | `app/advisor.py`, decision 22 |
 | MCP server for AI agents | "How would this plug into an agent ecosystem without giving agents authority?" | `app/mcp_server.py`, decision 18 |
 | Business case calculator | "What is it worth, and which assumption decides that?" | `docs/BUSINESS-CASE.md` |
@@ -200,16 +200,16 @@ The full endpoint list is in [docs/REFERENCE.md](docs/REFERENCE.md#endpoints); O
 **Measured** (prompt v7, refinement r2, advisor a2). Every set was re-run live on 15 Oct 2026
 after the final review moved negation into the model's output (prompt v7) and added nine negation
 cases. Every configuration was run 3 times. Prices are from Anthropic's list effective 2026-10-07.
-Latency is the model call, nearest-rank percentiles. The interval under each pass rate is a 95%
-Wilson interval over cases (a case counts when every run passed): it says how far a set this small
-can be trusted, and it is wide.
+Latency is the model call, nearest-rank percentiles. Each accuracy cell gives the share of runs
+that passed, then the cases that passed in every run, with a 95% Wilson interval over those cases:
+it says how far a set this small can be trusted, and it is wide.
 
 | | **Sonnet 5.5 · low effort (default)** | Haiku 5.5 · low effort | Haiku 5.5 · default effort |
 |---|---|---|---|
-| Development set, 43 cases × 3 runs | **100%** (92–100%) | 98% (88–100%) | 97% (85–99%) |
-| Held-out set, 18 cases × 3 runs | **100%** (82–100%) | 89% (67–97%) | 93% (67–97%) |
-| Refinement set, 17 cases × 3 runs | **100%** (82–100%) | 94% (73–99%) | not run |
-| Advisor set, 12 cases × 3 runs (known-truth history) | **92%** of runs (33 of 36); 10 of 12 cases every run (55–95%) | 97% of runs (35 of 36); 11 of 12 cases (65–99%) | not run |
+| Development set, 43 cases × 3 runs | **100%** of runs; 43 of 43 cases (92–100%) | 98% of runs; 42 of 43 cases (88–100%) | 97% of runs; 41 of 43 cases (85–99%) |
+| Held-out set, 18 cases × 3 runs | **100%** of runs; 18 of 18 cases (82–100%) | 89% of runs; 16 of 18 cases (67–97%) | 93% of runs; 16 of 18 cases (67–97%) |
+| Refinement set, 17 cases × 3 runs | **100%** of runs; 17 of 17 cases (82–100%) | 94% of runs; 16 of 17 cases (73–99%) | not run |
+| Advisor set, 12 cases × 3 runs (known-truth history) | **92%** of runs; 10 of 12 cases (55–95%) | 97% of runs; 11 of 12 cases (65–99%) | not run |
 | Latency p50 / p95 / max (dev) | 2.0 s / 3.9 s / 15.1 s | 1.4 s / 2.2 s / 3.5 s | 1.7 s / 3.2 s / 4.2 s |
 | Latency p50 / p95 / max (refinement) | 1.8 s / 2.2 s / 7.2 s | 1.5 s / 2.5 s / 2.7 s | not run |
 | Latency p50 / p95 (advisor) | 4.3 s / 6.1 s | 2.7 s / 5.9 s | not run |

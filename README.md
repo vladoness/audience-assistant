@@ -71,9 +71,11 @@ sizing latency at 200k / 1M / 5M lines.
 
 ## Time and scope
 
-**Time spent:** [HOURS: fill in before sending] hours of my own time over [DAYS] days, with an AI
-coding agent writing most first drafts (see "Use of AI"). That is more than the brief's 8–10
-hours, so here is what is the answer to the brief and what is a deliberate extension.
+**Time spent:** about 8 hours of my own time over five days (9–15 October 2026): framing the
+problem, making the design decisions, reviewing what the AI agent produced, and deciding what to
+fix. The agent did most of the writing, testing and checking in between (see "Use of AI"), so the
+repository is larger than 8 hours of hand-written code would be. Here is what answers the brief
+and what is a deliberate extension.
 
 **The core slice (the answer to the brief):** a marketer's request becomes a validated, governed
 audience. The model proposes; code validates fields, governed terms, data-usage policies and
@@ -880,44 +882,53 @@ conventions. The mapping, and which parts are tested, is in
 
 ## Use of AI in building this
 
-I built this with an AI coding agent (Claude in Cursor) as my pair, which is how I work day to
-day. The agent wrote most first drafts of code, tests and docs. I set the direction and made the
-decisions:
-- the workflow and the customer framing;
-- the architecture rule (model proposes, code disposes);
-- server-side glossary expansion and "never drop, always surface";
-- policies per marketing action;
-- rules as sentences with versioned parameters;
-- evaluating by audience equality;
-- the choice of default model from the measured results.
+I built this with an AI coding agent (Claude, in Cursor) as my pair, which is how I work day to
+day. Of my roughly 8 hours, most went into deciding and reviewing, not typing: the agent wrote
+nearly all of the code, tests and documentation, ran the evals and the browser checks, and
+drafted each fix. I decided what to build, what to accept, and what to push back on.
 
-How I checked the agent's work, with examples from this build:
-- **Running the app headless.** A browser run caught a real bug: "Add condition" defaulted to a
-  field already in use, and the server's de-duplication silently swallowed the new row.
-- **Testing against the live API, not documentation from memory.** The agent's first provider
-  used `temperature` and forced tool calls. The current SDK no longer accepts `temperature`, and
-  Sonnet 5.5 rejects forced tool use, so I moved to structured outputs.
-- **Measuring instead of trusting.** The first live eval exposed the model swapping the
-  marketer's number for a governed term. Fixing that in the prompt alone proved fragile, so the
-  safety-relevant check (the grounding warning) is deterministic code.
-- **An external review before submitting.** I had six reviewer agents, each with its own fresh
-  clone and no access to anything else, review the repo as an engineering manager, staff
-  engineer, SRE, applied-AI engineer, security reviewer and solution architect. All six would
-  have advanced it. They also found real problems:
-  - approval trusted client-supplied provenance;
-  - unanswered clarifications could be approved;
-  - policy-blocked conditions vanished after a channel switch;
-  - the documented debugging path used two different request ids;
-  - p95 was off by one;
-  - this README claimed a "held-out" case that wasn't.
+**What I decided:**
+- the customer, the workflow and the decision it supports (who to target, under which definition);
+- the architecture rule: the model proposes, code disposes;
+- governed terms expanded by the server, open terms asked about, nothing dropped silently;
+- policies per marketing action, and rules as sentences with versioned parameters;
+- evaluating by exact audience equality, with a frozen held-out set;
+- the default model, from the measured results;
+- the scope of each extension (refinement, evidence, the learning loop, the advisor, MCP), and what
+  to leave out.
 
-  Each is fixed and pinned by a test in `tests/test_review_fixes.py`.
+**How I checked the agent's work:**
+- **Running it, not reading it.** Headless browser runs caught real bugs that unit tests missed:
+  "Add condition" defaulting to a field already in use, and the note for agent-drafted audiences
+  sitting on a screen the reviewer never sees.
+- **Testing against the live API.** The agent's first provider used parameters the current SDK and
+  model no longer accept; I moved it to structured outputs.
+- **Measuring instead of trusting.** The first live eval showed the model replacing the marketer's
+  own number with a governed term, which is why that check is deterministic code. Tightening the
+  policy scoring later caught Haiku turning "high credit risk" into "high value". The first run
+  after moving negation into the model caught two bugs in the code.
+- **Repeated outside review.** I ran six rounds of review by AI reviewer agents, each with a
+  persona (for example an Adobe FDE manager, a Palantir FDE lead, an LLM-evals practitioner, an
+  LLM-security practitioner and a telco CMO), each on a fresh clone with access to nothing else. All rated it
+  "advance", and every round found something real that I had missed:
+  - approval trusting client-supplied labels;
+  - "not active" selecting the active customers;
+  - a frozen member list that kept customers who had since withdrawn consent;
+  - my fix for that then inflating the measured lift;
+  - outcome reports anyone could post.
 
-Where I deliberately did not rely on AI:
-- **Runtime decisions.** Validation, policies, consent, counting and the approval summary are
-  plain code; the model never decides anything the system can check.
-- **Expectations.** The eval expectations encode policy decisions. They were drafted with the
-  agent and reviewed by me; no model grades the model.
+  I treated each round like a code review: I chose what to fix, and some suggestions I declined
+  with the reason written down (a mandatory campaign type on the server, rebuilding the advisor).
+  The review files aren't in the repository; the fixes and their tests are.
+
+**Where I deliberately did not rely on AI:**
+- **Runtime decisions.** Validation, policies, consent, counting, the statistics and the summary
+  the marketer approves are plain code. The model never decides anything the system can check.
+- **Grading.** Eval expectations encode policy decisions, so they were written down as data and
+  are scored by exact audience equality; no model grades the model. The advisor is compared with
+  baselines that use no model at all.
+- **What the AI said about itself.** Accuracy, cost and latency numbers in this README come from
+  recorded runs that `make eval-replay` reproduces offline, not from the agent's summaries.
 
 ## Extensions I would do next
 

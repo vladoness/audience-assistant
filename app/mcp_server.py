@@ -27,7 +27,8 @@ from app.interpret import RefineRejected
 from app.llm import ProviderUnavailable
 from fastapi import HTTPException
 
-from app.main import Services, build_services, catalog_view, run_advice
+from app.advisor import run_advice
+from app.main import Services, build_services, catalog_view
 from app.models import AudienceDefinition, InterpretResult
 from app.observability import configure_logging, request_id_var
 from app.settings import Settings

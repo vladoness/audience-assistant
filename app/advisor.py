@@ -34,6 +34,20 @@ from app.synthdata import CAMPAIGN_TYPES
 from app.store import definition_hash
 from app.validate import validate_definition
 
+import json
+import logging
+from typing import TYPE_CHECKING
+
+from fastapi import HTTPException
+
+from app.llm import ProviderUnavailable
+from app.pii import mask_pii
+
+if TYPE_CHECKING:
+    from app.main import Services
+
+log = logging.getLogger("app")
+
 KINDS = ("narrow_segment", "exclude_segment", "switch_channel", "choose_campaign_type", "advice")
 FIELDS_BY_KIND = {"narrow_segment": {"attribute", "value"}, "exclude_segment": {"attribute", "value"},
                   "switch_channel": {"channel"}, "choose_campaign_type": {"campaign_type"}, "advice": set()}
@@ -278,3 +292,57 @@ def consequence(proposal: dict[str, Any], facts: dict[str, dict[str, Any]], engi
         return {"campaign_type": t, "note": f"Past {CAMPAIGN_TYPES[t]['label'].lower()} campaigns: {_signed(d['lift'])} "
                                             f"points against their holdout."}
     return {}
+
+
+def run_advice(s: Services, definition: AudienceDefinition, goal: str, campaign_type: str | None,
+               request_id: str | None = None) -> dict:
+    """Facts by code, proposals by the model, checks and consequences by code. Shared by the API and MCP."""
+    checked = s.interpreter.check(definition, [], {})
+    if checked.status == "invalid":
+        raise HTTPException(422, detail="Fix the audience's errors before asking for advice.")
+    if s.engine.size(checked.definition).reachable < s.engine.min_audience:
+        raise HTTPException(422, detail=f"The audience is too small for advice (fewer than {s.engine.min_audience} "
+                                        "reachable lines): past results can't say anything about it.")
+    if campaign_type is not None and campaign_type not in CAMPAIGN_TYPES:
+        raise HTTPException(422, detail=f"Unknown campaign type {campaign_type!r}.")
+    facts = fact_sheet(s.engine, s.catalog, s.history, s.store, checked.definition, campaign_type)
+    try:
+        raw, tel = s.interpreter.advise(facts, goal, campaign_type)
+    except ProviderUnavailable as exc:
+        raise HTTPException(503, detail=f"The advisor is unavailable ({exc}).") from None
+    by_id = {f["id"]: f for f in facts}
+    holdout = s.catalog.parameter_sets.get("measurement")
+    share = float(holdout.values["holdout_share"]) if holdout else 0.1
+    accepted, rejected = [], []
+    for p in (raw.get("proposals") or [])[:3]:
+        reason = check(p, by_id, s.catalog, checked.definition, campaign_type)
+        if reason:
+            rejected.append({"title": str(p.get("title", ""))[:200], "kind": p.get("kind"), "reason": reason})
+        else:
+            used = FIELDS_BY_KIND[p["kind"]]  # blank what a kind doesn't use: no free text rides along
+            accepted.append({"kind": p["kind"], "title": str(p["title"])[:200], "rationale": str(p["rationale"])[:600],
+                             "cites": p["cites"]}
+                            | {k: (p[k] if k in used else ("none" if k == "channel" else "")) for k in
+                               ("attribute", "value", "channel", "campaign_type")}
+                            | {"cited_facts": [by_id[c]["text"] for c in p["cites"]],
+                               "consequence": consequence(p, by_id, s.engine, s.catalog, checked.definition,
+                                                                  campaign_type, holdout_share=share)})
+    summary = str(raw.get("summary", ""))[:600]
+    summary_problem = check_summary(summary, by_id)
+    if summary_problem:
+        rejected.append({"title": "Summary", "kind": "summary", "reason": summary_problem})
+        summary = ""
+    s.metrics.incr("advice_accepted", len(accepted))
+    s.metrics.incr("advice_rejected", len(rejected))
+    advice_id = s.store.record_advice({
+        "request_id": request_id, "campaign_type": campaign_type, "goal_masked": mask_pii(goal.strip()[: s.settings.max_request_chars])[0],
+        "facts_json": json.dumps([{"id": f["id"], "text": f["text"]} for f in facts]), "raw_json": json.dumps(raw),
+        "accepted_json": json.dumps(accepted), "rejected_json": json.dumps(rejected),
+        "model": tel.model, "prompt_version": tel.prompt_version})
+    log.info("advice", extra={"advice_id": advice_id, "accepted": [p["kind"] for p in accepted],
+                              "rejected": [r["reason"] for r in rejected], "facts": len(facts),
+                              "campaign_type": campaign_type})
+    return {"advice_id": advice_id, "summary": summary, "proposals": accepted, "rejected": rejected,
+            "facts": [{"id": f["id"], "text": f["text"]} for f in facts], "telemetry": tel.model_dump(),
+            "synthetic_history": bool(s.history and s.history.synthetic),
+            "model_written": ["summary", "proposals[].title", "proposals[].rationale", "rejected[].title"]}

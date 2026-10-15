@@ -555,6 +555,7 @@ function outcomeLine(r, m) {
       + `${signed(o.lift_points)} pts (95% ${signed(o.lift_95_low)} to ${signed(o.lift_95_high)})`
       + `${r.outcome.expected ? ` against ${signed(r.outcome.expected.lift_points)} expected` : ""}: <span class="${verdictClass(r.outcome.verdict)}">${esc(r.outcome.verdict)}</span>`
       + (pending ? `<br>Not learned from until someone checks it: ${fmt(o.contacted)} contacted, ${fmt(o.held_out)} held out, ${fmt(r.outcome.unknown_responders)} responders not in this audience. `
+        + (r.outcome.check_before_confirming ? `<span class="warn-text">This is far from what past campaigns showed: it may be real, or the wrong file. Check it before confirming.</span> ` : "")
         + `<button class="small confirm-btn" data-id="${r.id}">Confirm outcome</button>`
         : ` · confirmed by ${esc(r.outcome.confirmed_by)}`) + "</div>";
   }

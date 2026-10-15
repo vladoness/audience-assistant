@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 PROMPT_VERSION = "v6"
 REFINE_VERSION = "r2"
 MAX_OUTPUT_TOKENS = 1024
+MAX_ADVICE_TOKENS = 2048  # three proposals with rationales and citations; Haiku ran out at 1,024 on 1 call in 6
 
 _CONDITION_SCHEMA = {
     "type": "object",
@@ -326,7 +327,7 @@ class AnthropicProvider:
         try:
             response = self._client.messages.create(
                 model=self.model,
-                max_tokens=MAX_OUTPUT_TOKENS,
+                max_tokens=max_tokens(schema),
                 system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                 messages=messages,
                 output_config=output_config,
@@ -355,6 +356,10 @@ class AnthropicProvider:
             cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
             finish_reason=response.stop_reason or "",
         )
+
+
+def max_tokens(schema: dict[str, Any] | None) -> int:
+    return MAX_ADVICE_TOKENS if schema is ADVICE_SCHEMA else MAX_OUTPUT_TOKENS
 
 
 def fixture_key(messages: list[dict[str, Any]]) -> str:

@@ -21,14 +21,14 @@ import uuid
 from typing import Any
 
 from app.audience import AudienceEngine
-from app.catalog import NOT, Catalog, parse_pending, pending_name
+from app.catalog import NOT, Catalog, invert, parse_pending, pending_name
 from app.explain import explain
 from app.limits import DailyBudget
 from app.governance import canonical, reconcile_with_proposal, verify_provenance
 from app.llm import (
-    ADVICE_SCHEMA, ADVISOR_SYSTEM, ADVISOR_VERSION, MAX_OUTPUT_TOKENS, PROMPT_VERSION, REFINE_SCHEMA, REFINE_VERSION,
+    ADVICE_SCHEMA, ADVISOR_SYSTEM, ADVISOR_VERSION, PROMPT_VERSION, REFINE_SCHEMA, REFINE_VERSION,
     BudgetExhausted, CircuitOpen, NotRecorded, LLMResult, Pricing, Provider, ProviderUnavailable, build_advice_messages,
-    build_messages, build_refine_messages, build_system_prompt,
+    build_messages, build_refine_messages, build_system_prompt, max_tokens,
 )
 from app.models import (
     AudienceDefinition, CheckResult, Clarification, ClarificationOption, Condition, InterpretResult, Issue, Telemetry,
@@ -267,7 +267,7 @@ class Interpreter:
                 log.warning("llm_circuit_opened", extra={"cooldown_s": self.breaker_cooldown_s})
             raise
         self._consecutive_failures = 0
-        cost = self.pricing.cost(result)
+        cost = 0.0 if result.replayed else self.pricing.cost(result)  # a recorded answer costs nothing
         if self.budget is not None:
             self.budget.spend(cost)
         tel.llm_calls += 1
@@ -289,7 +289,7 @@ class Interpreter:
             "gen_ai.operation.name": "chat",
             "gen_ai.request.model": self.provider.model,
             "gen_ai.response.model": result.model,
-            "gen_ai.request.max_tokens": MAX_OUTPUT_TOKENS,
+            "gen_ai.request.max_tokens": max_tokens(schema),
             "llm.effort": getattr(self.provider, "effort", None),
             "gen_ai.response.finish_reasons": [result.finish_reason],
             "gen_ai.usage.input_tokens": result.total_input_tokens,
@@ -400,6 +400,15 @@ class Interpreter:
                 continue
             if term.status == "decided" and {_condition_key(c) for c in term.conditions} <= model_keys:
                 continue  # the model wrote exactly the governed definition: same audience, nothing to flag
+            if _removed(request_text, phrase):
+                continue  # "remove the high value requirement": nothing to apply, nothing to warn about
+            overlapping = [c for c in conditions if c.source == "model"
+                           and c.attribute in {x["attribute"] for x in term.conditions}]
+            if term.status == "decided" and overlapping and all(_in_request(request_text, c.value) for c in overlapping):
+                continue  # "more than 45 days", "ARPU over 60 instead": the marketer's own value replaces it
+            exclusion = invert(term.conditions) if term.status == "decided" else None
+            if exclusion and {_normal(x) for x in exclusion} <= {_normal(c.model_dump()) for c in overlapping}:
+                continue  # "don't use the app" written as app_active_30d = false: exactly the exclusion
             if _negated(request_text, phrase):
                 if term.status != "decided":
                     # "not active": asked with the exclusion of each definition, never the definitions themselves.
@@ -524,6 +533,37 @@ def _negated(request_text: str, phrase: str) -> bool:
     pattern = (rf"(?<!\w){_NEGATORS}(?:[ \t]+(?!{_CLAUSE_WORDS}\b)[\w']+){{0,2}}?[ \t]+"
                rf"{re.escape(phrase.lower())}(?!\w)")
     return re.search(pattern, text) is not None
+
+
+_REMOVERS = r"(?:remove|drop|forget|delete|take out|get rid of|quita|quitar|elimina|eliminar)"
+
+
+def _removed(request_text: str, phrase: str) -> bool:
+    """Does the request ask to remove the phrase ("remove the high value requirement", "forget high value")?"""
+    pattern = (rf"(?<!\w){_REMOVERS}(?:[ \t]+(?!{_CLAUSE_WORDS}\b)[\w']+){{0,2}}?[ \t]+"
+               rf"{re.escape(phrase.lower())}(?!\w)")
+    return re.search(pattern, request_text.lower()) is not None
+
+
+def _in_request(request_text: str, value: Any) -> bool:
+    """Is every value of a condition in the marketer's own words (a number they typed, a value they named)?"""
+    text = request_text.lower()
+    numbers = {float(n.replace(",", "")) for n in re.findall(r"\d[\d,]*(?:\.\d+)?", text)}
+    for v in value if isinstance(value, list) else [value]:
+        if isinstance(v, bool):
+            return False
+        if isinstance(v, (int, float)) and float(v) not in numbers:
+            return False
+        if isinstance(v, str) and not re.search(rf"(?<!\w){re.escape(v.lower().replace('_', ' '))}(?!\w)", text):
+            return False
+    return True
+
+
+def _normal(c: dict[str, Any]) -> tuple:
+    """A condition in a comparable form: "is not true" and "is false" are the same on a yes/no field."""
+    if c["op"] in ("eq", "neq") and isinstance(c["value"], bool):
+        return (c["attribute"], "eq", c["value"] if c["op"] == "eq" else not c["value"])
+    return (c["attribute"], c["op"], json.dumps(c["value"], sort_keys=True))
 
 
 def _cannot_exclude(term) -> Issue:

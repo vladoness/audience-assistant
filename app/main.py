@@ -648,9 +648,12 @@ def outcome_view(s: Services, o: dict, measurement_json: str) -> dict:
     expected = json.loads(measurement_json).get("evidence_at_approval")
     ps = s.catalog.parameter_sets.get("measurement")
     measured = counts_lift(o["contacted"], o["held_out"], o["contacted_responders"], o["held_out_responders"])
+    judged = verdict(expected, measured, int(ps.values["min_holdout_lines"]) if ps else 0)
     return {"source": o["source"], "sent_at": o["sent_at"], "status": o["status"], "reports": o["reports"],
             "confirmed_by": o["confirmed_by"], "measured": measured.as_dict(), "expected": expected,
-            "verdict": verdict(expected, measured, int(ps.values["min_holdout_lines"]) if ps else 0),
+            "verdict": judged,
+            # A pending result that clearly differs from the evidence may be real, or a wrong file: say so.
+            "check_before_confirming": o["status"] == "pending" and judged.startswith(("below", "above")),
             "unknown_responders": o["unknown_responders"],
             "current_data_matches_approval": bool(o["membership_matches"])}
 

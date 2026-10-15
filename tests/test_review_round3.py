@@ -104,12 +104,12 @@ def test_a_comma_or_conjunction_ends_the_negation(make_client):
 
 def test_a_negated_decided_term_is_its_exclusion_or_a_warning(make_client):
     named = proposal(conditions=PREPAID_ONLY, terms=["high_value"])
-    silent = proposal(conditions=[{"attribute": "app_active_30d", "op": "eq", "value": False}])
+    silent = proposal(conditions=[{"attribute": "device_os", "op": "eq", "value": "android"}])  # app part left out
     client = make_client(ScriptedProvider(named, silent))
     r = client.post("/api/interpret", json={"request": "Prepaid customers who are not high value"}).json()
     assert {"attribute": "arpu_3m", "op": "lt", "value": 40.0, "source": "glossary:high_value=not"} in \
         r["definition"]["conditions"]
-    r = client.post("/api/interpret", json={"request": "Customers who don't use the app"}).json()
+    r = client.post("/api/interpret", json={"request": "Android customers who don't use the app"}).json()
     codes = {i["code"] for i in r["issues"]}
     assert "negated_governed_term" in codes and "governed_term_missed" not in codes
 
@@ -167,3 +167,29 @@ def test_replay_refuses_a_recording_made_with_another_system_prompt(tmp_path):
     with pytest.raises(NotRecorded, match="stale recording"):
         replay.propose("new prompt", messages)
     assert replay.propose("old prompt", messages).proposal == {}
+
+
+GOVERNED_WARNINGS = {"governed_term_overridden", "governed_term_missed", "negated_governed_term"}
+
+
+@pytest.mark.parametrize("request_text, conditions", [
+    ("Prepaid customers who haven't topped up for more than 45 days",  # the marketer's own number
+     [{"attribute": "line_type", "op": "eq", "value": "prepaid"},
+      {"attribute": "days_since_last_recharge", "op": "gt", "value": 45}]),
+    ("Customers who don't use the app", [{"attribute": "app_active_30d", "op": "eq", "value": False}]),  # the exclusion
+    ("Postpaid customers who are not high value", [{"attribute": "line_type", "op": "eq", "value": "postpaid"},
+                                                    {"attribute": "arpu_3m", "op": "lt", "value": 40}]),
+    ("Prepaid in the Coast, forget high value", [{"attribute": "line_type", "op": "eq", "value": "prepaid"},
+                                                 {"attribute": "region", "op": "eq", "value": "Coast"}]),  # a removal
+])
+def test_no_warning_when_the_model_did_what_the_marketer_said(make_client, request_text, conditions):
+    client = make_client(ScriptedProvider(proposal(conditions=conditions)))
+    r = client.post("/api/interpret", json={"request": request_text}).json()
+    assert not GOVERNED_WARNINGS & {i["code"] for i in r["issues"]}, r["issues"]
+
+
+def test_a_drifted_governed_threshold_still_warns(make_client):
+    drift = proposal(conditions=[{"attribute": "arpu_3m", "op": "gte", "value": 50}])
+    client = make_client(ScriptedProvider(drift))
+    r = client.post("/api/interpret", json={"request": "High value customers in the Capital"}).json()
+    assert "governed_term_overridden" in {i["code"] for i in r["issues"]}

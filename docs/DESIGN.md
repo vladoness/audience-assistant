@@ -51,7 +51,12 @@ deterministic check covers that case: whenever the request uses a governed phras
 and the model didn't name the term, an open term is asked about anyway, and a decided term gets
 a warning saying the model's own condition replaced the governed definition, or that the
 definition is missing. So guessing an open term is prevented by code; drifting a decided one is
-flagged, not prevented, because a marketer's own number legitimately replaces it.
+flagged, not prevented, because a marketer's own number legitimately replaces it. A reviewer
+counted the warnings on answers the evals scored correct: six in one run, which teaches people
+to ignore them. So there is no warning when every value the model used is in the marketer's own
+words ("more than 45 days", "ARPU over 60 instead"), when the model wrote exactly the exclusion
+of a negated term, or when the request removes the term ("forget high value"). The same run now
+shows none, and a test keeps a drifted threshold (50 for "high value") warning.
 
 *Negation.* "Not active" is the case where asking the usual question is worse than not asking:
 every option describes who *is* active, so any answer selects the opposite audience. My first fix
@@ -442,13 +447,13 @@ The eval also reports what it can't otherwise show:
   - one is the same rules plus a keyword list for the goal.
 - **A 95% interval over cases,** because twelve cases can't carry a precise number.
 
-Results (README trade-offs): keep 42%, rule 75%, keyword rule 83%, Sonnet 92%. On the structured
+Results (README trade-offs): keep 42%, rule 75%, keyword rule 83%, Sonnet 92%, Haiku 100%. On the structured
 cases the rules do as well as the model: those cases test that nothing misleading reaches the
 marketer, not that the model finds more than rules would. The model's measurable edge is reading
 a goal that doesn't name the type. It fails where the goal's words point the wrong way, the same
 trap as the keyword rule. Explaining in the marketer's terms isn't scored. The checks withheld
-nothing from Sonnet in the latest run, so on this set they are insurance; the tests show what
-they stop.
+nothing from Sonnet in the latest run. For Haiku they withheld an unsupported "Narrow to iOS
+lines" that would have failed the case: the one time on this set they changed an outcome.
 
 *Rejected: letting the model compute the impact itself.* It would read well and be wrong in ways
 no one would notice. The model's job is to notice and explain; arithmetic and policy are code's.

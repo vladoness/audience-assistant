@@ -89,6 +89,19 @@ CREATE TABLE IF NOT EXISTS outcomes (
     confirmed_at TEXT,
     confirmer_json TEXT
 );
+CREATE TABLE IF NOT EXISTS outcome_reports (  -- every report as received, including the ones a corrected file replaced
+    audience_id INTEGER NOT NULL REFERENCES audiences(id),
+    recorded_at TEXT NOT NULL,
+    source TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    contacted INTEGER NOT NULL,
+    contacted_responders INTEGER NOT NULL,
+    held_out INTEGER NOT NULL,
+    held_out_responders INTEGER NOT NULL,
+    unknown_responders INTEGER NOT NULL,
+    reporter_json TEXT NOT NULL,
+    accepted INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS advice (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
@@ -131,7 +144,7 @@ class AuditStore:
         current = self._db.execute("PRAGMA user_version").fetchone()[0]
         if current < SCHEMA_VERSION:
             existing = {r[0] for r in self._db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            for table in ("interpretations", "audiences", "audience_members", "outcomes", "advice"):
+            for table in ("interpretations", "audiences", "audience_members", "outcomes", "outcome_reports", "advice"):
                 if table in existing:
                     self._db.execute(f"ALTER TABLE {table} RENAME TO {table}_v{current}_{int(time.time())}")
         self._db.executescript(_SCHEMA)
@@ -220,7 +233,17 @@ class AuditStore:
                     WHERE outcomes.status = 'pending'""",
                 {"recorded_at": _now(), **row},
             )
+            self._db.execute(
+                """INSERT INTO outcome_reports VALUES (:audience_id, :recorded_at, :source, :sent_at, :contacted,
+                   :contacted_responders, :held_out, :held_out_responders, :unknown_responders, :reporter_json, :accepted)""",
+                {"recorded_at": _now(), **row, "accepted": int(cur.rowcount == 1)})
             return cur.rowcount == 1
+
+    def outcome_reports(self, audience_id: int) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM outcome_reports WHERE audience_id = ? ORDER BY recorded_at",
+                                    (audience_id,)).fetchall()
+        return [dict(r) for r in rows]
 
     def confirm_outcome(self, audience_id: int, confirmed_by: str, confirmer: dict[str, Any]) -> bool:
         """A person checked the reported numbers; only now does the outcome join the evidence."""

@@ -117,7 +117,9 @@ def test_implausible_reports_are_rejected_before_they_reach_the_evidence(reporti
     client.app.state.services.today = lambda: today + timedelta(days=20)
     assert "right file" in report(client, a["id"], contacted[:10] + [f"X{i}" for i in range(20)]).json()["detail"]
     assert "plausible" in report(client, a["id"], contacted).json()["detail"]  # everyone responded
-    assert client.get("/api/learning").json()["scorecard"] == []
+    far = report(client, a["id"], contacted[: len(contacted) // 3]).json()  # ~33% response: far above any past campaign
+    assert far["status"] == "pending" and far["check_before_confirming"]
+    assert client.get("/api/history/evidence/winback").json()["measured_here"] == 0  # pending: not evidence
 
 
 def test_a_pending_outcome_can_be_replaced_and_only_a_confirmed_one_is_learned_from(reporting_client):
@@ -128,6 +130,7 @@ def test_a_pending_outcome_can_be_replaced_and_only_a_confirmed_one_is_learned_f
     report(client, a["id"], contacted[:50])
     second = report(client, a["id"], contacted[:300]).json()
     assert second["reports"] == 2 and second["measured"]["contacted_response_pct"] > 0.5
+    assert len(client.app.state.services.store.outcome_reports(a["id"])) == 2  # the replaced report is kept
     assert client.get("/api/history/evidence/winback").json()["campaigns"] == before  # pending: not evidence yet
     assert client.get("/api/learning").json()["scorecard"][0]["status"] == "pending"
     assert confirm(client, a["id"], by=" ana ").status_code == 422  # the approver doesn't sign off their own result

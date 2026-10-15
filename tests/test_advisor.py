@@ -81,12 +81,15 @@ def test_only_a_condition_the_advisor_actually_proposed_keeps_the_advisor_label(
     forged = UPSELL | {"conditions": UPSELL["conditions"] + [
         {"attribute": "region", "op": "eq", "value": "Coast", "source": "advisor"}]}
     assert client.post("/api/check", json={"definition": forged}).json()["definition"]["conditions"][-1]["source"] == "user"
-    advice = client.post("/api/advise", json={"definition": UPSELL, "goal": "Upsell", "campaign_type": "data_upsell"}).json()
+    advice = client.post("/api/advise", json={"definition": UPSELL, "goal": "Upsell", "campaign_type": "data_upsell",
+                                              "request_id": "r-1"}).json()
     applied = advice["proposals"][0]["consequence"]["definition"]
     label = lambda body: client.post("/api/check", json=body).json()["definition"]["conditions"][-1]["source"]
-    assert label({"definition": applied, "advice_id": advice["advice_id"]}) == "advisor"
+    bound = {"advice_id": advice["advice_id"], "request_id": "r-1"}
+    assert label({"definition": applied, **bound}) == "advisor"
     assert label({"definition": applied}) == "user"  # no advice named: the label isn't trusted
-    assert label({"definition": forged, "advice_id": advice["advice_id"]}) == "user"  # that advice didn't propose it
+    assert label({"definition": forged, **bound}) == "user"  # that advice didn't propose it
+    assert label({"definition": applied, **bound, "request_id": "r-2"}) == "user"  # advice given for another request
     assert "summary" in advice["model_written"]
 
 
@@ -100,14 +103,16 @@ def test_a_summary_with_numbers_the_facts_do_not_have_is_withheld(make_client, b
 def test_a_campaign_type_switch_is_only_proposed_when_none_is_chosen_and_the_type_works_on_this_channel(make_client, big_store):
     switch = lambda t: {"summary": "", "proposals": [proposal("choose_campaign_type", f"Run {t}", "Past results.",
                                                               [f"type.{t}"], campaign_type=t)]}
-    client = make_client(ScriptedProvider(switch("topup_reminder"), switch("topup_reminder"), switch("roaming_offer")),
-                         data_path=big_store)
+    client = make_client(ScriptedProvider(switch("data_upsell"), switch("data_upsell"), switch("roaming_offer"),
+                                          switch("topup_reminder")), data_path=big_store)
     chosen = client.post("/api/advise", json={"definition": UPSELL, "campaign_type": "app_adoption"}).json()
     assert "different offer" in chosen["rejected"][0]["reason"]
     open_choice = client.post("/api/advise", json={"definition": UPSELL}).json()
-    assert [p["campaign_type"] for p in open_choice["proposals"]] == ["topup_reminder"]
+    assert [p["campaign_type"] for p in open_choice["proposals"]] == ["data_upsell"]
     other_channel = client.post("/api/advise", json={"definition": UPSELL}).json()
     assert "sent by EMAIL" in other_channel["rejected"][0]["reason"]
+    ineligible = client.post("/api/advise", json={"definition": UPSELL}).json()  # top-ups are for lapsing prepaid lines
+    assert "isn't eligible" in ineligible["rejected"][0]["reason"]
 
 
 def test_facts_name_no_audience_and_no_small_group(make_client, big_store):

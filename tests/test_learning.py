@@ -73,7 +73,7 @@ def test_the_export_is_the_contacted_group_unless_asked_and_matches_the_approval
     assert default.headers["x-membership"].startswith("as approved") and default.headers["x-excluded-since-approval"] == "0"
 
 
-def test_lines_that_lose_consent_after_approval_are_left_out_of_both_groups(reporting_client):
+def test_consent_is_applied_at_export_to_both_groups_and_never_after_the_send(reporting_client):
     client = reporting_client(PREPAID)
     a = approve(client)
     contacted = [p for p, _ in members(client, a["id"], "contacted")]
@@ -84,7 +84,9 @@ def test_lines_that_lose_consent_after_approval_are_left_out_of_both_groups(repo
     engine.without_consent = lambda ids, channel: withdrawn & set(ids)  # as if they opted out after approval
     export = client.get(f"/api/audiences/{a['id']}/export.csv")
     assert contacted[0] not in export.text and export.headers["x-excluded-since-approval"] == "2"
+    engine.without_consent = lambda ids, channel: (withdrawn | {contacted[1]}) & set(ids)  # opted out after the send
     out = report(client, a["id"], contacted[:100]).json()
+    # Groups are frozen at the send: a post-send opt-out (only contacted lines can reply STOP) stays counted.
     assert (out["measured"]["contacted"], out["measured"]["held_out"]) == (len(contacted) - 1, len(held_out) - 1)
     assert client.get("/api/audiences").json()[0]["excluded_since_approval"] == 2
 
@@ -180,6 +182,20 @@ def test_a_repeat_of_a_recent_audience_is_flagged_before_and_at_approval(make_cl
     second = approve(client, name="Second wave")
     assert second["measurement"]["overlaps_at_approval"][0]["share"] == 1.0
     assert "blurs both measurements" in second["measurement"]["overlap_note"]
+    before = client.get("/api/history/evidence/winback").json()["campaigns"]
+    for audience in (first, second):
+        client.post(f"/api/audiences/{audience['id']}/simulate-outcome")
+        client.post(f"/api/audiences/{audience['id']}/outcome/confirm", json={"confirmed_by": "Luis"})
+    assert client.get("/api/history/evidence/winback").json()["campaigns"] == before + 1  # the repeat isn't pooled
+    card = [c for c in client.get("/api/learning").json()["scorecard"] if c["audience_id"] == second["id"]][0]
+    assert card["kept_out_of_evidence"]
+
+
+def test_no_comparable_campaign_type_is_an_explicit_choice(make_client):
+    client = make_client(ScriptedProvider(PREPAID))
+    m = approve(client, campaign_type="other")["measurement"]
+    assert m["campaign_type"] is None and m["campaign_type_choice"].startswith("other")
+    assert m["holdout_lines"] > 0  # still measured by the campaign tool's report; it starts the evidence for its kind
 
 
 def test_past_campaigns_on_another_channel_are_not_evidence_for_this_one(make_client):

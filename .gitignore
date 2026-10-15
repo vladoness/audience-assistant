@@ -9,3 +9,4 @@ data/*.sqlite
 evals/results/*.local.json
 .DS_Store
 evals/results/*.replay.json
+node_modules/

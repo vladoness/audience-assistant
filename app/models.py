@@ -70,6 +70,7 @@ class Clarification(BaseModel):
     options: list[ClarificationOption]
     working_default_note: str | None = None  # who adopted the interim default and why, until the owner decides
     negated: bool = False  # the request excludes the term ("not active"): every option is an exclusion
+    either: bool = False  # unclear whether it includes or excludes: definitions and exclusions are both offered
 
 
 class Explanation(BaseModel):
@@ -162,10 +163,11 @@ class AdviseRequest(BaseModel):
     definition: AudienceDefinition
     goal: str = Field("", max_length=200)
     campaign_type: str | None = None
+    request_id: str | None = Field(None, max_length=64)  # the interpretation being advised on
 
 
 class OutcomeRequest(BaseModel):
-    """What the campaign tool reports after the send: which lines responded within the window."""
+    """What the data team reports after the window: which lines responded (from billing records)."""
 
     responders: list[Annotated[str, StringConstraints(max_length=64)]] = Field(max_length=2_000_000)
     sent_at: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
@@ -187,6 +189,7 @@ class CheckRequest(BaseModel):
     pending_terms: list[str] = Field(default_factory=list)
     resolutions: dict[str, str] = Field(default_factory=dict)
     advice_id: int | None = None  # the advice an "advisor" condition came from; without it the label isn't kept
+    request_id: str | None = Field(None, max_length=64)  # ...and the request that advice was given for
 
 
 class CheckResult(BaseModel):

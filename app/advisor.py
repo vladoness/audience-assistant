@@ -16,7 +16,8 @@
 4. The marketer applies one or ignores them. An applied change is a condition with source
    "advisor" and goes through the same validation and approval as any edit.
 
-Ontology contract (target): POST /v1/ontology/{oid}/actions/adviseAudience over the same facts.
+On AEP: a customer-built agent or tool next to Audience Agent, reading the same facts from CJA and the
+audience estimate.
 """
 
 from __future__ import annotations
@@ -93,7 +94,9 @@ def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistor
         if len(counts) >= 2:
             label = catalog.attributes[attr].label
             shown = _counts(list(counts.values()))
-            parts = ", ".join(f"{v} {c}{_share(n, sized.reachable)}" for (v, n), c in zip(counts.items(), shown))
+            suppressed = any(0 < n < SMALL_CELL for n in counts.values())  # exact shares would undo the rounding
+            parts = ", ".join(f"{v} {c}{'' if suppressed else _share(n, sized.reachable)}"
+                              for (v, n), c in zip(counts.items(), shown))
             add(f"mix.{attr}", f"By {label.lower()}: {parts}.", values=counts)
 
     other = "email" if channel == "sms" else "sms"
@@ -112,14 +115,15 @@ def fact_sheet(engine: AudienceEngine, catalog: Catalog, history: CampaignHistor
                                f"last {pressure.recent_days} days.", count=pressure.contacted_recently)
         add("pressure.cap", f"{_count(pressure.at_or_over_cap)} of these lines already had {pressure.cap} or more "
                             f"campaigns in the last {pressure.window_days} days.", count=pressure.at_or_over_cap)
-        own = store.outcomes()
+        own = store.evidence_outcomes()
         for t in CAMPAIGN_TYPES:
             e = history.evidence(t, own)
             p = e["pooled"]
             add(f"type.{t}", f"Past {e['label'].lower()} campaigns ({e['campaigns']}, sent by "
                              f"{CAMPAIGN_TYPES[t]['channel'].upper()}): {_signed(p['lift_points'])} points "
                              f"against their holdout (95% {_signed(p['lift_95_low'])} to {_signed(p['lift_95_high'])}).",
-                lift=p["lift_points"], low=p["lift_95_low"], high=p["lift_95_high"], channel=CAMPAIGN_TYPES[t]["channel"])
+                lift=p["lift_points"], low=p["lift_95_low"], high=p["lift_95_high"], channel=CAMPAIGN_TYPES[t]["channel"],
+                eligible_share=engine.share_where(definition, CAMPAIGN_TYPES[t]["audience"]))
         for t in CAMPAIGN_TYPES:
             for attr in allowed:
                 present = mix.get(attr, {})
@@ -228,6 +232,8 @@ def check(proposal: dict[str, Any], facts: dict[str, dict[str, Any]], catalog: C
             return f"past campaigns of that type were sent by {d['channel'].upper()}, not {definition.channel.upper()}"
         if not d["low"] > 0:
             return "past results for that type can't be told apart from no effect"
+        if d.get("eligible_share", 1.0) < 0.5:
+            return "most of this audience isn't eligible for that campaign type (for example, a prepaid-only offer)"
     return None
 
 

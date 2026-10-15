@@ -301,3 +301,46 @@ cases:
       clarify: [active]
       clarify_negated: []
       definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}, {attribute: roaming_30d, op: eq, value: false}]}
+
+  # Negation the phrase check can't see, or misreads (added 15 Oct after the final review): the model
+  # now reports excluded terms; the phrase check only raises an alarm when the two disagree.
+  - id: negated-term-05
+    category: negation
+    request: Prepaid customers who are inactive
+    expect:
+      status: needs_clarification
+      clarify: [active]
+      clarify_negated: [active]
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}]}
+
+  - id: negated-term-06
+    category: negation
+    request: Postpaid customers other than the high value ones
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: line_type, op: eq, value: postpaid}, {attribute: arpu_3m, op: lt, value: 40}]}
+
+  - id: negated-term-07
+    category: negation
+    request: No roaming high value customers
+    expect:
+      status: ready
+      definition: {conditions: [{attribute: roaming_30d, op: eq, value: false}, {attribute: arpu_3m, op: gte, value: 40}]}
+
+  - id: negated-term-08
+    category: negation
+    request: Clientes prepago que no están activos
+    expect:
+      status: needs_clarification
+      clarify: [active]
+      clarify_negated: [active]
+      definition: {conditions: [{attribute: line_type, op: eq, value: prepaid}]}
+
+  - id: negated-term-09
+    category: negation
+    request: Customers who are neither active nor on premium plans
+    expect:
+      status: needs_clarification
+      clarify: [active]
+      clarify_negated: [active]
+      definition: {conditions: [{attribute: plan_tier, op: neq, value: premium}]}

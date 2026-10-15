@@ -5,38 +5,35 @@
     "runs": 3,
     "pass_rate": 0.889,
     "pass_rate_per_run": [
-      0.944,
       0.889,
-      0.833
+      0.889,
+      0.889
     ],
     "cases_passed_every_run_95_interval": [
-      0.608,
-      0.942
+      0.672,
+      0.969
     ],
-    "status_accuracy": 0.926,
-    "audience_exact_match": 0.961,
+    "status_accuracy": 0.889,
+    "audience_exact_match": 1.0,
     "repair_rate": 0.0,
-    "latency_p50_ms": 1305.0,
-    "latency_p95_ms": 1923.0,
-    "latency_max_ms": 1943.0,
-    "avg_tokens_in": 3073.0,
-    "avg_tokens_out": 153.0,
-    "cost_per_1k_requests_usd": 0.11,
+    "latency_p50_ms": 1484.0,
+    "latency_p95_ms": 2381.0,
+    "latency_max_ms": 3609.0,
+    "avg_tokens_in": 3350.0,
+    "avg_tokens_out": 158.0,
+    "cost_per_1k_requests_usd": 0.12,
     "by_category": {
       "glossary_decided": "6/6",
       "glossary_open": "6/6",
       "multilingual": "3/3",
       "out_of_scope": "3/3",
-      "pii": "2/3",
+      "pii": "0/3",
       "policy": "6/6",
-      "simple": "4/9",
+      "simple": "6/9",
       "thresholds": "12/12",
       "unmapped": "6/6"
     },
-    "flaky_cases": [
-      "h-pii-01",
-      "h-simple-02"
-    ],
+    "flaky_cases": [],
     "failures": [
       {
         "id": "h-channel-01",
@@ -44,11 +41,7 @@
       },
       {
         "id": "h-pii-01",
-        "failed_runs": "1/3"
-      },
-      {
-        "id": "h-simple-02",
-        "failed_runs": "2/3"
+        "failed_runs": "3/3"
       }
     ],
     "effort": "low",
@@ -91,10 +84,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1499.1,
-      "tokens_in": 3075,
-      "tokens_out": 157,
-      "cost_usd": 0.000114,
+      "llm_ms": 3454.6,
+      "tokens_in": 3352,
+      "tokens_out": 175,
+      "cost_usd": 0.000505,
       "run": 1
     },
     {
@@ -127,10 +120,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1251.7,
-      "tokens_in": 3069,
-      "tokens_out": 160,
-      "cost_usd": 0.000115,
+      "llm_ms": 2104.8,
+      "tokens_in": 3346,
+      "tokens_out": 192,
+      "cost_usd": 0.000133,
       "run": 1
     },
     {
@@ -166,10 +159,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1928.7,
-      "tokens_in": 3085,
-      "tokens_out": 165,
-      "cost_usd": 0.000119,
+      "llm_ms": 1189.2,
+      "tokens_in": 3362,
+      "tokens_out": 138,
+      "cost_usd": 0.000108,
       "run": 1
     },
     {
@@ -202,10 +195,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1834.9,
-      "tokens_in": 3077,
-      "tokens_out": 164,
-      "cost_usd": 0.000117,
+      "llm_ms": 1989.9,
+      "tokens_in": 3354,
+      "tokens_out": 162,
+      "cost_usd": 0.000119,
       "run": 1
     },
     {
@@ -232,10 +225,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1087.7,
-      "tokens_in": 3072,
-      "tokens_out": 111,
-      "cost_usd": 9e-05,
+      "llm_ms": 2381.4,
+      "tokens_in": 3349,
+      "tokens_out": 123,
+      "cost_usd": 9.9e-05,
       "run": 1
     },
     {
@@ -268,10 +261,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1307.0,
-      "tokens_in": 3069,
-      "tokens_out": 161,
-      "cost_usd": 0.000115,
+      "llm_ms": 1489.3,
+      "tokens_in": 3346,
+      "tokens_out": 174,
+      "cost_usd": 0.000124,
       "run": 1
     },
     {
@@ -310,10 +303,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1207.4,
-      "tokens_in": 3072,
-      "tokens_out": 171,
-      "cost_usd": 0.00012,
+      "llm_ms": 1670.1,
+      "tokens_in": 3349,
+      "tokens_out": 159,
+      "cost_usd": 0.000117,
       "run": 1
     },
     {
@@ -346,10 +339,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1906.9,
-      "tokens_in": 3065,
-      "tokens_out": 184,
-      "cost_usd": 0.000126,
+      "llm_ms": 1293.8,
+      "tokens_in": 3342,
+      "tokens_out": 121,
+      "cost_usd": 9.7e-05,
       "run": 1
     },
     {
@@ -385,10 +378,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1261.2,
-      "tokens_in": 3068,
-      "tokens_out": 162,
-      "cost_usd": 0.000115,
+      "llm_ms": 2294.5,
+      "tokens_in": 3345,
+      "tokens_out": 165,
+      "cost_usd": 0.00012,
       "run": 1
     },
     {
@@ -418,10 +411,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1144.9,
-      "tokens_in": 3074,
-      "tokens_out": 133,
-      "cost_usd": 0.000102,
+      "llm_ms": 1272.5,
+      "tokens_in": 3351,
+      "tokens_out": 157,
+      "cost_usd": 0.000116,
       "run": 1
     },
     {
@@ -451,10 +444,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1298.9,
-      "tokens_in": 3071,
-      "tokens_out": 131,
-      "cost_usd": 0.0001,
+      "llm_ms": 1880.0,
+      "tokens_in": 3348,
+      "tokens_out": 134,
+      "cost_usd": 0.000105,
       "run": 1
     },
     {
@@ -485,15 +478,16 @@
       ],
       "clarifications": [],
       "unmapped": [
-        "complained on social media"
+        "who complained on social media",
+        "Big data users"
       ],
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1285.6,
-      "tokens_in": 3072,
-      "tokens_out": 140,
-      "cost_usd": 0.000105,
+      "llm_ms": 1596.2,
+      "tokens_in": 3349,
+      "tokens_out": 176,
+      "cost_usd": 0.000126,
       "run": 1
     },
     {
@@ -531,10 +525,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1170.0,
-      "tokens_in": 3073,
-      "tokens_out": 151,
-      "cost_usd": 0.00011,
+      "llm_ms": 1292.0,
+      "tokens_in": 3350,
+      "tokens_out": 164,
+      "cost_usd": 0.00012,
       "run": 1
     },
     {
@@ -568,10 +562,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1651.5,
-      "tokens_in": 3072,
-      "tokens_out": 115,
-      "cost_usd": 9.2e-05,
+      "llm_ms": 1257.1,
+      "tokens_in": 3349,
+      "tokens_out": 122,
+      "cost_usd": 9.9e-05,
       "run": 1
     },
     {
@@ -586,17 +580,15 @@
       "jaccard": null,
       "conditions": [],
       "clarifications": [],
-      "unmapped": [
-        "Summarise last month's campaign results"
-      ],
+      "unmapped": [],
       "issues": [
         "no_conditions"
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1265.3,
-      "tokens_in": 3070,
-      "tokens_out": 102,
+      "llm_ms": 1776.7,
+      "tokens_in": 3347,
+      "tokens_out": 98,
       "cost_usd": 8.6e-05,
       "run": 1
     },
@@ -636,22 +628,22 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1516.0,
-      "tokens_in": 3083,
-      "tokens_out": 185,
-      "cost_usd": 0.000128,
+      "llm_ms": 3609.0,
+      "tokens_in": 3360,
+      "tokens_out": 174,
+      "cost_usd": 0.000126,
       "run": 1
     },
     {
       "id": "h-pii-01",
       "category": "pii",
       "request": "Feature phone users in the North (contact maria.lopez@example.com for details)",
-      "passed": true,
+      "passed": false,
       "checks": {
-        "status": true,
+        "status": false,
         "audience": true
       },
-      "status": "ready",
+      "status": "needs_confirmation",
       "jaccard": 1.0,
       "conditions": [
         {
@@ -668,14 +660,16 @@
         }
       ],
       "clarifications": [],
-      "unmapped": [],
+      "unmapped": [
+        "contact [EMAIL] for details"
+      ],
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1257.8,
-      "tokens_in": 3079,
-      "tokens_out": 173,
-      "cost_usd": 0.000122,
+      "llm_ms": 1376.6,
+      "tokens_in": 3356,
+      "tokens_out": 160,
+      "cost_usd": 0.000118,
       "run": 1
     },
     {
@@ -707,20 +701,21 @@
           "attribute": "app_active_30d",
           "op": "eq",
           "value": true,
-          "source": "model"
+          "source": "glossary:app_user"
         }
       ],
       "clarifications": [],
       "unmapped": [],
       "issues": [
+        "ungrounded_term",
         "policy_violation"
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1556.9,
-      "tokens_in": 3071,
-      "tokens_out": 213,
-      "cost_usd": 0.000141,
+      "llm_ms": 2077.2,
+      "tokens_in": 3348,
+      "tokens_out": 198,
+      "cost_usd": 0.000137,
       "run": 1
     },
     {
@@ -759,23 +754,23 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1157.4,
-      "tokens_in": 3075,
-      "tokens_out": 164,
-      "cost_usd": 0.000117,
+      "llm_ms": 1271.0,
+      "tokens_in": 3352,
+      "tokens_out": 175,
+      "cost_usd": 0.000125,
       "run": 2
     },
     {
       "id": "h-simple-02",
       "category": "simple",
       "request": "Android users who did not roam in the last month",
-      "passed": false,
+      "passed": true,
       "checks": {
         "status": true,
-        "audience": false
+        "audience": true
       },
       "status": "ready",
-      "jaccard": 0.2357,
+      "jaccard": 1.0,
       "conditions": [
         {
           "attribute": "device_os",
@@ -788,25 +783,17 @@
           "op": "eq",
           "value": false,
           "source": "model"
-        },
-        {
-          "attribute": "app_active_30d",
-          "op": "eq",
-          "value": true,
-          "source": "glossary:app_user"
         }
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [
-        "ungrounded_term"
-      ],
+      "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1547.7,
-      "tokens_in": 3069,
-      "tokens_out": 186,
-      "cost_usd": 0.000128,
+      "llm_ms": 2071.9,
+      "tokens_in": 3346,
+      "tokens_out": 198,
+      "cost_usd": 0.000136,
       "run": 2
     },
     {
@@ -842,10 +829,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1345.4,
-      "tokens_in": 3085,
-      "tokens_out": 162,
-      "cost_usd": 0.000117,
+      "llm_ms": 1376.9,
+      "tokens_in": 3362,
+      "tokens_out": 173,
+      "cost_usd": 0.000125,
       "run": 2
     },
     {
@@ -878,10 +865,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1229.1,
-      "tokens_in": 3077,
-      "tokens_out": 149,
-      "cost_usd": 0.00011,
+      "llm_ms": 1915.3,
+      "tokens_in": 3354,
+      "tokens_out": 158,
+      "cost_usd": 0.000117,
       "run": 2
     },
     {
@@ -908,10 +895,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 926.0,
-      "tokens_in": 3072,
-      "tokens_out": 110,
-      "cost_usd": 9e-05,
+      "llm_ms": 1371.7,
+      "tokens_in": 3349,
+      "tokens_out": 130,
+      "cost_usd": 0.000103,
       "run": 2
     },
     {
@@ -944,10 +931,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1268.2,
-      "tokens_in": 3069,
-      "tokens_out": 157,
-      "cost_usd": 0.000113,
+      "llm_ms": 1326.8,
+      "tokens_in": 3346,
+      "tokens_out": 172,
+      "cost_usd": 0.000123,
       "run": 2
     },
     {
@@ -986,10 +973,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1134.2,
-      "tokens_in": 3072,
-      "tokens_out": 141,
-      "cost_usd": 0.000105,
+      "llm_ms": 1320.2,
+      "tokens_in": 3349,
+      "tokens_out": 183,
+      "cost_usd": 0.000129,
       "run": 2
     },
     {
@@ -1022,9 +1009,9 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1650.9,
-      "tokens_in": 3065,
-      "tokens_out": 118,
+      "llm_ms": 1309.1,
+      "tokens_in": 3342,
+      "tokens_out": 112,
       "cost_usd": 9.3e-05,
       "run": 2
     },
@@ -1061,10 +1048,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1328.5,
-      "tokens_in": 3068,
-      "tokens_out": 157,
-      "cost_usd": 0.000113,
+      "llm_ms": 1409.3,
+      "tokens_in": 3345,
+      "tokens_out": 184,
+      "cost_usd": 0.000129,
       "run": 2
     },
     {
@@ -1094,10 +1081,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1310.6,
-      "tokens_in": 3074,
-      "tokens_out": 144,
-      "cost_usd": 0.000107,
+      "llm_ms": 1315.4,
+      "tokens_in": 3351,
+      "tokens_out": 129,
+      "cost_usd": 0.000102,
       "run": 2
     },
     {
@@ -1127,10 +1114,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1254.1,
-      "tokens_in": 3071,
-      "tokens_out": 124,
-      "cost_usd": 9.7e-05,
+      "llm_ms": 1741.1,
+      "tokens_in": 3348,
+      "tokens_out": 131,
+      "cost_usd": 0.000103,
       "run": 2
     },
     {
@@ -1161,14 +1148,15 @@
       ],
       "clarifications": [],
       "unmapped": [
-        "complained on social media"
+        "who complained on social media",
+        "big data users"
       ],
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1240.5,
-      "tokens_in": 3072,
-      "tokens_out": 155,
+      "llm_ms": 1260.7,
+      "tokens_in": 3349,
+      "tokens_out": 149,
       "cost_usd": 0.000112,
       "run": 2
     },
@@ -1207,10 +1195,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1706.7,
-      "tokens_in": 3073,
-      "tokens_out": 162,
-      "cost_usd": 0.000116,
+      "llm_ms": 1459.4,
+      "tokens_in": 3350,
+      "tokens_out": 160,
+      "cost_usd": 0.000118,
       "run": 2
     },
     {
@@ -1236,18 +1224,16 @@
         }
       ],
       "clarifications": [],
-      "unmapped": [
-        "new plans"
-      ],
+      "unmapped": [],
       "issues": [
         "policy_violation"
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1610.2,
-      "tokens_in": 3072,
-      "tokens_out": 186,
-      "cost_usd": 0.000128,
+      "llm_ms": 1925.3,
+      "tokens_in": 3349,
+      "tokens_out": 138,
+      "cost_usd": 0.000107,
       "run": 2
     },
     {
@@ -1262,17 +1248,15 @@
       "jaccard": null,
       "conditions": [],
       "clarifications": [],
-      "unmapped": [
-        "Summarise last month's campaign results"
-      ],
+      "unmapped": [],
       "issues": [
         "no_conditions"
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1144.9,
-      "tokens_in": 3070,
-      "tokens_out": 102,
+      "llm_ms": 1734.1,
+      "tokens_in": 3347,
+      "tokens_out": 98,
       "cost_usd": 8.6e-05,
       "run": 2
     },
@@ -1312,22 +1296,22 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1600.2,
-      "tokens_in": 3083,
-      "tokens_out": 189,
-      "cost_usd": 0.00013,
+      "llm_ms": 1403.1,
+      "tokens_in": 3360,
+      "tokens_out": 188,
+      "cost_usd": 0.000133,
       "run": 2
     },
     {
       "id": "h-pii-01",
       "category": "pii",
       "request": "Feature phone users in the North (contact maria.lopez@example.com for details)",
-      "passed": true,
+      "passed": false,
       "checks": {
-        "status": true,
+        "status": false,
         "audience": true
       },
-      "status": "ready",
+      "status": "needs_confirmation",
       "jaccard": 1.0,
       "conditions": [
         {
@@ -1344,14 +1328,16 @@
         }
       ],
       "clarifications": [],
-      "unmapped": [],
+      "unmapped": [
+        "contact [EMAIL] for details"
+      ],
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1248.9,
-      "tokens_in": 3079,
-      "tokens_out": 170,
-      "cost_usd": 0.000121,
+      "llm_ms": 1483.6,
+      "tokens_in": 3356,
+      "tokens_out": 178,
+      "cost_usd": 0.000127,
       "run": 2
     },
     {
@@ -1387,17 +1373,19 @@
         }
       ],
       "clarifications": [],
-      "unmapped": [],
+      "unmapped": [
+        "iOS users"
+      ],
       "issues": [
         "ungrounded_term",
         "policy_violation"
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1516.0,
-      "tokens_in": 3071,
-      "tokens_out": 206,
-      "cost_usd": 0.000138,
+      "llm_ms": 1923.9,
+      "tokens_in": 3348,
+      "tokens_out": 180,
+      "cost_usd": 0.000128,
       "run": 2
     },
     {
@@ -1436,23 +1424,23 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1236.7,
-      "tokens_in": 3075,
-      "tokens_out": 161,
-      "cost_usd": 0.000116,
+      "llm_ms": 1342.6,
+      "tokens_in": 3352,
+      "tokens_out": 166,
+      "cost_usd": 0.000121,
       "run": 3
     },
     {
       "id": "h-simple-02",
       "category": "simple",
       "request": "Android users who did not roam in the last month",
-      "passed": false,
+      "passed": true,
       "checks": {
         "status": true,
-        "audience": false
+        "audience": true
       },
       "status": "ready",
-      "jaccard": 0.2357,
+      "jaccard": 1.0,
       "conditions": [
         {
           "attribute": "device_os",
@@ -1465,25 +1453,17 @@
           "op": "eq",
           "value": false,
           "source": "model"
-        },
-        {
-          "attribute": "app_active_30d",
-          "op": "eq",
-          "value": true,
-          "source": "glossary:app_user"
         }
       ],
       "clarifications": [],
       "unmapped": [],
-      "issues": [
-        "ungrounded_term"
-      ],
+      "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1923.3,
-      "tokens_in": 3069,
-      "tokens_out": 171,
-      "cost_usd": 0.00012,
+      "llm_ms": 2076.4,
+      "tokens_in": 3346,
+      "tokens_out": 196,
+      "cost_usd": 0.000135,
       "run": 3
     },
     {
@@ -1519,10 +1499,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1260.0,
-      "tokens_in": 3085,
-      "tokens_out": 141,
-      "cost_usd": 0.000107,
+      "llm_ms": 1203.6,
+      "tokens_in": 3362,
+      "tokens_out": 138,
+      "cost_usd": 0.000108,
       "run": 3
     },
     {
@@ -1555,10 +1535,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1144.8,
-      "tokens_in": 3077,
+      "llm_ms": 1854.0,
+      "tokens_in": 3354,
       "tokens_out": 149,
-      "cost_usd": 0.00011,
+      "cost_usd": 0.000113,
       "run": 3
     },
     {
@@ -1585,10 +1565,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 945.9,
-      "tokens_in": 3072,
-      "tokens_out": 111,
-      "cost_usd": 9e-05,
+      "llm_ms": 1614.7,
+      "tokens_in": 3349,
+      "tokens_out": 142,
+      "cost_usd": 0.000109,
       "run": 3
     },
     {
@@ -1621,10 +1601,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1337.5,
-      "tokens_in": 3069,
-      "tokens_out": 163,
-      "cost_usd": 0.000116,
+      "llm_ms": 1292.7,
+      "tokens_in": 3346,
+      "tokens_out": 178,
+      "cost_usd": 0.000126,
       "run": 3
     },
     {
@@ -1663,10 +1643,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1448.3,
-      "tokens_in": 3072,
-      "tokens_out": 161,
-      "cost_usd": 0.000115,
+      "llm_ms": 1511.9,
+      "tokens_in": 3349,
+      "tokens_out": 176,
+      "cost_usd": 0.000126,
       "run": 3
     },
     {
@@ -1699,10 +1679,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1768.9,
-      "tokens_in": 3065,
-      "tokens_out": 115,
-      "cost_usd": 9.2e-05,
+      "llm_ms": 1131.7,
+      "tokens_in": 3342,
+      "tokens_out": 112,
+      "cost_usd": 9.3e-05,
       "run": 3
     },
     {
@@ -1738,10 +1718,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1255.4,
-      "tokens_in": 3068,
-      "tokens_out": 165,
-      "cost_usd": 0.000117,
+      "llm_ms": 1291.0,
+      "tokens_in": 3345,
+      "tokens_out": 162,
+      "cost_usd": 0.000118,
       "run": 3
     },
     {
@@ -1771,10 +1751,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1387.6,
-      "tokens_in": 3074,
-      "tokens_out": 154,
-      "cost_usd": 0.000112,
+      "llm_ms": 1577.0,
+      "tokens_in": 3351,
+      "tokens_out": 165,
+      "cost_usd": 0.00012,
       "run": 3
     },
     {
@@ -1804,10 +1784,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1264.1,
-      "tokens_in": 3071,
-      "tokens_out": 123,
-      "cost_usd": 9.6e-05,
+      "llm_ms": 1819.0,
+      "tokens_in": 3348,
+      "tokens_out": 132,
+      "cost_usd": 0.000104,
       "run": 3
     },
     {
@@ -1838,15 +1818,16 @@
       ],
       "clarifications": [],
       "unmapped": [
-        "complained on social media"
+        "who complained on social media",
+        "big data users"
       ],
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1807.0,
-      "tokens_in": 3072,
-      "tokens_out": 146,
-      "cost_usd": 0.000108,
+      "llm_ms": 1404.6,
+      "tokens_in": 3349,
+      "tokens_out": 189,
+      "cost_usd": 0.000132,
       "run": 3
     },
     {
@@ -1884,9 +1865,9 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1790.9,
-      "tokens_in": 3073,
-      "tokens_out": 166,
+      "llm_ms": 1283.4,
+      "tokens_in": 3350,
+      "tokens_out": 160,
       "cost_usd": 0.000118,
       "run": 3
     },
@@ -1914,17 +1895,17 @@
       ],
       "clarifications": [],
       "unmapped": [
-        "new plans"
+        "about our new plans"
       ],
       "issues": [
         "policy_violation"
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1942.9,
-      "tokens_in": 3072,
-      "tokens_out": 152,
-      "cost_usd": 0.000111,
+      "llm_ms": 1607.8,
+      "tokens_in": 3349,
+      "tokens_out": 162,
+      "cost_usd": 0.000119,
       "run": 3
     },
     {
@@ -1939,17 +1920,15 @@
       "jaccard": null,
       "conditions": [],
       "clarifications": [],
-      "unmapped": [
-        "Summarise last month's campaign results"
-      ],
+      "unmapped": [],
       "issues": [
         "no_conditions"
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1036.3,
-      "tokens_in": 3070,
-      "tokens_out": 103,
+      "llm_ms": 1749.7,
+      "tokens_in": 3347,
+      "tokens_out": 98,
       "cost_usd": 8.6e-05,
       "run": 3
     },
@@ -1989,10 +1968,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1477.5,
-      "tokens_in": 3083,
-      "tokens_out": 161,
-      "cost_usd": 0.000116,
+      "llm_ms": 1184.9,
+      "tokens_in": 3360,
+      "tokens_out": 179,
+      "cost_usd": 0.000128,
       "run": 3
     },
     {
@@ -2027,10 +2006,10 @@
       "issues": [],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1305.0,
-      "tokens_in": 3079,
-      "tokens_out": 147,
-      "cost_usd": 0.000109,
+      "llm_ms": 1383.7,
+      "tokens_in": 3356,
+      "tokens_out": 192,
+      "cost_usd": 0.000134,
       "run": 3
     },
     {
@@ -2073,10 +2052,10 @@
       ],
       "llm_calls": 1,
       "repaired": false,
-      "llm_ms": 1485.5,
-      "tokens_in": 3071,
-      "tokens_out": 208,
-      "cost_usd": 0.000139,
+      "llm_ms": 1524.2,
+      "tokens_in": 3348,
+      "tokens_out": 191,
+      "cost_usd": 0.000133,
       "run": 3
     }
   ]

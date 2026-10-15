@@ -9,7 +9,7 @@
     GET  /api/interpretations/{id}  a recorded interpretation, re-checked, for review (e.g. drafted over MCP)
     GET  /api/audiences   approved audiences + whether a governance change affects them (blast radius)
     GET  /api/audiences/{id}/export.csv  the lines to contact (?group=held_out|all for the rest), as approved
-    POST /api/audiences/{id}/outcome     the campaign tool reports responders (token); stored as pending
+    POST /api/audiences/{id}/outcome     the data team reports responders (token); stored as pending
     POST /api/audiences/{id}/outcome/confirm  a person confirms a pending outcome; only then is it learned from
     POST /api/audiences/{id}/simulate-outcome  demo only (synthetic history): generated responses, also pending
     POST /api/advise      the advisor: facts by code, proposals by the model, checked by code (calls the model)
@@ -226,7 +226,8 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
 
     @app.post("/api/check", response_model=CheckResult)
     def check(body: CheckRequest, request: Request) -> CheckResult:
-        return svc(request).interpreter.check(body.definition, body.pending_terms, body.resolutions, body.advice_id)
+        return svc(request).interpreter.check(body.definition, body.pending_terms, body.resolutions, body.advice_id,
+                                              body.request_id)
 
     @app.post("/api/size", response_model=SizeResult)
     def size(definition: AudienceDefinition, request: Request) -> SizeResult:
@@ -246,7 +247,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         each is checked against those facts and sized before the marketer sees it."""
         s = svc(request)
         rate_limit(s, request)
-        return run_advice(s, body.definition, body.goal, body.campaign_type)
+        return run_advice(s, body.definition, body.goal, body.campaign_type, body.request_id)
 
     @app.get("/api/history")
     def history(request: Request) -> dict:
@@ -258,7 +259,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
     @app.get("/api/history/evidence/{campaign_type}")
     def evidence(campaign_type: str, request: Request) -> dict:
         h = svc(request).history
-        found = h.evidence(campaign_type, svc(request).store.outcomes()) if h is not None else None
+        found = h.evidence(campaign_type, svc(request).store.evidence_outcomes()) if h is not None else None
         if found is None:
             raise HTTPException(404, detail=f"No campaign history for type {campaign_type!r}.")
         return found
@@ -277,7 +278,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         reachable = s.engine.size(checked.definition).reachable
         holdout = round(reachable * share)  # the expected split: the real one is drawn at approval
         target = reachable - holdout
-        past = s.history.evidence(body.campaign_type, s.store.outcomes())
+        past = s.history.evidence(body.campaign_type, s.store.evidence_outcomes())
         detectable, note = detectable_lift(past, target, holdout)
         return {"available": True, "target_lines": target, "holdout_lines": holdout, "past_lift_points":
                 past["pooled"]["lift_points"], "detectable_lift_points": detectable, "power_note": note,
@@ -292,22 +293,26 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         existing = s.store.approval_for(body.request_id)
         if existing is not None:
             raise HTTPException(409, detail=f"This request was already approved as audience #{existing}.")
-        checked = s.interpreter.check(body.definition, [], {}, body.advice_id)
+        checked = s.interpreter.check(body.definition, [], {}, body.advice_id, body.request_id)
         if checked.status != "ready":
             raise HTTPException(422, detail={"status": checked.status, "issues": [i.model_dump() for i in checked.issues]})
         if not checked.definition.conditions:
             raise HTTPException(422, detail={"status": "invalid", "detail": "An audience needs at least one condition."})
         answered = dict(c.source.removeprefix("glossary:").partition("=")[::2]
                         for c in checked.definition.conditions if c.source.startswith("glossary:") and "=" in c.source)
-        # A term asked as "not <term>" is only answered by an exclusion, and the reverse.
+        # A term asked as "not <term>" is only answered by an exclusion, and the reverse; "unclear" takes either.
         unanswered = [t for t in json.loads(interpretation["clarifications_json"])
-                      if (o := answered.get(parse_pending(t)[0])) is None or o.startswith(NOT) != parse_pending(t)[1]]
+                      if (o := answered.get(parse_pending(t)[0])) is None
+                      or (parse_pending(t)[1] is not None and o.startswith(NOT) != parse_pending(t)[1])]
         if unanswered:
             raise HTTPException(422, detail={"status": "needs_clarification", "unanswered_terms": unanswered})
         unmapped = json.loads(interpretation["unmapped_json"])
         if unmapped and not body.acknowledged_unmapped:
             raise HTTPException(422, detail={"status": "needs_confirmation", "unmapped_phrases": unmapped})
         known_types = {t["id"] for t in s.history.types()} if s.history is not None else set()
+        no_comparable_type = body.campaign_type == "other"  # an explicit choice: nothing in the history compares
+        if no_comparable_type:
+            body.campaign_type = None
         if body.campaign_type is not None and body.campaign_type not in known_types:
             raise HTTPException(422, detail=f"Unknown campaign type {body.campaign_type!r}.")
         if body.campaign_type is not None and CAMPAIGN_TYPES[body.campaign_type]["channel"] != checked.definition.channel:
@@ -320,6 +325,8 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         sized = s.engine.size(final)
         measurement = measurement_plan(s, final, body.goal.strip(), salt=body.request_id,
                                        campaign_type=body.campaign_type)
+        measurement["campaign_type_choice"] = ("other: no comparable past campaigns" if no_comparable_type
+                                               else body.campaign_type or "not chosen")
         members = s.engine.members(final, body.request_id, measurement["holdout_share"])
         definition = final.model_dump()
         audience_id = s.store.record_approval_once(members=members, row={
@@ -376,7 +383,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
 
     @app.post("/api/audiences/{audience_id}/outcome")
     def outcome(audience_id: int, body: OutcomeRequest, request: Request) -> dict:
-        """Close the loop: the campaign tool reports who responded, with the shared outcome token. The lift
+        """Close the loop: the data team reports who responded (from billing records), with the shared outcome token. The lift
         is measured against the membership recorded at approval and stored as pending: it joins the
         evidence only when a person confirms it. A new report replaces a pending one."""
         s = svc(request)
@@ -419,7 +426,6 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         m = json.loads(row["measurement_json"])
         if not m.get("campaign_type"):
             raise HTTPException(422, detail="This audience has no campaign type, so there is nothing to simulate against.")
-        recheck_consent(s, audience_id, row)
         responders = s.history.simulate_responders(s.store.members(audience_id), m["campaign_type"],
                                                    seed=f"outcome:{audience_id}")
         return record_outcome(s, audience_id, responders, source="simulated", sent_at=s.today().isoformat(),
@@ -430,7 +436,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
         """The loop in numbers: how many decisions were defined, approved, measured, and what was learned.
         Evidence uses confirmed outcomes only; the scorecard shows pending ones too, marked."""
         s = svc(request)
-        own = s.store.outcomes()
+        own = s.store.evidence_outcomes()
         types = []
         for t in s.history.types() if s.history is not None else []:
             now = s.history.evidence(t["id"], own)
@@ -447,7 +453,7 @@ def create_app(settings: Settings | None = None, provider: Provider | None = Non
     @app.get("/api/learning/{campaign_type}")
     def learning_curve(campaign_type: str, request: Request) -> dict:
         s = svc(request)
-        found = s.history.learning(campaign_type, s.store.outcomes()) if s.history is not None else None
+        found = s.history.learning(campaign_type, s.store.evidence_outcomes()) if s.history is not None else None
         if found is None:
             raise HTTPException(404, detail=f"No campaign history for type {campaign_type!r}.")
         return found
@@ -541,11 +547,15 @@ EXAMPLES = [
 REFINE_EXAMPLES = ["also include the Highlands", "only postpaid", "make it SMS instead"]
 
 
-def run_advice(s: Services, definition: AudienceDefinition, goal: str, campaign_type: str | None) -> dict:
+def run_advice(s: Services, definition: AudienceDefinition, goal: str, campaign_type: str | None,
+               request_id: str | None = None) -> dict:
     """Facts by code, proposals by the model, checks and consequences by code. Shared by the API and MCP."""
     checked = s.interpreter.check(definition, [], {})
     if checked.status == "invalid":
         raise HTTPException(422, detail="Fix the audience's errors before asking for advice.")
+    if s.engine.size(checked.definition).reachable < s.engine.min_audience:
+        raise HTTPException(422, detail=f"The audience is too small for advice (fewer than {s.engine.min_audience} "
+                                        "reachable lines): past results can't say anything about it.")
     if campaign_type is not None and campaign_type not in CAMPAIGN_TYPES:
         raise HTTPException(422, detail=f"Unknown campaign type {campaign_type!r}.")
     facts = advisor.fact_sheet(s.engine, s.catalog, s.history, s.store, checked.definition, campaign_type)
@@ -578,7 +588,7 @@ def run_advice(s: Services, definition: AudienceDefinition, goal: str, campaign_
     s.metrics.incr("advice_accepted", len(accepted))
     s.metrics.incr("advice_rejected", len(rejected))
     advice_id = s.store.record_advice({
-        "campaign_type": campaign_type, "goal_masked": mask_pii(goal.strip()[: s.settings.max_request_chars])[0],
+        "request_id": request_id, "campaign_type": campaign_type, "goal_masked": mask_pii(goal.strip()[: s.settings.max_request_chars])[0],
         "facts_json": json.dumps([{"id": f["id"], "text": f["text"]} for f in facts]), "raw_json": json.dumps(raw),
         "accepted_json": json.dumps(accepted), "rejected_json": json.dumps(rejected),
         "model": tel.model, "prompt_version": tel.prompt_version})
@@ -612,8 +622,7 @@ def record_outcome(s: Services, audience_id: int, responders: list[str], source:
     if source == "campaign_tool" and today < sent + timedelta(days=m["window_days"]):
         raise HTTPException(422, detail=(f"The {m['window_days']}-day measurement window is open until "
                                          f"{sent + timedelta(days=m['window_days'])}; report after that."))
-    recheck_consent(s, audience_id, row)
-    groups = dict(s.store.members(audience_id))
+    groups = dict(s.store.members(audience_id))  # as handed off: consent was applied at export, before the send
     responded = set(responders)
     contacted = sum(1 for g in groups.values() if g == "contacted")
     held_out = len(groups) - contacted
@@ -654,14 +663,16 @@ def outcome_view(s: Services, o: dict, measurement_json: str) -> dict:
             "verdict": judged,
             # A pending result that clearly differs from the evidence may be real, or a wrong file: say so.
             "check_before_confirming": o["status"] == "pending" and judged.startswith(("below", "above")),
+            "kept_out_of_evidence": json.loads(measurement_json).get("overlap_note"),
             "unknown_responders": o["unknown_responders"],
             "current_data_matches_approval": bool(o["membership_matches"])}
 
 
 def recheck_consent(s: Services, audience_id: int, row: dict) -> int:
-    """Membership is frozen at approval, consent isn't: before any hand-off (export, outcome count), lines
-    that lost consent for the channel, or left the profile store, are left out of both groups. Returns
-    how many lines have been left out since approval."""
+    """Membership is frozen at approval, consent isn't: at export (the hand-off before the send), lines that
+    lost consent for the channel, or left the profile store, are left out of both groups. Never after the
+    send: only contacted lines can opt out because of the campaign, so dropping them then would inflate
+    the measured lift. Returns how many lines have been left out since approval."""
     gone = s.engine.without_consent([pid for pid, _ in s.store.members(audience_id)], row["channel"])
     if gone:
         s.store.exclude_members(audience_id, gone, f"no {row['channel']} consent on {s.today().isoformat()}")
@@ -696,7 +707,7 @@ def measurement_plan(s: Services, definition: AudienceDefinition, goal: str, sal
     window = int(ps.values["window_days"]) if ps else 0
     target, holdout = s.engine.split(definition, salt, share)
     measurable = ps is not None and holdout >= int(ps.values["min_holdout_lines"])
-    past = s.history.evidence(campaign_type, s.store.outcomes()) if s.history is not None and campaign_type else None
+    past = s.history.evidence(campaign_type, s.store.evidence_outcomes()) if s.history is not None and campaign_type else None
     pressure = s.history.contact_pressure(definition) if s.history is not None else None
     detectable, power_note = detectable_lift(past, target, holdout)
     overlaps = advisor.recent_overlaps(s.engine, s.store, definition)
@@ -739,8 +750,8 @@ def detectable_lift(past: dict | None, target: int, holdout: int) -> tuple[float
         return detectable, None
     return detectable, (f"With {holdout:,} lines held out, only a lift of about {detectable:.2f} points or more would "
                         f"show clearly; past campaigns of this type lifted {past['pooled']['lift_points']:+.2f}, so this "
-                        "one will probably read \"too small to tell\". A wider audience or a larger holdout share "
-                        "would fix it.")
+                        "one will probably read \"too small to tell\". A wider audience would fix it; the holdout "
+                        "share is a governed setting (Marketing Analytics).")
 
 
 def catalog_view(c: Catalog) -> dict:

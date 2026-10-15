@@ -29,7 +29,7 @@ from app.catalog import Catalog
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v6"
+PROMPT_VERSION = "v7"
 REFINE_VERSION = "r2"
 MAX_OUTPUT_TOKENS = 1024
 MAX_ADVICE_TOKENS = 2048  # three proposals with rationales and citations; Haiku ran out at 1,024 on 1 call in 6
@@ -60,6 +60,12 @@ PROPOSAL_SCHEMA = {
             "items": {"type": "string"},
             "description": "Glossary term names used by the request. Do not also write conditions for them.",
         },
+        "excluded_terms": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Of glossary_terms, the ones the request EXCLUDES ('not active', 'inactive', 'other than "
+                           "high value', 'no están activos'). Empty if none.",
+        },
         "conditions": {"type": "array", "items": _CONDITION_SCHEMA},
         "channel": {"type": "string", "enum": ["sms", "email", "unspecified"]},
         "unmapped_phrases": {
@@ -74,7 +80,8 @@ PROPOSAL_SCHEMA = {
             "description": "Up to 3 short interpretation choices the marketer should know about.",
         },
     },
-    "required": ["glossary_terms", "conditions", "channel", "unmapped_phrases", "out_of_scope", "assumptions"],
+    "required": ["glossary_terms", "excluded_terms", "conditions", "channel", "unmapped_phrases", "out_of_scope",
+                 "assumptions"],
 }
 
 ADVISOR_VERSION = "a2"
@@ -183,6 +190,9 @@ Rules:
    But if the request states its own number for that idea ("used over 25 GB", "joined in the last 6 months"), the
    marketer's number wins: write it as a condition and do not use the glossary term. A shared word is not enough
    to use a term: only use it when the request is about that concept ("heavy roaming" is not "heavy data users").
+   If the request EXCLUDES a term ("not active", "inactive", "other than high value", "neither ... nor", in any
+   language), list it in glossary_terms AND in excluded_terms; the system applies the exclusion. A negation that
+   belongs to another part of the request ("no roaming, high value") does not exclude the term.
 3. Anything the catalog has NO data for goes into unmapped_phrases, quoted from the request. Never silently drop part
    of the request.
 4. If the request asks for an attribute that exists but is marked NOT TARGETABLE, or "Not usable for <channel>
@@ -206,6 +216,8 @@ Request: "new joiners on iOS who are active"
 -> conditions [device_os eq ios]; glossary_terms [new_customer, active]; channel unspecified
 Request: "prepaid customers who opened our last marketing email"
 -> conditions [line_type eq prepaid]; unmapped_phrases ["opened our last marketing email"]
+Request: "Android lines that aren't new customers"
+-> conditions [device_os eq android]; glossary_terms [new_customer]; excluded_terms [new_customer]
 """
 
 

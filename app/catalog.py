@@ -68,15 +68,18 @@ class TermOption:
 
 
 NOT = "not:"  # prefix for a negated term ("not:active" pending) or option ("not:active_usage"; "not" for a decided term)
+EITHER = "any:"  # prefix for a term whose polarity is unclear ("any:active" pending): both readings are offered
 _INVERSE = {"eq": "neq", "neq": "eq", "gte": "lt", "lt": "gte", "gt": "lte", "lte": "gt", "in": "not_in", "not_in": "in"}
 
 
-def pending_name(term: str, negated: bool) -> str:
-    return f"{NOT}{term}" if negated else term
+def pending_name(term: str, negated: bool | None) -> str:
+    return f"{EITHER}{term}" if negated is None else f"{NOT}{term}" if negated else term
 
 
-def parse_pending(name: str) -> tuple[str, bool]:
-    """A pending term as recorded: its name, and whether the request negated it."""
+def parse_pending(name: str) -> tuple[str, bool | None]:
+    """A pending term as recorded: its name, and whether the request negated it (None: unclear, ask both)."""
+    if name.startswith(EITHER):
+        return name.removeprefix(EITHER), None
     return (name.removeprefix(NOT), True) if name.startswith(NOT) else (name, False)
 
 
@@ -85,6 +88,8 @@ def invert(conditions: tuple[dict[str, Any], ...]) -> tuple[dict[str, Any], ...]
     if len(conditions) != 1 or conditions[0]["op"] not in _INVERSE:
         return None
     c = conditions[0]
+    if c["op"] == "eq" and isinstance(c["value"], bool):
+        return ({**c, "value": not c["value"]},)  # yes/no fields only take "is": not "is yes" is "is no"
     return ({**c, "op": _INVERSE[c["op"]]},)
 
 

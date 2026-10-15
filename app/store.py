@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS outcome_reports (  -- every report as received, inclu
 CREATE TABLE IF NOT EXISTS advice (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
+    request_id TEXT,  -- the interpretation the advice was given for: its "advisor" labels are valid only there
     campaign_type TEXT,
     goal_masked TEXT NOT NULL,
     facts_json TEXT NOT NULL,
@@ -257,19 +258,20 @@ class AuditStore:
         """What the advisor was shown, what it proposed, and what the checks let through or withheld."""
         with self._lock, self._db:
             cur = self._db.execute(
-                """INSERT INTO advice (created_at, campaign_type, goal_masked, facts_json, raw_json, accepted_json,
-                   rejected_json, model, prompt_version) VALUES (:created_at, :campaign_type, :goal_masked, :facts_json,
-                   :raw_json, :accepted_json, :rejected_json, :model, :prompt_version)""",
-                {"created_at": _now(), **row})
+                """INSERT INTO advice (created_at, request_id, campaign_type, goal_masked, facts_json, raw_json,
+                   accepted_json, rejected_json, model, prompt_version) VALUES (:created_at, :request_id, :campaign_type,
+                   :goal_masked, :facts_json, :raw_json, :accepted_json, :rejected_json, :model, :prompt_version)""",
+                {"created_at": _now(), "request_id": None, **row})
             return cur.lastrowid
 
-    def advised_conditions(self, advice_id: int | None) -> list[dict[str, Any]]:
-        """Conditions that one recorded advice response actually proposed: the only ones that may keep the
-        "advisor" label when a client sends them back with that advice id."""
-        if advice_id is None:
+    def advised_conditions(self, advice_id: int | None, request_id: str | None) -> list[dict[str, Any]]:
+        """Conditions that one recorded advice response, given for this request, actually proposed: the
+        only ones that may keep the "advisor" label when a client sends them back."""
+        if advice_id is None or request_id is None:
             return []
         with self._lock:
-            row = self._db.execute("SELECT accepted_json FROM advice WHERE id = ?", (advice_id,)).fetchone()
+            row = self._db.execute("SELECT accepted_json FROM advice WHERE id = ? AND request_id = ?",
+                                   (advice_id, request_id)).fetchone()
         return [] if row is None else [
             c for p in json.loads(row[0]) for c in (p.get("consequence", {}).get("definition") or {}).get("conditions", [])
             if c.get("source") == "advisor"]
@@ -286,6 +288,13 @@ class AuditStore:
                 (campaign_type, campaign_type, include_pending, audience_id, audience_id),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def evidence_outcomes(self, campaign_type: str | None = None) -> list[dict[str, Any]]:
+        """Confirmed outcomes that may join the pooled evidence: not those of audiences approved while a
+        large share of their lines was in another recent approval. Their holdouts and sends overlap, so
+        they aren't independent campaigns; the scorecard still shows them, marked."""
+        return [o for o in self.outcomes(campaign_type)
+                if not json.loads(o["measurement_json"]).get("overlap_note")]
 
     def counts(self) -> dict[str, int]:
         """How far decisions have travelled round the loop."""

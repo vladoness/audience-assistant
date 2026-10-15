@@ -113,6 +113,9 @@ async function loadHistoryTypes() {
     o.value = t.id; o.textContent = `${t.label} (${t.channel.toUpperCase()}, ${t.campaigns} past)`;
     $("campaign-type").appendChild(o);
   });
+  const other = document.createElement("option");
+  other.value = "other"; other.textContent = "Other: nothing comparable in past campaigns";
+  $("campaign-type").appendChild(other);
   $("campaign-type-row").hidden = false;
   loadAudit();
 }
@@ -120,11 +123,18 @@ async function loadHistoryTypes() {
 async function loadEvidence() {
   const type = $("campaign-type").value;
   const box = $("evidence");
+  updateApprove();
+  if (type === "other") {
+    box.innerHTML = '<span class="hint-inline">No past campaigns to compare with. 10% is still held out, so this one will start the evidence for its kind.</span>';
+    box.classList.remove("hidden");
+    return;
+  }
   if (!type) { box.classList.add("hidden"); return; }
   const e = await api(`/api/history/evidence/${encodeURIComponent(type)}`);
   const recent = e.per_campaign.slice(0, 4).map((c) =>
     `<li>${esc(c.name)}: ${c.lift_points >= 0 ? "+" : ""}${c.lift_points} pts (95%: ${c.lift_95_low} to ${c.lift_95_high}), ${fmt(c.contacted)} contacted, ${fmt(c.held_out)} held out</li>`).join("");
-  box.innerHTML = `<strong>What happened last time</strong>${e.synthetic ? SYNTHETIC : ""}<p style="margin:6px 0 0">${esc(e.reading)}</p><ul>${recent}</ul>`;
+  box.innerHTML = `<strong>What happened last time</strong>${e.synthetic ? SYNTHETIC : ""}<p style="margin:6px 0 0">${esc(e.reading)}</p>`
+    + `<p style="margin:6px 0 0"><strong>In plain terms:</strong> about ${perThousand(e.pooled.lift_points)} extra responders for every 1,000 messages sent.</p><ul>${recent}</ul>`;
   box.classList.remove("hidden");
   if (!state.definition) return;
   const p = await api("/api/measurement-preview", { definition: state.definition, campaign_type: type }).catch(() => null);
@@ -153,7 +163,8 @@ async function advise() {
   const btn = $("advise-btn"), box = $("advice");
   btn.disabled = true; btn.innerHTML = '<span class="spinner dark"></span>Analysing…';
   try {
-    const r = await api("/api/advise", { definition: state.definition, goal: $("goal").value, campaign_type: $("campaign-type").value || null });
+    const r = await api("/api/advise", { definition: state.definition, goal: $("goal").value,
+      campaign_type: $("campaign-type").value || null, request_id: state.requestId });
     state.advice = r.proposals;
     state.adviceId = r.advice_id;
     const proposals = r.proposals.map((p, i) => {
@@ -228,7 +239,7 @@ async function interpret() {
     state.appliedAdviceId = null;
     state.unmapped = r.unmapped_phrases;
     state.acknowledged = false;
-    state.pendingTerms = r.clarifications.map((c) => (c.negated ? `not:${c.term}` : c.term));
+    state.pendingTerms = r.clarifications.map((c) => (c.either ? `any:${c.term}` : c.negated ? `not:${c.term}` : c.term));
     applyResult(r);
     renderChanges(null);
     renderTelemetry(r.telemetry, r.request_id);
@@ -286,7 +297,7 @@ function renderChanges(changes) {
 function applyResult(r) {
   state.status = r.status;
   state.definition = r.definition;
-  state.pendingTerms = r.clarifications.map((c) => (c.negated ? `not:${c.term}` : c.term));
+  state.pendingTerms = r.clarifications.map((c) => (c.either ? `any:${c.term}` : c.negated ? `not:${c.term}` : c.term));
   $("refine-btn").disabled = !state.requestId;
   $("channel").value = r.definition.channel;
   renderBanner();
@@ -453,7 +464,7 @@ async function resolve(term, optionId) {
 
 async function recheck(resolutions = {}) {
   const r = await api("/api/check", { definition: state.definition, pending_terms: state.pendingTerms, resolutions,
-    advice_id: state.appliedAdviceId || null });
+    advice_id: state.appliedAdviceId || null, request_id: state.requestId });
   applyResult({ ...r, unmapped_phrases: state.unmapped });
   renderChanges(null);
 }
@@ -564,8 +575,10 @@ function renderTelemetry(t, requestId) {
 }
 
 function updateApprove() {
+  const typeChosen = $("campaign-type-row").hidden || $("campaign-type").value !== "";
   const missing = [
     $("goal").value.trim().length < 3 && "what the campaign is for",
+    !typeChosen && "a campaign type (or Other)",
     $("aud-name").value.trim().length < 3 && "an audience name",
     $("approver").value.trim().length < 2 && "your name",
   ].filter(Boolean);
@@ -592,14 +605,23 @@ async function approve() {
       + (m.measurable ? "" : `<p class="warn-text">${esc(m.note)}</p>`)
       + (m.power_note ? `<p class="warn-text">${esc(m.power_note)}</p>` : "")
       + (m.overlap_note ? `<p class="warn-text">${esc(m.overlap_note)}</p>` : "")
-      + `<p class="hint">Next: export the lines to contact from Audiences &amp; results, send the campaign, and record what happened after ${m.window_days} days. Definition ${esc(r.definition_hash)}.</p>`;
+      + `<p class="hint">Next: export the lines to contact from Audiences &amp; results, send the campaign, and record what happened after ${m.window_days} days.</p>`;
     goStep(5);
     loadAudit();
     loadLearning();
   } catch (e) {
-    const d = e.data?.detail;
-    $("approve-msg").textContent = "Not approved: " + (typeof d === "string" ? d : JSON.stringify(d || e.message));
+    $("approve-msg").textContent = "Not approved: " + approvalError(e.data?.detail, e.message);
   }
+}
+
+function approvalError(d, fallback) {
+  // The server's reasons, in words: a marketer shouldn't have to read JSON.
+  if (typeof d === "string") return d;
+  if (!d) return fallback;
+  if (d.unanswered_terms) return `answer the question about ${d.unanswered_terms.map((t) => termLabel(t.replace(/^(not|any):/, ""))).join(", ")} first.`;
+  if (d.unmapped_phrases) return `confirm building without: ${d.unmapped_phrases.join(", ")}.`;
+  if (d.issues?.length) return d.issues.map((i) => i.message).join(" ");
+  return d.detail || fallback;
 }
 
 async function loadAudit() {
@@ -640,21 +662,26 @@ function verdictClass(v) {
 }
 
 const signed = (v) => `${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
+const perThousand = (points) => Math.round(Number(points) * 10).toLocaleString("en-US");
+const termLabel = (name) => name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, " ");
 
 function outcomeLine(r, m) {
   if (r.outcome) {
     const o = r.outcome.measured;
     const pending = r.outcome.status === "pending";
-    return `<div class="aud-outcome ${pending ? "pending" : "measured"}"><strong>${pending ? "Reported" : "Measured"}</strong> (${esc(r.outcome.source === "simulated" ? "simulated send" : "campaign tool")}): `
-      + `${signed(o.lift_points)} pts (95% ${signed(o.lift_95_low)} to ${signed(o.lift_95_high)})`
+    const tone = pending ? "pending" : r.outcome.verdict.startsWith("too small") ? "" : "measured";
+    return `<div class="aud-outcome ${tone}"><strong>${pending ? "Reported" : "Measured"}</strong> (${esc(r.outcome.source === "simulated" ? "simulated send" : "campaign tool")}): `
+      + `about ${perThousand(o.lift_points)} extra responders per 1,000 messages, ${signed(o.lift_points)} pts (95% ${signed(o.lift_95_low)} to ${signed(o.lift_95_high)})`
       + `${r.outcome.expected ? ` against ${signed(r.outcome.expected.lift_points)} expected` : ""}: <span class="${verdictClass(r.outcome.verdict)}">${esc(r.outcome.verdict)}</span>`
       + (pending ? `<br>Not learned from until someone checks it: ${fmt(o.contacted)} contacted, ${fmt(o.held_out)} held out, ${fmt(r.outcome.unknown_responders)} responders not in this audience. `
         + (r.outcome.check_before_confirming ? `<span class="warn-text">This is far from what past campaigns showed: it may be real, or the wrong file. Check it before confirming.</span> ` : "")
         + `<button class="small confirm-btn" data-id="${r.id}">Confirm outcome</button>`
-        : ` · confirmed by ${esc(r.outcome.confirmed_by)}`) + "</div>";
+        : ` · confirmed by ${esc(r.outcome.confirmed_by)}`)
+      + (r.outcome.kept_out_of_evidence ? `<br><span class="hint-inline">Not added to the evidence: this audience overlapped a recent approval, so it isn't an independent campaign.</span>` : "")
+      + "</div>";
   }
   if (!m.campaign_type) return "";
-  return `<div class="aud-outcome">Not measured yet. After the ${m.window_days}-day window the campaign tool posts responses to <span class="mono">/api/audiences/${r.id}/outcome</span>. `
+  return `<div class="aud-outcome">Not measured yet. After the ${m.window_days}-day window, the data team reports who responded (from billing records), and the result waits here for someone to confirm it. `
     + (state.historySynthetic ? `<button class="small simulate-btn" data-id="${r.id}">Simulate the send (demo)</button>` : "") + "</div>";
 }
 
@@ -708,7 +735,7 @@ async function loadLearning() {
   $("scorecard").innerHTML = s.scorecard.map((c) => `<tr><td>${c.audience_id}</td><td>${esc(c.name)}</td><td>${esc((s.types.find((x) => x.id === c.campaign_type) || {}).label || c.campaign_type)}</td>`
     + `<td>${c.expected ? `${signed(c.expected.lift_points)} pts (95% ${signed(c.expected.lift_95_low)} to ${signed(c.expected.lift_95_high)}), ${c.expected.campaigns} campaigns` : "none recorded"}</td>`
     + `<td>${signed(c.measured.lift_points)} pts (95% ${signed(c.measured.lift_95_low)} to ${signed(c.measured.lift_95_high)})<div class="hint">${fmt(c.measured.contacted)} contacted, ${fmt(c.measured.held_out)} held out · ${esc(c.source === "simulated" ? "simulated send" : "campaign tool")}</div></td>`
-    + `<td class="${verdictClass(c.verdict)}">${esc(c.verdict)}${c.status === "pending" ? '<div class="hint">pending: not learned from until confirmed</div>' : ""}</td></tr>`).join("")
+    + `<td class="${verdictClass(c.verdict)}">${esc(c.verdict)}${c.status === "pending" ? '<div class="hint">pending: not learned from until confirmed</div>' : ""}${c.kept_out_of_evidence ? '<div class="hint">not added to the evidence: overlapped a recent approval</div>' : ""}</td></tr>`).join("")
     || '<tr><td colspan="6" class="hint">No outcomes yet. Approve an audience with a campaign type, then measure its send.</td></tr>';
   drawCurve((await api(`/api/learning/${encodeURIComponent(sel.value)}`)).timeline);
 }
@@ -766,7 +793,7 @@ async function loadInsights() {
     || '<li class="hint">Nothing yet.</li>';
   $("ins-terms").innerHTML = ins.open_terms.map((t) => {
     const chosen = Object.entries(t.chosen).filter(([, n]) => n).map(([label, n]) => `${esc(label)}: ${n}`).join("; ");
-    return `<li><strong>${esc(t.term)}</strong><span class="n">asked ${t.asked}×</span><div class="hint">${chosen || "no approvals yet"} · decides: ${esc(t.owner_pending)}</div></li>`;
+    return `<li><strong>${esc(termLabel(t.term))}</strong><span class="n">asked ${t.asked}×</span><div class="hint">${chosen || "no approvals yet"} · decides: ${esc(t.owner_pending)}</div></li>`;
   }).join("");
   $("ins-blocked").innerHTML = ins.blocked_by_policy.map((b) =>
     `<li>${esc(b.label)} <span class="hint">(${esc(b.policy)})</span><span class="n">${b.count}×</span></li>`).join("")

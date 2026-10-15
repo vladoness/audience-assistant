@@ -59,16 +59,22 @@ of a negated term, or when the request removes the term ("forget high value"). T
 shows none, and a test keeps a drifted threshold (50 for "high value") warning.
 
 *Negation.* "Not active" is the case where asking the usual question is worse than not asking:
-every option describes who *is* active, so any answer selects the opposite audience. My first fix
-turned a negated phrase into a warning. A reviewer showed that this opened a hole: in "no roaming,
-active lines" the "no" was read as negating "active", so the question was skipped. Now:
-- A negated open term is asked as an exclusion ("Not: used the network…", option ids
-  `not:<option>`), and only an exclusion answers it, at check and at approval.
-- A negated decided term that the model named applies the exclusion of the governed definition
-  (`glossary:high_value=not`). It is still governed, so a threshold change reaches it.
-- A negation spans at most two words and stops at a comma or a conjunction.
-- A definition with more than one condition can't be excluded in AND-only logic, so it is an
-  error that sends the marketer to the editor, never a guess.
+every option describes who *is* active, so any answer selects the opposite audience. It took
+three attempts, each found wanting by a review:
+1. A warning instead of the question. It opened a hole: in "no roaming, active lines" the "no"
+   was read as negating "active", and the question was skipped.
+2. A phrase check (a regular expression) deciding negation, with exclusion options. Better, but
+   it was deciding language on the path the model actually takes, and missed "inactive",
+   "other than", "neither … nor" and Spanish, while misreading "No roaming high value".
+3. Now: **the model reports which governed terms the request excludes** (`excluded_terms`, in
+   the same call), and the phrase check is an alarm. When they agree, an excluded open term is
+   asked as an exclusion ("Not: used the network…", option ids `not:<option>`), and only an
+   exclusion answers it, at check and at approval; an excluded decided term becomes the exclusion
+   of its governed definition (`glossary:high_value=not`), still governed, so a threshold change
+   reaches it. When they disagree on an open term, the question offers both readings and the
+   marketer picks; on a decided term the model's reading is applied with a warning. A definition
+   with more than one condition can't be excluded in AND-only logic, so it is an error that sends
+   the marketer to the editor, never a guess.
 
 **3. Nothing is dropped silently by the system; a model omission is surfaced, not prevented.**
 The most dangerous model behaviour here is quietly ignoring the part it can't do: "premium
@@ -117,7 +123,8 @@ A field is not simply "allowed" or "forbidden". `app_active_30d` comes from an a
 SDK whose consent covers in-app and SMS marketing but not email. So fields carry labels,
 channels are marketing actions, and enabled policies deny labels for actions. This is the shape
 of label-based governance in customer data platforms (labels → policies → marketing actions), so
-it maps directly onto a platform's own policy service in a real rollout. Policy violations are
+it closely mirrors a platform's own policy service. It isn't identical: AEP policies can deny
+combinations of labels, and enforcement follows the data's lineage through to activation. Policy violations are
 never sent back to the model for "repair": the request conflicts with policy, so the marketer
 sees the policy id and decides.
 
@@ -156,8 +163,9 @@ trail. `/api/insights` aggregates them into:
 That is the field-to-product loop, built from data the system already records.
 
 **14. Model use is bounded.**
-Requests are capped at 500 characters, outputs at 1,024 tokens, and repairs at one. The two
-endpoints that call the model (interpret and refine) share a per-client token-bucket rate limit
+Requests are capped at 500 characters, outputs at 1,024 tokens (2,048 for the advisor), and repairs
+at one. The three endpoints that call the model (interpret, refine and advise) share a per-client
+token-bucket rate limit
 (HTTP 429 with Retry-After). A daily model budget switches the assistant off when spent; the deterministic
 editor keeps working. These are the OWASP LLM10 (unbounded consumption) mitigations sized for a
 single-team tool.
@@ -194,8 +202,9 @@ instructions live in the user message, so the system prompt and every recording 
 step stay valid.
 
 **17. One model call per step, not an agent loop.**
-Adobe's Audience Agent plans multi-step work across agents. This prototype deliberately makes
-one structured call per user step (interpret or refine), plus at most one repair. The catalog and
+On AEP, planning work across agents is Agent Orchestrator's job; Audience Agent is one specialised
+agent. This prototype deliberately makes one structured call per user step (interpret, refine or
+advise), plus at most one repair. The catalog and
 glossary fit in a cached prompt, so there is no field-discovery tool to call. Sizing is
 deterministic and takes milliseconds, so the model doesn't need to "check its work" against the
 data. The marketer is the loop: every step ends at a screen they read. That keeps latency at one
@@ -340,9 +349,12 @@ connects them.
    the same transaction as the approval. The export reads that list, not a re-run of the
    definition, so a data refresh can't change who gets the campaign or who is counted. A digest
    check against today's data is shown for information. Consent is the exception: freezing it
-   would send to people who opted out after approval (a reviewer showed exactly that). So at every
-   export and outcome count, lines without consent for the channel today are left out of both
-   groups, with the reason stored. The default export holds only the lines to contact; the
+   would send to people who opted out after approval (a reviewer showed exactly that). So at
+   export, the hand-off before the send, lines without consent for the channel today are left out
+   of both groups, with the reason stored. Never after the send: my first version also re-checked
+   at the outcome count, and a later review showed why that is wrong. Only contacted customers
+   can reply STOP, so dropping post-send opt-outs removes non-responders from one group only and
+   inflates the lift (+3.61 became +3.78 on the same file). After the send, groups are frozen. The default export holds only the lines to contact; the
    holdout is a separate download.
 2. **A report must be plausible to be stored.** `POST /api/audiences/{id}/outcome` needs the
    shared `OUTCOME_TOKEN`. `record_outcome` rejects a send date outside approval-to-today, a
@@ -380,8 +392,10 @@ lifted less than that, they get a warning, and it is recorded with the approval.
 (a wider audience or a larger holdout share) is theirs, or the parameter owner's.
 
 *Overlapping audiences.* A line held out of one campaign may be contacted by another in the same
-window, which shrinks both measured lifts. The advisor shows overlap with recent approvals, but
-nothing coordinates holdouts across campaigns. A rollout would use a shared global control group.
+window, which shrinks both measured lifts. Before approval the marketer is warned; the outcome of
+an audience approved with that warning is shown but kept out of the pooled evidence, because it
+isn't an independent campaign. Nothing coordinates holdouts across campaigns; on AEP, Journey
+Optimizer's global holdout is that control group.
 
 *Simulated sends.* With no campaign tool in the demo, a labelled button generates responses from
 the same known effects as the synthetic history and posts them through the same `record_outcome`
@@ -392,7 +406,7 @@ deployment.
 threshold by itself; segment-level reading is the advisor's job (decision 22). What the evidence should change (stop a campaign type that doesn't work,
 retarget one that does) stays a person's decision, made with the evidence on screen.
 
-**22. The advisor: AI reads the facts and proposes; code checks every claim and prices every change.**
+**22. The advisor: AI reads the facts and proposes; code checks every structured claim and prices every change.**
 Translating a request is not the only thing a model is good at. Reading twenty facts at once
 (segment results, contact pressure, consent, campaign-type evidence) and connecting them to a
 goal in plain language is another. So once an audience is set, an advisor proposes up to three
@@ -426,9 +440,9 @@ improvements. The design keeps the rule of decision 1 (the model proposes, code 
   for, and a signal if the prompt needs work.
 - **Every advice response is recorded** (`advice` table: masked goal, facts, raw proposals,
   what was accepted and withheld). A condition keeps the "advisor" label only if the advice
-  response the client names (`advice_id`) proposed exactly that condition, and the approval
-  stores the id. My first version accepted a match against any recent advice, so a reviewer could
-  label an unrelated edit "advisor".
+  response the client names (`advice_id`) proposed exactly that condition, for the same request,
+  and the approval stores the id. Earlier versions accepted a match against any recent advice,
+  then any advice for any audience; reviewers labelled unrelated edits "advisor" both times.
 
 *How it is evaluated.* The synthetic history has exactly one planted segment effect (data upsells
 work better on postpaid lines). That makes a known truth to score against: the advisor should
@@ -475,7 +489,8 @@ things. Now:
 - **Technical detail** (request ids, tokens, cost, definition hashes) is collapsed, not removed:
   the audit trail is the same, the marketer just isn't asked to read it.
 
-No logic moved: the same API, the same element ids, the same tests. A Playwright walk-through
+No logic moved: the same API, the same element ids, the same tests. `scripts/ui_walkthrough.mjs`
+(Playwright, optional: it needs a browser, so it isn't part of `make test`) walks the journey and
 checks the gating at each step (24 checks).
 
 ## Where the time goes (and why that shapes the design)

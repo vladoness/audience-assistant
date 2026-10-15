@@ -159,6 +159,20 @@ class AudienceEngine:
             [salt, salt, *params]).fetchone()
         return {"contacted": contacted[:16], "held_out": held_out[:16]}
 
+    @property
+    def min_audience(self) -> int:
+        return self._min_audience
+
+    def share_where(self, definition: AudienceDefinition, sql: str) -> float:
+        """Share of this audience's reachable lines that also meet a fixed SQL condition (a campaign type's
+        eligibility, written in code in CAMPAIGN_TYPES, never from a request)."""
+        where, params = self.compile(definition)
+        consent = f'"{self._catalog.channels[definition.channel]}"'
+        total, inside = self._con.cursor().execute(
+            f"SELECT count(*), count(*) FILTER (WHERE coalesce(({sql}), false)) FROM profiles WHERE {where} AND {consent}",
+            params).fetchone()
+        return inside / total if total else 0.0
+
     def without_consent(self, profile_ids: list[str], channel: str) -> set[str]:
         """Of these lines, the ones that can no longer be contacted on the channel: consent withdrawn since,
         or gone from the profile store. Checked at every hand-off, because membership is frozen at approval."""

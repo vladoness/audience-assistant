@@ -48,7 +48,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 make setup        # uv sync
 make run          # http://127.0.0.1:8000 (PORT=8010 make run to change); creates the synthetic store on first run
-make test         # 175 tests, no network or API key needed
+make test         # 182 tests, no network or API key needed
 make lint         # governance config check: prints a receipt (0 errors, 0 warnings)
 make mcp          # the same assistant as an MCP server for AI agents (see "Use it from an AI agent")
 ```
@@ -94,7 +94,7 @@ the benchmark, and the customer and design notes. Read `app/interpret.py`, `app/
 | MCP server for AI agents | "How would this plug into an agent ecosystem without giving agents authority?" | `app/mcp_server.py`, decision 18 |
 | Business case calculator | "What is it worth, and which assumption decides that?" | `docs/BUSINESS-CASE.md` |
 
-Each extension is small, uses the same validation and audit path as the core, and has its own
+Each extension uses the same validation and audit path as the core, and has its own
 tests. None of them is needed to judge the core slice.
 
 ---
@@ -133,7 +133,8 @@ what marketers asked for that the data or the policies can't serve.
    base) audiences. **Contact pressure** comes from past campaigns: the share of these lines
    contacted in the last 7 and 30 days, and how many already had 3 or more campaigns this month
    (thresholds in the `contact_policy` parameter set).
-4. **Plan & approve.** The marketer states the goal, picks the campaign type (evidence appears),
+4. **Plan & approve.** The marketer states the goal, picks the campaign type (evidence appears;
+   "Other: nothing comparable" is an explicit choice, not a blank),
    can ask the advisor, and approves. The server re-validates and re-sizes. It checks that every open term was answered
    and every unmapped part acknowledged, and that "governed" labels are genuine. Then it writes an
    audit record:
@@ -167,12 +168,17 @@ The loop closes in the app, not only on a slide:
    probably read "too small to tell"; a data upsell to 37,000 lines doesn't.
 3. **Send:** approval stores the exact membership: every line with its group. The export is
    that stored list, not a re-run of the definition, so a data refresh can't change who gets the
-   campaign. Consent is the exception: it is re-checked at every hand-off, and a line that has
-   withdrawn consent (or left the profile store) since approval is left out of both groups, with
-   the reason recorded and the count shown. By default the export contains only the lines to
+   campaign. Consent is the exception: it is re-checked at export, the hand-off before the send,
+   and a line that has withdrawn consent (or left the profile store) since approval is left out
+   of both groups, with the reason recorded and the count shown. After the send the groups are
+   frozen: only contacted customers can reply STOP, so dropping post-send opt-outs would inflate
+   the measured lift. By default the export contains only the lines to
    contact; the holdout is a separate file (`?group=held_out`), so it can't be sent to by mistake.
-4. **Measure:** after the 14-day window the campaign tool reports which lines responded
+4. **Measure:** after the 14-day window, the operator's data team reports which lines responded
    (`POST /api/audiences/{id}/outcome`, a list of profile ids, with the shared `OUTCOME_TOKEN`).
+   The responder file comes from billing and charging records (who topped up, who bought a
+   bundle), because a response is a purchase, not a click; the campaign tool only supplies the
+   send list and the send date.
    The server counts them against the stored groups and measures the lift with its 95% interval
    (Agresti–Caffo, so a group with no responders doesn't get a falsely exact interval).
    - **Rejected outright:** a send date before the approval or in the future, a report made
@@ -183,7 +189,8 @@ The loop closes in the app, not only on a slide:
      is marked "check it before confirming": it may be real, or the wrong file.
 5. **Learn, after a person checks:** a pending outcome joins the evidence only when someone
    other than the approver confirms it (named, with their client recorded, like the approver). A
-   confirmed outcome can't be overwritten. The
+   confirmed outcome can't be overwritten. An outcome of an audience approved with an overlap
+   warning is shown but not added to the evidence, because it isn't an independent campaign. The
    next approval of that type sees it. The chart shows each campaign's lift and the running
    estimate after it; its band narrowing is the learning.
 6. **Check the decision:** the scorecard compares each approval's expectation with what was
@@ -209,8 +216,9 @@ my assumption; in a real rollout Marketing Analytics would own them, like any go
 **Overlapping audiences blur the measurement.** A line held out of one campaign can be contacted
 by another in the same window, which shrinks the measured lift of both. Before approving, the
 marketer is warned when a quarter or more of the audience was in one approved in the last 14 days
-(and when it is the same definition again), and the approval records the overlap. Contact
-pressure warns about recent sends in the history, though not yet about sends approved here.
+(and when it is the same definition again), the approval records the overlap, and that
+audience's outcome is kept out of the pooled evidence. Contact pressure warns about recent sends
+in the history, though not yet about sends approved here.
 Nothing coordinates holdouts across campaigns; a real rollout would hold a shared, global control
 group.
 
@@ -251,7 +259,8 @@ less, and the section says exactly how much:
    - **Switching channel:** only if policy allows it.
    - **Suggesting a campaign type:** only when the marketer hasn't chosen one (a different type
      is a different offer, which is their decision), and only for a type sent on this audience's
-     channel whose past results are clearly positive.
+     channel, whose past results are clearly positive, and for which most of this audience is
+     eligible (a top-up reminder is for lapsing prepaid lines, not postpaid ones).
    - **A free-text point and the summary:** checked for citations and numbers only. Code can't
      check what a sentence means, so the UI labels them as the advisor's words.
 
@@ -376,55 +385,43 @@ Four mechanisms keep this trustworthy over time (details in [docs/DESIGN.md](doc
 
 ## Trade-offs: latency, cost, accuracy
 
-**Measured** (prompt v6, refinement r2, advisor a2). Live runs on 15 Oct 2026: the dev and
-advisor sets after the second review round added negation and goal-reading cases, the held-out
-set after the policy cases gained expected audiences; the refinement set is from 14 Oct. Every
-configuration was run 3 times. Prices are from Anthropic's list effective 2026-10-07. Latency is
-the model call, nearest-rank percentiles. The interval under each pass rate is a 95% Wilson
-interval over cases (a case counts when every run passed): it says how far a set this small can
-be trusted, and it is wide.
+**Measured** (prompt v7, refinement r2, advisor a2). Every set was re-run live on 15 Oct 2026
+after the final review moved negation into the model's output (prompt v7) and added nine negation
+cases. Every configuration was run 3 times. Prices are from Anthropic's list effective 2026-10-07.
+Latency is the model call, nearest-rank percentiles. The interval under each pass rate is a 95%
+Wilson interval over cases (a case counts when every run passed): it says how far a set this small
+can be trusted, and it is wide.
 
 | | **Sonnet 5.5 · low effort (default)** | Haiku 5.5 · low effort | Haiku 5.5 · default effort |
 |---|---|---|---|
-| Development set, 38 cases × 3 runs | **100%** (91–100%) | 97% (87–100%) | 93% (76–96%) |
-| Held-out set, 18 cases × 3 runs | **100%** (82–100%) | 89% (61–94%) | 94% (74–99%) |
+| Development set, 43 cases × 3 runs | **100%** (92–100%) | 98% (88–100%) | 97% (85–99%) |
+| Held-out set, 18 cases × 3 runs | **100%** (82–100%) | 89% (67–97%) | 93% (67–97%) |
 | Refinement set, 17 cases × 3 runs | **100%** (82–100%) | 94% (73–99%) | not run |
-| Advisor set, 12 cases × 3 runs (known-truth history) | **92%** (55–95%) | 100% (76–100%) | not run |
-| Latency p50 / p95 / max (dev) | 1.7 s / 3.1 s / 5.3 s | 1.3 s / 2.7 s / 4.3 s | 1.6 s / 4.6 s / 6.4 s |
-| Latency p50 / p95 / max (refinement) | 1.8 s / 2.6 s / 4.8 s | 1.7 s / 2.2 s / 9.1 s | not run |
-| Latency p50 / p95 (advisor) | 3.9 s / 5.0 s | 2.8 s / 5.3 s | not run |
-| Cost per 1,000 requests (dev / refinement / advisor) | $2.05 / $2.68 / $8.28 | $0.12 / $0.17 / $0.47 | $0.17 / not run / not run |
+| Advisor set, 12 cases × 3 runs (known-truth history) | **92%** (55–95%) | 97% (65–99%) | not run |
+| Latency p50 / p95 / max (dev) | 2.0 s / 3.9 s / 15.1 s | 1.4 s / 2.2 s / 3.5 s | 1.7 s / 3.2 s / 4.2 s |
+| Latency p50 / p95 / max (refinement) | 1.8 s / 2.2 s / 7.2 s | 1.5 s / 2.5 s / 2.7 s | not run |
+| Latency p50 / p95 (advisor) | 4.3 s / 6.1 s | 2.7 s / 5.9 s | not run |
+| Cost per 1,000 requests (dev / refinement / advisor) | $1.92 / $2.67 / $8.53 | $0.11 / $0.18 / $0.50 | $0.16 / not run / not run |
 
-The sets are small enough that Sonnet's 100% and Haiku's 89–97% overlap at 95%: they show
-regressions and the kinds of mistakes, not a precise accuracy.
+The sets are small enough that Sonnet's 100% and Haiku's 89–98% overlap at 95%: they show
+regressions and the kinds of mistakes, not a precise accuracy. The 15.1 s and 7.2 s maxima are
+single slow calls (the SDK's retry after a timeout); they are why the timeout and breaker exist.
 
 **What the advisor eval shows, including what it doesn't.**
-- **Against three baselines that use no model:**
-  - "Always keep the audience as it is" passes 42% of the advisor cases.
-  - A twenty-line rule passes 75%: narrow on every clearly-better segment, mention recent
-    contact, pick the best-measured type on the channel.
-  - The same rule with a keyword list for the goal passes 83%.
-  - Sonnet passes 92% of case-runs.
-- **Where the model beats the rules:** reading a goal that doesn't name the type. "They keep
-  hitting their limit before the month is over" is a data upsell for Sonnet every time; both
-  rules pick top-up reminders.
-- **Where it doesn't:** "used to recharge every week and have gone quiet; bring them back" is a
-  win-back (these lines are over 30 days lapsed). Sonnet picked top-up reminders in 2 of 3 runs,
-  taken in by the word "recharge" like the keyword rule.
+- **Against three baselines that use no model:** "always keep the audience as it is" passes 42%
+  of the advisor cases; a twenty-line rule passes 75%; the same rule with a keyword list for the
+  goal passes 83%. Sonnet passes 92% of case-runs, Haiku 97%.
+- **Where the model beats the rules:** reading a goal that doesn't name the type ("used to
+  recharge every week and have gone quiet; bring them back" is a win-back, which both rules miss).
+- **Where it doesn't, and what caught it:** for "They keep hitting their limit before the month
+  is over", Sonnet proposed a top-up reminder for a postpaid audience in 2 of 3 runs. The
+  eligibility check withheld it (top-ups are for lapsing prepaid lines), so nothing wrong reached
+  the marketer, but nothing right did either. The checks withheld 9 of Sonnet's 87 proposals and
+  2 of Haiku's 60; scored without them, Haiku drops from 97% to 94%.
 - **On the structured cases, the rules do as well.** Those cases test that nothing misleading
   reaches the marketer, and the model's other contribution, explaining in plain language, isn't
-  scored.
-- **Scored without the checks,** Sonnet scores the same: the checks withheld none of its 82
-  proposals this run (2 of 70 the run before), so for Sonnet they are insurance. For Haiku they
-  were the difference once: in one run it proposed "Narrow to iOS lines", which past campaigns
-  don't support; the check withheld it, and that case-run would have failed without it (97%
-  without the checks, 100% with them).
-- **Sonnet's other miss:** in one run of three it didn't mention that app adoption is a weak
-  campaign type.
-- **Haiku** passed every case-run once the advisor got its own output cap (2,048 tokens; at the
-  shared 1,024 it ran out on 5 case-runs, shown as "advisor unavailable"). On this set it does
-  better than Sonnet at a twentieth of the cost, but twelve cases can't separate them (the
-  intervals overlap). Routing the advisor to Haiku is the next experiment, not a conclusion.
+  scored. The honest reading: the advisor's measurable value is goal reading; its proposals are
+  worth checking, not trusting.
 
 The advisor costs under a cent a call; at this customer's volume that is about 35 cents a month.
 
@@ -436,29 +433,26 @@ set of reachable lines as the expected audience** (for a refused policy case, th
 the refusal), the right clarification or unmapped phrase, and policies named and enforced.
 Per-case results are in `evals/results/`. Run 1 of every configuration is recorded, so
 `make eval-replay MODEL=... EFFORT=...` reproduces its outcomes offline, misses included (the
-advisor set replays at 10 of 12; Haiku's held-out recordings are from the 14 Oct run). Three Sonnet dev requests
+advisor set replays at 10 of 12). Three Sonnet dev requests
 share their text with the UI examples and were re-recorded with them: same outcomes, different
 latencies.
 
-**What the misses were.** Sonnet missed none of the 219 interpretation case-runs in these runs,
-including the four negation cases ("not active" asked as an exclusion, "not high value",
-"don't use the app", and "no roaming, active" where the comma ends the negation). In an earlier
-run it missed one: it read "haven't recharged in 60 days" as at least 60 rather than more than
-60, and its summary said "at least 60 days", so the marketer could see the reading. Treat it as
-99–100%, not as perfect. Haiku's misses (one Haiku-default miss is a rate-limited call, counted
-as a failure):
-- **Governed term applied without evidence.**
-  - "Android users" and "iOS users" picked up the governed *app users* (held-out cases); with an
-    email campaign that then got blocked by MKT-12.
-  - "High credit risk band" picked up the governed *high value* term in every run, at both
-    efforts. At low effort it still named the credit policy, but the audience left after the
-    refusal was wrong; the stricter policy scoring added on 15 Oct is what caught this. At
-    default effort it dropped the credit request without naming the policy.
-
-  The deterministic grounding check flagged every one of these to the marketer.
+**What the misses were.** Sonnet missed none of the 219 interpretation and refinement case-runs
+in these runs, including all nine negation cases ("not active", "inactive", "other than high
+value", "neither … nor", Spanish "no están activos", and "No roaming high value", where the
+negation belongs to roaming). In an earlier run it missed one: it read "haven't recharged in 60
+days" as at least 60 rather than more than 60, and its summary said "at least 60 days", so the
+marketer could see the reading. Treat it as 99–100%, not as perfect. Haiku's misses (one
+Haiku-default miss is a rate-limited call, counted as a failure):
+- **Governed term applied without evidence.** "iOS users" picked up the governed *app users*
+  (held-out, every run at low effort; with an email campaign it then got blocked by MKT-12), and
+  "spending more than 60 dollars a month" became the governed *high value* (revenue ≥ 40) instead
+  of the marketer's own 60 (dev, every run at low effort). The deterministic grounding check
+  flagged both to the marketer.
+- **A policy-blocked field listed as missing data.** At default effort, "medium credit risk band"
+  was put under "no data" in one run of three instead of being named as blocked by MKT-07. The
+  audience was right, and the field was not used.
 - **The same boundary ambiguity** (≥ 60 against > 60), in every run at default effort.
-- **An invented threshold.** "Long tenure" became ≥ 36 months in one run, while also being
-  listed as having no data.
 - **Over-caution with PII.** In a request containing a contact email, it asked the marketer to
   confirm dropping "contact [EMAIL] for details". The audience was right.
 - **"Also" on a field the audience doesn't filter.** On the refinement set Haiku read "also
@@ -468,7 +462,8 @@ as a failure):
 
 **Decision: Sonnet 5.5 at low effort.** At this customer's volume (about 40 audiences a month)
 the cost difference is under a dollar a month. The accuracy difference is the gap between "right
-in every case-run of these runs, and in 206 of 207 an earlier run" and "check the warnings". Haiku
+in every interpretation case-run of these runs, and in 206 of 207 an earlier run" and "check the
+warnings". Haiku
 at low effort is the documented option for high-volume tenants: about 17× cheaper and a little
 faster, with every governed-term miss surfaced by the grounding check. The configuration is one
 environment variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
@@ -547,11 +542,11 @@ environment variable (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`).
 | An audience approved with no way to tell later whether it worked | Approval requires a campaign goal and records a holdout group and the success measure; a holdout under 500 lines is flagged as too small to measure, and before approval the marketer sees the smallest lift the holdout would show, with a warning when past campaigns of the type lifted less |
 | Governed rule or threshold changes after approval | Affected audiences flagged with the change and their size under current rules |
 | Profile data refreshed between approval and send | The export and the outcome count use the member list stored at approval; a header and the audit view say whether today's data would still produce the same groups |
-| The same audience approved twice, or two audiences that share most lines | Warned before approval and recorded with it: their holdouts and sends overlap, which blurs both measurements |
+| The same audience approved twice, or two audiences that share most lines | Warned before approval and recorded with it; the outcome is shown but kept out of the pooled evidence, because overlapping holdouts and sends aren't independent campaigns |
 | Model text reaching an agent over MCP | Fields a proposal kind doesn't use are blanked, titles and rationales are capped, withheld reasons are written by code, approved-audience names are replaced by numbers, and every response lists which fields are model or request text |
-| A customer withdraws consent after approval | Consent is re-checked at every export and outcome count; the line is left out of both groups (so the comparison stays like for like), the reason is stored, and the audit view shows how many were left out |
+| A customer withdraws consent after approval | Consent is re-checked at export, before the send: the line is left out of both groups (so the comparison stays like for like), the reason is stored, and the audit view shows how many. After the send the groups are frozen, because only contacted customers can opt out in reply to the campaign |
 | The holdout list sent to by mistake | The default export holds only the lines to contact; the holdout is a separate download |
-| "Not active" read as "active" | A negated open term is asked as an exclusion ("Not: used the network…"), and only an exclusion answers it, at check and at approval; a negated decided term applies the exclusion of its governed definition; a comma or conjunction ends the negation; a definition that can't be excluded with AND-only logic is an error that sends the marketer to the editor |
+| "Not active", "inactive", "other than high value" read the wrong way round | The model reports which governed terms the request excludes; a phrase check is the alarm. Agreed exclusions of an open term are asked as an exclusion ("Not: used the network…") and only an exclusion answers it; a negated decided term becomes the exclusion of its governed definition. When the two disagree on an open term, both readings are offered; on a decided term the model's reading is applied with a warning |
 | Broken governance config (unknown field, wrong type, mistyped policy status) | Startup lint fails with the list of errors |
 | Request floods or runaway spend | 429 with Retry-After per client; daily budget switches the assistant off; definitions capped at 30 conditions |
 | Unexpected server error | JSON 500 with the request id; logged with the stack trace and the same id |
@@ -590,8 +585,8 @@ Endpoints:
   approvals). Approval rejects a campaign type sent on another channel.
 - `GET /api/history` and `GET /api/history/evidence/{campaign_type}`: campaign types with past
   campaigns, and their measured lift (read-only).
-- `POST /api/audiences/{id}/outcome` (needs `X-Outcome-Token`): the campaign tool reports
-  responders after the window; the lift is measured against the membership stored at approval
+- `POST /api/audiences/{id}/outcome` (needs `X-Outcome-Token`): the data team reports
+  responders (from billing records) after the window; the lift is measured against the membership stored at approval
   and kept as pending. `POST /api/audiences/{id}/outcome/confirm`: a person confirms it, and only
   then does it join the evidence. `POST /api/audiences/{id}/simulate-outcome` does the same with
   generated responses, demo only.
@@ -635,7 +630,7 @@ OpenAPI docs are at `/docs`.
 
 ## Testing and reliability
 
-- **`make test`: 175 tests, no network.** A scripted fake model drives each failure mode
+- **`make test`: 182 tests, no network.** A scripted fake model drives each failure mode
   deterministically:
   - repair once, then stop;
   - outage fallback and the circuit breaker;
@@ -661,8 +656,9 @@ OpenAPI docs are at `/docs`.
     difference is only claimed when intervals don't overlap, and a result that can't be told
     from zero is never "in line";
   - negation (`tests/test_review_round3.py`): "not active" is asked as an exclusion ("Not: used the
-    network…"), only an exclusion answers it, even at approval; a comma or "and" ends a negation;
-    "not high value" applies the exclusion of the governed definition;
+    network…"), only an exclusion answers it, even at approval; exclusions the phrase check can't
+    see ("inactive", Spanish) come from the model; when the model and the phrase check disagree,
+    both readings are offered; "not high value" applies the exclusion of the governed definition;
   - consent after approval (`tests/test_learning.py`): a line that withdraws consent is left out of
     the export and of both measured groups;
   - campaign history (`tests/test_history.py`): measured lift recovers the known true effect of
@@ -695,10 +691,14 @@ OpenAPI docs are at `/docs`.
   - Repeats show run-to-run variance, and flaky cases are listed in the results.
   - Each recording stores a fingerprint of the system prompt; replaying a recording made with a
     different prompt or catalog fails instead of silently reporting old results.
-  - **Limitations:** the sets are small and mostly clean requests. There are no hard cases yet
-    (negation such as "not high value", synonyms outside the alias lists, messy multi-sentence
-    tickets), and the policy cases without a definition check that the policy is named and
-    enforced, not the rest of the audience.
+  - **Limitations:** the sets are small and mostly clean requests. Negation now has nine dev
+    cases ("not active", "inactive", "other than", "neither … nor", Spanish, and a "No roaming
+    high value" false-positive guard), but there is no separate hard tier yet (synonyms outside
+    the alias lists, messy multi-sentence tickets, two audiences in one request).
+
+- **UI walkthrough (optional, needs a browser):** `scripts/ui_walkthrough.mjs` drives the New
+  audience journey in Chrome through Playwright and checks the gating at each step (24 checks;
+  it runs offline, using only the example requests). Instructions are at the top of the file.
 
 ## Observability and operability
 
@@ -812,18 +812,23 @@ How each piece would be delivered on the platform rather than rebuilt:
 | Approve | Create the audience (AEP keeps its own audit log; this one adds the business provenance) |
 | Catalog and policies read from YAML | Read from AEP: schemas and governance policies via the platform APIs, or the read-only tools in the [CX Coworker Gateway](https://experienceleague.adobe.com/en/docs/experience-cloud-ai/experience-cloud-ai/mcp/overview) MCP endpoint (beta) |
 | Synthetic campaign history, contact pressure, lift vs holdout | Journey Optimizer's message send and feedback datasets as the history; lift computed in Customer Journey Analytics or Query Service over the same events |
-| Holdout recorded at approval | Journey Optimizer's journey-level holdout ([Limited Availability](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/orchestrate-journeys/create-journey/journey-properties)), deterministic, with lift in CJA. Use it rather than this split; keep the approval record of what was planned |
+| Holdout recorded at approval | Journey Optimizer's journey-level holdout ([Limited Availability](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/orchestrate-journeys/create-journey/journey-properties)), with lift in CJA. Use it rather than this split; keep the approval record of what was planned. (How it assigns profiles is worth confirming with the product team before relying on it.) |
+| Overlapping audiences blurring each other's holdouts | Journey Optimizer's global holdout, a control group kept out of all journeys, is the platform answer to the overlap problem this app only warns about |
 | Contact pressure warning | Journey Optimizer's [capping rule sets](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/conflict-prioritization/capping-rules/rule-sets) enforce frequency caps at send time. This warning shows the same pressure earlier, while the audience is being defined |
 | Approval with a goal and an approver | Journey Optimizer [approval policies](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/test/approve/approval-policies) with named reviewers and SSO identities. This record adds the business provenance (definitions, evidence, holdout plan) that an approval request doesn't carry |
 | Export CSV of contacted / held-out lines | Not needed on AEP: the approved definition becomes an audience, and activation or a journey reads it directly |
-| Outcome report and learning curve | Journey Optimizer records sends, holdout exclusions and conversions as experience events; CJA computes the lift. The learning step stays the same: each measured journey joins the evidence for its type |
+| Outcome report and learning curve | Journey Optimizer records sends, feedback (including unsubscribes) and holdout exclusions. Responses are the operator's own events (top-ups, bundle purchases) ingested into AEP; CJA joins the two and computes the lift. The learning step stays the same: each measured journey joins the evidence for its type |
+| Campaign advisor | No direct AEP equivalent: a customer-built agent or tool next to Audience Agent, reading the same facts (audience estimate, CJA results) and proposing changes a person accepts |
+| Policy-blocked fields | Label-based access control can hide a field like `credit_risk_band` from marketers entirely, so it never reaches a request; this app shows it and blocks it, which is the weaker control |
 | Clarification and policy step | A customer-built agent or tool alongside Audience Agent; Agent Orchestrator is documented as extensible to customer and partner agents. The MCP server here is that shape: drafting tools for agents, approval kept with a person |
 
 Not modelled here: identity. Here a profile is a mobile line. On AEP the profile is usually the
 person, stitched by the identity graph across their lines, accounts and email addresses, so a
 telco has to choose the grain per use case: line for usage-based campaigns (top-ups, data
 upsell), person or account for consent, contact pressure and household offers. Merge policies
-make that choice explicit, and consent is per person and channel, not per line. Real-time (streaming or edge) qualification is
+make that choice explicit. Consent attributes on a merged profile resolve by the merge policy's
+precedence, so a family plan with one line opted in and one opted out is the hard case to design
+for, not an edge case. Real-time (streaming or edge) qualification is
 also out of scope; this is batch.
 
 ## Standards
@@ -869,7 +874,7 @@ conventions. The mapping, and which parts are tested, is in
 - **Refinement limits.** Changes aren't cached, and a change can't remove a part of the original
   request that has no data: it carries forward until the marketer accepts building without it.
   Offline, only the suggested changes on the example requests are recorded.
-- **The eval sets are small** (38 + 18 + 17 + 12 cases): the 95% intervals in the trade-offs
+- **The eval sets are small** (43 + 18 + 17 + 12 cases): the 95% intervals in the trade-offs
   table are 10–40 points wide. Enough to catch regressions and see the kinds of mistakes, not to
   certify accuracy or rank close configurations.
 

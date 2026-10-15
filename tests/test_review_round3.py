@@ -60,10 +60,10 @@ def test_an_open_term_the_model_did_not_name_is_still_asked(make_client):
 PREPAID_ONLY = [{"attribute": "line_type", "op": "eq", "value": "prepaid"}]
 
 
-@pytest.mark.parametrize("terms", [[], ["active"]])  # the model didn't flag the term, or named it
+@pytest.mark.parametrize("terms, excluded", [([], []), (["active"], ["active"])])  # not named; named as excluded
 @pytest.mark.parametrize("request_text", ["Prepaid customers who are not active", "Prepaid lines no longer active"])
-def test_not_active_is_asked_as_an_exclusion_never_as_active(make_client, request_text, terms):
-    client = make_client(ScriptedProvider(proposal(conditions=PREPAID_ONLY, terms=terms)))
+def test_not_active_is_asked_as_an_exclusion_never_as_active(make_client, request_text, terms, excluded):
+    client = make_client(ScriptedProvider(proposal(conditions=PREPAID_ONLY, terms=terms, excluded=excluded)))
     r = client.post("/api/interpret", json={"request": request_text}).json()
     (c,) = r["clarifications"]
     assert r["status"] == "needs_clarification" and c["term"] == "active" and c["negated"]
@@ -89,10 +89,35 @@ def test_not_active_is_asked_as_an_exclusion_never_as_active(make_client, reques
     ("Customers who don't use the app", "use the app", True), ("customers who stopped using the app", "using the app", True),
     ("non active lines", "active", True), ("Prepaid, no roaming, active lines", "active", False),
     ("no complaints, active on Android", "active", False), ("not only active but high spenders", "active", False),
-    ("not prepaid and active", "active", False), ("customers who want active plans", "active", False)])
+    ("not prepaid and active", "active", False), ("customers who want active plans", "active", False),
+    ("customers who are neither active nor on premium plans", "active", True),
+    ("postpaid customers other than high value ones", "high value", True)])
 def test_what_counts_as_a_negation(text, phrase, negated):
     from app.interpret import _negated
     assert _negated(text, phrase) is negated
+
+
+@pytest.mark.parametrize("request_text, excluded", [
+    ("Prepaid customers who are inactive", ["active"]),  # no phrase for the alarm to check: the model decides
+    ("Clientes prepago que no están activos", ["active"]),
+])
+def test_the_model_reports_exclusions_the_phrase_check_cannot_see(make_client, request_text, excluded):
+    client = make_client(ScriptedProvider(proposal(conditions=PREPAID_ONLY, terms=["active"], excluded=excluded)))
+    (c,) = client.post("/api/interpret", json={"request": request_text}).json()["clarifications"]
+    assert c["negated"] and all(o["id"].startswith("not:") for o in c["options"])
+
+
+def test_when_the_model_and_the_phrase_check_disagree_the_marketer_chooses_the_reading(make_client):
+    client = make_client(ScriptedProvider(proposal(conditions=PREPAID_ONLY, terms=["active"])))  # model: included
+    r = client.post("/api/interpret", json={"request": "Prepaid customers who are not active"}).json()
+    (c,) = r["clarifications"]
+    ids = [o["id"] for o in c["options"]]
+    assert c["either"] and "active_usage" in ids and "not:active_usage" in ids and "isn't clear" in c["question"]
+    for answer in ("active_usage", "not:active_usage"):  # either reading answers it, at check and at approval
+        checked = client.post("/api/check", json={"definition": r["definition"], "pending_terms": ["any:active"],
+                                                  "resolutions": {"active": answer}}).json()
+        assert checked["status"] == "ready"
+    assert approve(client, r, definition=checked["definition"]).status_code == 200
 
 
 def test_a_comma_or_conjunction_ends_the_negation(make_client):
@@ -103,15 +128,21 @@ def test_a_comma_or_conjunction_ends_the_negation(make_client):
 
 
 def test_a_negated_decided_term_is_its_exclusion_or_a_warning(make_client):
-    named = proposal(conditions=PREPAID_ONLY, terms=["high_value"])
+    named = proposal(conditions=PREPAID_ONLY, terms=["high_value"], excluded=["high_value"])
     silent = proposal(conditions=[{"attribute": "device_os", "op": "eq", "value": "android"}])  # app part left out
-    client = make_client(ScriptedProvider(named, silent))
+    included = proposal(conditions=[{"attribute": "roaming_30d", "op": "eq", "value": False}], terms=["high_value"])
+    client = make_client(ScriptedProvider(named, silent, included))
     r = client.post("/api/interpret", json={"request": "Prepaid customers who are not high value"}).json()
     assert {"attribute": "arpu_3m", "op": "lt", "value": 40.0, "source": "glossary:high_value=not"} in \
         r["definition"]["conditions"]
+    assert r["status"] == "ready"
     r = client.post("/api/interpret", json={"request": "Android customers who don't use the app"}).json()
     codes = {i["code"] for i in r["issues"]}
     assert "negated_governed_term" in codes and "governed_term_missed" not in codes
+    # "No roaming high value customers": the model reads high value as included, the phrase check as excluded.
+    r = client.post("/api/interpret", json={"request": "No roaming high value customers"}).json()
+    assert {"attribute": "arpu_3m", "op": "gte", "value": 40.0, "source": "glossary:high_value"} in r["definition"]["conditions"]
+    assert "negation_unclear" in {i["code"] for i in r["issues"]}
 
 
 def test_whole_words_only(make_client):
@@ -193,3 +224,12 @@ def test_a_drifted_governed_threshold_still_warns(make_client):
     client = make_client(ScriptedProvider(drift))
     r = client.post("/api/interpret", json={"request": "High value customers in the Capital"}).json()
     assert "governed_term_overridden" in {i["code"] for i in r["issues"]}
+
+
+def test_excluding_a_yes_no_term_gives_a_valid_condition(make_client):
+    client = make_client(ScriptedProvider(proposal(terms=["app_user"], excluded=["app_user"],
+                                                   conditions=[{"attribute": "device_os", "op": "eq", "value": "android"}])))
+    r = client.post("/api/interpret", json={"request": "Android customers who don't use the app"}).json()
+    assert r["status"] == "ready"
+    assert {"attribute": "app_active_30d", "op": "eq", "value": False, "source": "glossary:app_user=not"} in \
+        r["definition"]["conditions"]

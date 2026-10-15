@@ -36,7 +36,7 @@ Two people make decisions here, and the tool supports both without making either
 | Decision | Whom this campaign targets, under which definition | What "active", "likely to churn" and other contested terms mean, for everyone |
 | What they see before deciding | The exact definition in plain English; for each answer to an open term, the lines it reaches and what only it adds; policy blocks with the policy named; how recently these lines were contacted; what past campaigns of this type achieved against their holdouts | How often each open term is asked about and which answer marketers chose (Insights) |
 | What they do | Answer, edit, change in words, approve with a goal | Settle the term in the glossary; affected approved audiences are flagged with their size under the new rule |
-| How we know it was right | The holdout recorded at approval: once the campaign tool reports responses, the measured lift is compared with what the evidence predicted, and the campaign joins the evidence for the next one of its type | Fewer questions, fewer edits, and approved audiences that measure well |
+| How we know it was right | The holdout recorded at approval: once the data team reports responses from billing records, the measured lift is compared with what the evidence predicted, and the campaign joins the evidence for the next one of its type | Fewer questions, fewer edits, and approved audiences that measure well |
 
 ## What the assistant changes
 
@@ -81,7 +81,9 @@ it builds is sent. This measures quality and speed safely, but it can't measure 
 that isn't sent has no responders.
 
 **Phase 2, weeks 3–8, live:** the two marketers send the audiences they approve in the app, each
-with its holdout, and the campaign tool reports outcomes after each 14-day window. This is where
+with its holdout. After each 14-day window, the operator's data team builds the responder file from
+billing and charging records (who topped up, who bought a bundle) and posts it; the campaign tool
+only supplies the send list. This is where
 the business case's biggest assumption, the value of a campaign, gets measured.
 
 Measured across both phases:
@@ -97,8 +99,12 @@ Measured across both phases:
   the MCP route waits.
 
 **Go / no-go after the pilot:**
-- **Go** if at least 95% of audiences match the analyst's, no approved audience breaks a policy,
-  the median request-to-approval time is under 5 minutes, and the pilot campaigns' confirmed
-  outcomes show lift clearly above zero for at least one campaign type (the measured lift then
-  replaces the business case's response assumption, whatever it turns out to be).
+- **Go** if all of these hold:
+  - at least 95% of audiences match the analyst's, and no approved audience breaks a policy;
+  - the median request-to-approval time is under 5 minutes;
+  - for at least one campaign type, the confirmed outcomes break even: measured lift × lines
+    reached × Finance's margin per responder covers the cost of a campaign. A lift that is merely
+    above zero isn't enough; in the low case it takes five years to pay back;
+  - pilot marketers ran more campaigns a month than the others, the second lever in the business
+    case.
 - **Fix the catalog or glossary first** if one field or term drives most of the mismatches.

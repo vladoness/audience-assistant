@@ -74,8 +74,8 @@ under revenue.
 
 | | Estimate |
 |---|---|
-| Delivery, once | About 8 FDE weeks, roughly $50k. Weeks 1–2: connect the profile store and build the catalog from its schema. Weeks 2–4: workshops with Marketing Analytics and Legal to write the glossary and policies. Weeks 4–8: shadow pilot with two marketers and holdout groups |
-| Running, per year | About $4k: hosting about $1.8k; model calls under $5 (about 3 calls per audience at $2–3 per 1,000); a few hours a month of the data owners' time settling definitions |
+| Delivery, once | About 8 FDE weeks, roughly $50k. Weeks 1–2: connect the profile store and build the catalog from its schema. Weeks 2–4: workshops with Marketing Analytics and Legal to write the glossary and policies. Weeks 4–8: the start of the eight-week pilot in CUSTOMER-CONTEXT.md (two weeks shadow, then live sends with holdouts); its last weeks run after delivery, with light support inside the estimate |
+| Running, per year | About $4k: hosting about $1.8k; model calls under $5 (about 3 calls per audience at $2–3 per 1,000); a few hours a month of the data owners' time settling definitions. Not costed here: the operator's data team building the responder file from billing records, a few days to automate and then about a day a month |
 
 ## Scenarios
 

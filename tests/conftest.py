@@ -37,10 +37,11 @@ class ScriptedProvider:
         return LLMResult(proposal=response, model=self.model, latency_ms=5.0, input_tokens=100, output_tokens=20)
 
 
-def proposal(conditions=None, terms=None, unmapped=None, channel=None, out_of_scope=False) -> dict[str, Any]:
+def proposal(conditions=None, terms=None, unmapped=None, channel=None, out_of_scope=False, excluded=None) -> dict[str, Any]:
     return {
         "conditions": conditions or [],
         "glossary_terms": terms or [],
+        "excluded_terms": excluded or [],
         "unmapped_phrases": unmapped or [],
         "channel": channel,
         "out_of_scope": out_of_scope,

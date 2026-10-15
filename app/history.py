@@ -14,8 +14,8 @@ The loop closes here too: when an approved audience's outcome is reported (POST
 measured lift joins the evidence for its campaign type, so the next decision of that type sees it,
 and the approval's own expectation is compared with what happened.
 
-Ontology contract (target, for an AEP rollout): send and response events from Journey Optimizer
-datasets, lift from Customer Journey Analytics or Query Service over the same events.
+On AEP: sends and feedback from Journey Optimizer datasets, responses from the operator's own events
+(top-ups, bundle purchases) ingested into AEP, lift in Customer Journey Analytics or Query Service.
 """
 
 from __future__ import annotations
